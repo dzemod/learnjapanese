@@ -1,0 +1,8 @@
+learnjapanesetextbook/
+textbook/
+*.pdf
+node_modules/
+.vercel/
+.env*
+.DS_Store
+Thumbs.db
