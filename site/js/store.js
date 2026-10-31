@@ -1,7 +1,7 @@
 import { uid, today, fmtDate, shuffle, hasKanji } from './util.js';
 
 const K = { progress: 'jp.progress', custom: 'jp.custom', opts: 'jp.opts', days: 'jp.days', best: 'jp.best', pw: 'jp.pw' };
-const DEFAULT_OPTS = { answer: 'uk', filter: 'all', shuffle: false, fcSort: true, listenType: 'choose', kanjiAns: 'both' };
+const DEFAULT_OPTS = { answer: 'uk', filter: 'all', shuffle: false, fcSort: true, listenType: 'choose', kanjiAns: 'both', termOrder: 'book' };
 
 function load(k, def) {
   try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : def; } catch { return def; }

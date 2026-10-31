@@ -3,9 +3,9 @@
 //   <lessonId>     — kanji cards (front = kanji, answer = meaning and/or readings)
 //   <lessonId>-w   — example words of the lesson ("Слова уроку N")
 // Stroke order: KanjiVG (© Ulrich Apel, CC BY-SA 3.0), fetched from the jsDelivr CDN.
-import { $, $$, esc, I, toast, modal, speak, speakCard, sizeClass, hasKanji } from './util.js';
+import { $, $$, esc, I, toast, modal, speak, speakCard, sizeClass, hasKanji, sortGojuon } from './util.js';
 import {
-  state, prog, toggleStar, setStats, registerSetProvider, registerKanjiPayload, markKanjiPending, saveCustomNow, syncAll, onSync,
+  saveOpts, state, prog, toggleStar, setStats, registerSetProvider, registerKanjiPayload, markKanjiPending, saveCustomNow, syncAll, onSync,
 } from './store.js';
 import { MODES, kunHTML } from './modes.js';
 
@@ -367,7 +367,8 @@ export function kanjiLessonView(root, id, openId) {
         <h2 class="sec-title">Слова уроку ${l.no} <span class="muted">(${ws.cards.length})</span><span class="sec-pct">${pct(ws)}%</span></h2>
         ${progressBar(ws)}
         ${modesGrid(id + '-w')}
-        <div class="term-list">${ws.cards.map(c => {
+        <div class="terms-head"><span></span><div class="seg small" data-order><button class="${state.opts.termOrder !== 'gojuon' ? 'on' : ''}" data-v="book">Як у підручнику</button><button class="${state.opts.termOrder === 'gojuon' ? 'on' : ''}" data-v="gojuon" lang="ja">あいうえお</button></div></div>
+        <div class="term-list">${(state.opts.termOrder === 'gojuon' ? sortGojuon(ws.cards) : ws.cards).map(c => {
           const p = prog(ws.id, c.id);
           return `<div class="term ${c.check ? 'needs-check' : ''}" data-id="${esc(c.id)}">
             <span class="lvl lvl${p.lvl || 0}"></span>
@@ -382,6 +383,7 @@ export function kanjiLessonView(root, id, openId) {
       </section>
     </div>`;
     $('[data-sync]', root)?.addEventListener('click', async () => { const r = await syncAll(); if (r.ok) toast('Збережено в GitHub ✓'); draw(); });
+    $('[data-order]', root).onclick = e => { const b = e.target.closest('button'); if (b) { saveOpts({ termOrder: b.dataset.v }); redraw(); } };
     $('.kgrid', root).onclick = e => {
       const b = e.target.closest('[data-k]');
       if (b) openKanji(id, b.dataset.k, redraw);

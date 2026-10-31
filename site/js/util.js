@@ -302,3 +302,11 @@ export const furi = s => esc(s).replace(FG, (_, k, r) => `${k}<span class="fg">(
 export const furiPlain = s => String(s ?? '').replace(FG, '$1($2)');
 /** Text for speech: readings instead of kanji. */
 export const furiSay = s => String(s ?? '').replace(FG, '$2');
+
+// ---------- Gojūon (あいうえお) order ----------
+const JA_COLL = new Intl.Collator('ja');
+const toHira = s => String(s || '').replace(/[ァ-ヶ]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60)).replace(/^[～〜－\[\]（(［【]+/, '');
+/** Kana key of a card: reading if the word has kanji, otherwise the word itself. */
+export const kanaKey = c => toHira(c.reading || c.kana || c.japanese || c.word || '');
+/** Sort a copy of the list in gojūon order (stable for equal keys). */
+export const sortGojuon = (list, key = kanaKey) => list.map((x, i) => [x, i]).sort((a, b) => JA_COLL.compare(key(a[0]), key(b[0])) || a[1] - b[1]).map(x => x[0]);

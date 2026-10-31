@@ -1,3 +1,4 @@
+import { sortGojuon } from './util.js';
 import { $, $$, esc, I, speakCard, toast, modal, download, pickFile, parseText, norm, today, onSwipe, justSwiped, isTyping, hasKanji } from './util.js';
 import {
   state, getSets, getSet, isMine, setStats, prog, toggleStar, createSet, addCards, deleteCard, renameSet, deleteSet, markChecked,
@@ -97,7 +98,7 @@ export function homeView(root) {
       if (nq) $$('.set-card', groups).forEach(el => {
         const s = sets.find(x => setUrl(x.id) === el.getAttribute('href'));
         if (norm(s.title).includes(nq)) return;
-        const hits = s.cards.filter(c => norm(`${c.japanese} ${c.reading} ${c.ukrainian}`).includes(nq)).slice(0, 3);
+        const hits = sortGojuon(s.cards.filter(c => norm(`${c.japanese} ${c.reading} ${c.ukrainian}`).includes(nq))).slice(0, 3);
         $('.hits', el).innerHTML = hits.map(c => `<span><span lang="ja">${esc(c.japanese)} ${esc(readingTxt(c))}</span> — ${esc(c.ukrainian)}</span>`).join('');
       });
     };
@@ -194,6 +195,7 @@ export function setView(root, id, api) {
       <div class="terms-head">
         <h2 class="sec-title">Слова <span class="muted">(${set.cards.length})</span></h2>
         <div class="seg small" data-tf><button class="on" data-v="all">Усі</button><button data-v="star">★ Важкі</button>${nCheck ? `<button data-v="check">Перевірити <span class="count-pill">${nCheck}</span></button>` : ''}</div>
+        <div class="seg small" data-order title="Порядок слів"><button class="${state.opts.termOrder !== 'gojuon' ? 'on' : ''}" data-v="book">Як у підручнику</button><button class="${state.opts.termOrder === 'gojuon' ? 'on' : ''}" data-v="gojuon" lang="ja">あいうえお</button></div>
       </div>
       <div class="term-list"></div>
       <div class="add-slot"></div>
@@ -228,11 +230,13 @@ export function setView(root, id, api) {
   const drawTerms = () => {
     const cur = getSet(id) || set;
     set.cards = cur.cards;
-    const cs = termFilter === 'star' ? set.cards.filter(c => prog(set.id, c.id).star)
+    let cs = termFilter === 'star' ? set.cards.filter(c => prog(set.id, c.id).star)
       : termFilter === 'check' ? set.cards.filter(c => c.check) : set.cards;
-    let lastSec = 'main';
+    const gojuon = state.opts.termOrder === 'gojuon';
+    if (gojuon) cs = sortGojuon(cs);
+    let lastSec = gojuon ? null : 'main';
     list.innerHTML = cs.length ? cs.map(c => {
-      const sec = c.section && c.section !== lastSec && sectionName[c.section] ? `<div class="term-sec">◊ ${sectionName[c.section]} ◊</div>` : '';
+      const sec = !gojuon && c.section && c.section !== lastSec && sectionName[c.section] ? `<div class="term-sec">◊ ${sectionName[c.section]} ◊</div>` : '';
       if (c.section) lastSec = c.section;
       return sec + (editing === c.id ? `<div class="term editing" data-id="${esc(c.id)}"><div class="inline-form"></div></div>` : rowHTML(c));
     }).join('') : `<p class="muted center">${termFilter === 'star' ? 'Немає позначених слів — натисніть ★ на важких.' : termFilter === 'check' ? 'Усі слова перевірено ✓' : 'Немає слів.'}</p>`;
@@ -251,6 +255,13 @@ export function setView(root, id, api) {
   };
   const afterChange = () => { drawTerms(); refreshPreview?.(); };
   drawTerms();
+  $('[data-order]', root).onclick = e => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    saveOpts({ termOrder: b.dataset.v });
+    $$('[data-order] button', root).forEach(el => el.classList.toggle('on', el === b));
+    drawTerms();
+  };
   $('[data-tf]', root).onclick = e => {
     const b = e.target.closest('button');
     if (!b) return;
