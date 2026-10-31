@@ -15,8 +15,13 @@ for (const f of ['sets.json', 'grammar.json', 'kanji.json', 'exam.json']) {
   const file = path.join(__dirname, '../site/data', f);
   let s = fs.readFileSync(file, 'utf8');
   for (const [name, re, rep] of rules) {
-    const n = (s.match(re) || []).length;
-    if (n) { total[`${f} ${name}`] = n; s = s.replace(re, rep); }
+    // number placeholders (－人 = – людей) keep the en dash: skip the dash rule on those card lines
+    s = s.split(/\n/).map(line => {
+      if (name === 'dash' && /"(kanji|kana)":"－/.test(line)) return line;
+      const n = (line.match(re) || []).length;
+      if (n) total[`${f} ${name}`] = (total[`${f} ${name}`] || 0) + n;
+      return line.replace(re, rep);
+    }).join(String.fromCharCode(10));
   }
   JSON.parse(s);
   if (!dry) fs.writeFileSync(file, s);
