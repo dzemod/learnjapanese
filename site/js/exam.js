@@ -225,7 +225,7 @@ function qError(it) {
     uid: it.id, type: 'e', mode: 'error', lesson: it.l, ref: gref(it.pt), weak: it.k === 'p' ? it.a : FORMS[it.f]?.label || '',
     label: 'Знайдіть помилку: торкніться неправильного слова й виправте його', kind: it.k, chunks, wrong: wi,
     prompt: `<div class="ex-uk">${esc(it.uk)}</div>`, answer: plainT(it.a), answers: [plainT(it.a), it.ak].filter(Boolean),
-    options: it.k === 'p' ? shuffle([it.a, ...pick(PARTICLES, 3, [it.a, it.w])]).map(o => ({ v: o, h: o })) : null,
+    options: it.k === 'p' ? shuffle([it.a, ...pick(PARTICLES, 3, [it.a, it.w, ...(it.alt || [])])]).map(o => ({ v: o, h: o })) : null,
     correct: sentHTML(it.pre, `<b class="ex-hl">${furi(it.a)}</b>`, it.post), x: `Помилка: «${it.w}» → правильно «${plainT(it.a)}». ${it.x}`, src: `урок ${it.l}`,
   };
 }

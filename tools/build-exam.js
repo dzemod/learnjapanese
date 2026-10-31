@@ -48,7 +48,8 @@ const nextWords = (toks, i, n = 6) => toks.slice(i + 1, i + 1 + n).map(t => t.ba
 const TRANSPORT = ['電車', 'バス', 'タクシー', '新幹線', '車', '自転車', '地下鉄', '飛行機', '船', 'でんしゃ', 'くるま'];
 const TOOLS = ['はし', 'ボールペン', 'パソコン', 'テレビ', 'ラジオ', 'カード', '現金', '英語', '日本語', '中国語', 'ファックス', 'メール', '辞書', '電話', '手', 'ナイフ', 'フォーク'];
 function explainParticle(toks, i, L) {
-  const t = toks[i], p = t.surface_form, prev = toks[i - 1], next = toks[i + 1];
+  const t = toks[i], p = t.surface_form;
+  const prev = toks.slice(0, i).reverse().find(x => x.pos_detail_1 !== '空白'), next = toks.slice(i + 1).find(x => x.pos_detail_1 !== '空白');
   const v = nextVerb(toks, i), vb = v?.basic_form || '';
   const words = nextWords(toks, i);
   const R = (pt, x) => (has(pt) && pointById.get(pt).lesson <= L ? { pt, x } : null);
@@ -80,7 +81,8 @@ function explainParticle(toks, i, L) {
       if (t.pos_detail_1 !== '格助詞') return null;
       if (prev && TRANSPORT.includes(prev.surface_form)) return R('5-3', 'Частка で після назви транспорту вказує засіб пересування (で — спосіб дії).');
       if (prev && (TOOLS.includes(prev.surface_form) || /語$/.test(prev.surface_form))) return R('7-1', 'Частка で вказує на знаряддя чи спосіб, за допомогою якого виконується дія (мова, інструмент).');
-      if (prev && ['一人', 'ひとり', 'みんな', '自分'].includes(prev.surface_form)) return R('5-4', 'ひとりで — «сам, наодинці»; частка と у такому разі не використовується.');
+      if (prev && ['みんな', '自分', '二人', '家族'].includes(prev.surface_form)) return null; // みんなで / 自分で — not drilled
+      if (prev && ['一人', 'ひとり'].includes(prev.surface_form)) return R('5-4', 'ひとりで — «сам, наодинці»; частка と у такому разі не використовується.');
       if (prev && ['会議', 'パーティー', '試合'].includes(prev.surface_form)) return R('21-5', 'Частка で позначає ситуацію (подію), у якій відбувається дія.');
       if (toks.some(x => x.surface_form === 'いちばん')) return R('12-5', 'ІМ₁ で … いちばん — вибір з групи чи категорії ІМ₁; група позначається часткою で.');
       return R('6-5', 'Частка で після іменника зі значенням місця вказує на місце, де відбувається дія.');
@@ -97,11 +99,17 @@ function explainParticle(toks, i, L) {
       return null;
     }
     case 'と':
+      if (['申す', '書く', '読む', '伝える', '呼ぶ'].includes(next?.basic_form)) return null; // quotation with other verbs — not drilled
       if (['言う', '思う', 'いう', 'おもう'].includes(next?.basic_form)) return next.basic_form.match(/言|いう/) ? R('21-2', 'Частка と позначає зміст сказаного (цитату) перед いいます.') : R('21-1', 'Частка と позначає зміст думки перед おもいます.');
       if (prev && prev.pos === '動詞' && prev.conjugated_form === '基本形') return R('23-3', 'ДІЄСЛ словникова форма と、～ — після цієї дії неминуче відбувається інша.');
       if (toks.some(x => x.surface_form === 'どちら')) return R('12-4', 'ІМ₁ と ІМ₂ と どちらが … — вибір з двох; предмети поєднуються часткою と.');
-      if (prev && NOUN(prev) && v && !(next && NOUN(next))) return R('5-4', 'Частка と після іменника-особи означає «з, разом з».');
-      if (prev && NOUN(prev) && next && NOUN(next)) return R('4-6', 'Частка と поєднує два іменники сурядним зв’язком («і»), перелічуючи всі предмети.');
+      {
+        // AとB + が/を/は/も/の/です → «і»; otherwise ІМ(особа)と + дієслово → «разом з»
+        const j = toks.indexOf(next), after = next && NOUN(next) ? toks.slice(j + 1).find(x => x.pos_detail_1 !== '空白') : null;
+        const joined = after && (['が', 'を', 'は', 'も', 'の', 'です', '、', 'じゃ', 'で'].includes(after.surface_form) && !(after.surface_form === 'で' && v));
+        if (prev && NOUN(prev) && next && NOUN(next) && joined) return R('4-6', 'Частка と поєднує два іменники сурядним зв’язком («і»), перелічуючи всі предмети.');
+        if (prev && NOUN(prev) && v) return R('5-4', 'Частка と після іменника-особи означає «з, разом з».');
+      }
       return null;
     case 'から':
       if (t.pos_detail_1 === '接続助詞') {
@@ -138,8 +146,30 @@ function explainParticle(toks, i, L) {
     default: return null;
   }
 }
-const PART_ALT = { 'は': ['が', 'も'], 'が': ['は', 'も'], 'も': ['は', 'が'], 'に': ['へ'], 'へ': ['に'], 'から': ['に'] };
-const WRONG = { 'は': 'を', 'が': 'を', 'も': 'を', 'を': 'に', 'に': 'を', 'へ': 'を', 'で': 'を', 'の': 'を', 'と': 'を', 'から': 'を', 'まで': 'を', 'や': 'を', 'か': 'を' };
+// Particles that may also be grammatical in the same slot — never offered as distractors.
+const PART_ALT = {
+  'は': ['が', 'も', 'を'], 'が': ['は', 'も', 'を'], 'も': ['は', 'が'], 'を': ['が', 'は'], 'に': ['へ', 'は'], 'へ': ['に'], 'から': ['に'],
+  'と': ['や'], 'や': ['と'], 'か': ['ね', 'よ'], 'ね': ['よ', 'か'], 'よ': ['ね', 'か'], 'で': ['は', 'を'], 'まで': ['に'],
+};
+const MOVE = /(散歩|歩|走|泳|飛|渡|通|曲が|出|降り|登|上が|下が)/;
+/** A particle that is surely wrong in this sentence for the error-finding task (null = skip). */
+function wrongFor(p, toks, i) {
+  const rest = toks.slice(i + 1).map(t => t.surface_form).join('');
+  const prev = toks[i - 1]?.surface_form || '';
+  switch (p) {
+    case 'は': // the topic may be a topicalized object (本は読みました → 本を読みました is fine): skip then
+      return /(ます|ました|ません|ませんでした|まれ|れ|て)/.test(rest.split(/[。？]/)[0]) && !rest.split(/[。？]/)[0].includes('を') ? null : 'を';
+    case 'が': return null; // が↔を／は are often both possible (potential, ～たい, contrast)
+    case 'も': return /^(何|なに|なん|だれ|どこ|いつ)$/.test(prev) ? null : 'を';
+    case 'を': return MOVE.test(rest.slice(0, 6)) ? null : 'に';
+    case 'に': return 'を';
+    case 'へ': return 'を';
+    case 'で': return MOVE.test(rest.slice(0, 6)) ? null : 'を';
+    case 'と': case 'の': case 'や': case 'か': return 'を';
+    case 'から': case 'まで': return 'の';
+    default: return null;
+  }
+}
 
 // ---------- verbs ----------
 const GROUP = ct => (/^五段/.test(ct) ? 'I' : /^一段/.test(ct) ? 'II' : /^(サ変|カ変)/.test(ct) ? 'III' : null);
@@ -187,7 +217,8 @@ function masuOf(dict, g) {
         const it = { id: `p${L.lesson}-${++np}`, t: 'p', ...base, pt: e.pt, spt: pt.id, pre, a: t.surface_form, post, uk: b.uk, x: e.x };
         if (PART_ALT[t.surface_form]) it.alt = PART_ALT[t.surface_form];
         items.push(it);
-        if (WRONG[t.surface_form] && ne < 40) items.push({ id: `e${L.lesson}-${++ne}`, t: 'e', k: 'p', ...base, pt: e.pt, spt: pt.id, pre, w: WRONG[t.surface_form], a: t.surface_form, post, uk: b.uk, x: e.x });
+        const wp = wrongFor(t.surface_form, toks, i);
+        if (wp && ne < 40) items.push({ id: `e${L.lesson}-${++ne}`, t: 'e', k: 'p', ...base, pt: e.pt, spt: pt.id, pre, w: wp, a: t.surface_form, ...(PART_ALT[t.surface_form] ? { alt: PART_ALT[t.surface_form] } : {}), post, uk: b.uk, x: e.x });
       });
       // verb-form item (max 1 per sentence)
       for (let i = 0; i < toks.length; i++) {
@@ -219,11 +250,15 @@ function masuOf(dict, g) {
         const masuKana = masuMk.replace(/\{([^|}]+)\|([^}]+)\}/g, '$2');
         const expect = conj.conjugate(masu, g, form);
         if (expect !== ans.pl) { bad++; continue; }
+        // the analyser must read the verb exactly like the furigana in the book (行って: いって, not おこなって)
+        const k2h = x => x.replace(/[ァ-ヶ]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60));
+        const anaRead = k2h(toks.filter(x => x.a >= a && x.a < end).map(x => x.reading || x.surface_form).join(''));
+        if (anaRead !== ans.kana) { bad++; continue; }
         const fp = conj.FORMS[form].point;
         const x = conj.explainConj(masuKana, g, form) + ` Конструкція речення — «${pt.title.replace(/\{([^|}]+)\|[^}]+\}/g, '$1')}».`;
         const pre = span(sg, 0, a).mk, post = span(sg, end, plain.length).mk;
         items.push({ id: `v${L.lesson}-${++nv}`, t: 'v', ...base, pt: fp && has(fp) ? fp : pt.id, spt: pt.id, pre, a: ans.mk, ak: ans.kana, post, base: masuMk, g, f: form, uk: b.uk, x });
-        const wf = { te: 'dict', ta: 'te', nai: 'dict', dict: 'te', tara: 'te', temo: 'te', nakatta: 'nai' }[form];
+        const wf = /^[ 　]*[、。？!…]/.test(post.replace(/\{[^|}]+\|[^}]+\}/g, 'x')) ? null : { te: 'dict', ta: 'te' }[form]; // only swaps that are surely ungrammatical
         const w = wf && conj.conjugate(masu, g, wf);
         if (w && conj.FORMS[wf].lesson <= L.lesson) items.push({ id: `e${L.lesson}-${++ne}`, t: 'e', k: 'v', ...base, pt: fp && has(fp) ? fp : pt.id, spt: pt.id, pre, w, a: ans.mk, ak: ans.kana, post, uk: b.uk, x, f: form, base: masuMk, g });
         break;
