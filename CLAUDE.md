@@ -47,7 +47,7 @@
 - Stroke order: KanjiVG SVGs from jsDelivr (CC BY-SA 3.0, attribution shown in the kanji card).
 
 ## Progress of the textbook import (update after each batch)
-- Grammar: lessons 1–5 done.
+- Grammar: lessons 1–10 done. Translation book pages: L6 64,66–67 · L7 70,72–73 · L8 76,78–79 · L9 82,84–85 · L10 88,90–91 · L11 94,96–97 (pattern: lesson start, vocab, II at +2, III at +3, IV at +4..+5). Main book: L6 48, L7 56, L8 66, L9 74, L10 82, L11 90.
 - Kanji: kanji-300 lessons 1–2 done (40 kanji); kanji-700 not started.
 - Scans are read by rendering pages to PNG with the `mupdf` npm package (no Python/poppler on this PC).
 
