@@ -42,7 +42,8 @@ export function homeView(root) {
     const sets = getSets();
     const st = streak();
     const changes = localChangeCount();
-    const mine = sets.filter(isMine), book = sets.filter(s => !isMine(s));
+    const lessonNo = s => { const m = /^mnn-(d+)$/.exec(s.id); return m ? +m[1] : 999; };
+    const mine = sets.filter(isMine), book = sets.filter(s => !isMine(s)).sort((a, b) => lessonNo(a) - lessonNo(b));
     root.innerHTML = `<div class="home fade-in">
       ${state.loadError ? `<div class="alert">Не вдалося завантажити <code>data/sets.json</code>. Якщо ви відкрили файл напряму, запустіть локальний сервер: <code>npx serve site</code>.</div>` : ''}
       <section class="hero">
@@ -87,7 +88,8 @@ export function homeView(root) {
       const match = s => !nq || norm(s.title).includes(nq) || s.cards.some(c => norm(`${c.japanese} ${c.reading} ${c.ukrainian}`).includes(nq));
       const b = book.filter(match), m = mine.filter(match);
       groups.innerHTML =
-        (b.length ? `<h2 class="group-title"><span lang="ja">教科書</span> Підручник</h2><div class="set-grid">${b.map(card).join('')}</div>` : '') +
+        [['Частина I', '第一部', b.filter(x => lessonNo(x) <= 25 || lessonNo(x) === 999)], ['Частина II', '第二部', b.filter(x => lessonNo(x) >= 26 && lessonNo(x) !== 999)]]
+          .map(([t, jp, list]) => list.length ? `<h2 class="group-title"><span lang="ja">${jp}</span> ${t}</h2><div class="set-grid">${list.map(card).join('')}</div>` : '').join('') +
         `<h2 class="group-title"><span lang="ja">私の</span> Мої уроки</h2>` +
         (m.length ? `<div class="set-grid">${m.map(card).join('')}</div>`
           : `<div class="empty small-empty"><p>${nq ? 'Нічого не знайдено.' : 'Тут з’являться ваші власні уроки.'}</p>${nq ? '' : '<a class="btn primary" href="#/new">Створити мій урок</a>'}</div>`);
