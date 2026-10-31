@@ -73,6 +73,6 @@
 - Run locally: `npx serve site` (the save API only works on Vercel or with `vercel dev`).
 
 ## Review (REVIEW.md)
-- Review in progress (user request): batches words 1–10 … 41–50, grammar by 10, kanji by chapters, exam bank, interface; after each batch commit "Review: …" and update REVIEW.md (corrections table, «Потребує перевірки», statistics). Done: batch 1 (words 0–10 + global typography), batch 2 (words 11–20).
+- Review in progress (user request): batches words 1–10 … 41–50, grammar by 10, kanji by chapters, exam bank, interface; after each batch commit "Review: …" and update REVIEW.md (corrections table, «Потребує перевірки», statistics). Done: batch 1 (words 0–10 + global typography), batch 2 (words 11–20), batch 3 (words 21–30).
 - After rebuilding grammar/exam always run `node tools/typo-uk.js` (quotes «», apostrophe ’, dash —, …).
 - Transcription: kana only for readings; Cyrillic names/terms by the Ukrainian (Kovalenko) system (し сі, ち ті, じ дзі, つ цу, しゃ ся, ちゃ тя, じゃ дзя).

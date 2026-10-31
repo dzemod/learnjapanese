@@ -1229,7 +1229,7 @@
         {"id":"mnn-23-22","kanji":"角","kana":"かど","ukrainian":"ріг (вулиці), зовнішній кут","verbGroup":"","hint":"","section":"main","source":"textbook"},
         {"id":"mnn-23-23","kanji":"橋","kana":"はし","ukrainian":"міст","verbGroup":"","hint":"","section":"main","source":"textbook"},
         {"id":"mnn-23-24","kanji":"駐車場","kana":"ちゅうしゃじょう","ukrainian":"стоянка, парковка","verbGroup":"","hint":"","section":"main","source":"textbook"},
-        {"id":"mnn-23-25","kanji":"目","kana":"－め","ukrainian":"(котрий) -й (за рахунком)","verbGroup":"","hint":"","section":"main","source":"textbook"},
+        {"id":"mnn-23-25","kanji":"－目","kana":"－め","ukrainian":"(котрий) -й (за рахунком)","verbGroup":"","hint":"","section":"main","source":"textbook"},
         {"id":"mnn-23-26","kanji":"[お]正月","kana":"[お]しょうがつ","ukrainian":"Новий рік","verbGroup":"","hint":"","section":"main","source":"textbook"},
         {"id":"mnn-23-27","kanji":"","kana":"ごちそうさま[でした]。","ukrainian":"Дякую за те, що пригостили. (усталений вираз, репліка вдячності запрошеного в гості або до ресторану після закінчення прийому їжі або напоїв)","verbGroup":"","hint":"","section":"main","source":"textbook"},
         {"id":"mnn-23-28","kanji":"建物","kana":"たてもの","ukrainian":"будівля, споруда, будинок","verbGroup":"","hint":"","section":"dialogue","source":"textbook"},
@@ -1284,7 +1284,7 @@
         {"id":"mnn-25-13","kanji":"","kana":"こと","ukrainian":"справа; питання (～の こと – питання про; про)","verbGroup":"","hint":"","section":"dialogue","source":"textbook"},
         {"id":"mnn-25-14","kanji":"一杯 飲みましょう。","kana":"いっぱい のみましょう。","ukrainian":"Вип’ємо по чарці.","verbGroup":"","hint":"","section":"dialogue","source":"textbook"},
         {"id":"mnn-25-15","kanji":"[いろいろ] お世話に なりました。","kana":"[いろいろ] おせわに なりました。","ukrainian":"Дякую за вашу турботу. / Ви багато для мене зробили.","verbGroup":"","hint":"","section":"dialogue","source":"textbook"},
-        {"id":"mnn-25-16","kanji":"頑張ります","kana":"がんばります","ukrainian":"старанно (що-небудь) робити, докладати всіх зусиль.","verbGroup":"I","hint":"","section":"dialogue","source":"textbook"},
+        {"id":"mnn-25-16","kanji":"頑張ります","kana":"がんばります","ukrainian":"старанно (що-небудь) робити, докладати всіх зусиль","verbGroup":"I","hint":"","section":"dialogue","source":"textbook"},
         {"id":"mnn-25-17","kanji":"どうぞ お元気で。","kana":"どうぞ おげんきで。","ukrainian":"Бажаю вам усього найкращого (перед довгою розлукою).","verbGroup":"","hint":"","section":"dialogue","source":"textbook"}
       ]
     },
