@@ -390,7 +390,7 @@ export function editorView(root, setId, api) {
       <button class="btn ghost sm" data-gen hidden>Згенерувати читання</button>
     </div>
     <div class="ptable">
-      <div class="ptable-head"><span>Кандзі</span><span>Кана</span><span>Українською</span><span></span></div>
+      <div class="ptable-head"><span>Канджі</span><span>Кана</span><span>Українською</span><span></span></div>
       <div class="rows"></div>
     </div>
     <button class="btn ghost wide" data-addrow>${I.plus}<span>Додати рядок</span></button>
@@ -406,7 +406,7 @@ export function editorView(root, setId, api) {
   };
   const draw = () => {
     rowsEl.innerHTML = rows.length ? rows.map((r, i) => `<div class="prow" data-i="${i}">
-      <input class="input jp" lang="ja" data-f="kanji" placeholder="漢字" value="${esc(r.kanji)}" aria-label="Кандзі">
+      <input class="input jp" lang="ja" data-f="kanji" placeholder="漢字" value="${esc(r.kanji)}" aria-label="Канджі">
       <div class="kana-cell"><input class="input jp ${r.check ? 'auto' : ''}" lang="ja" data-f="kana" placeholder="かな" value="${esc(r.kana)}" aria-label="Кана">${r.check ? '<span class="check-badge" title="Розпізнано автоматично — перевірте">перевірити</span>' : ''}</div>
       <input class="input" data-f="ukrainian" placeholder="переклад" value="${esc(r.ukrainian)}" aria-label="Українською">
       <button class="icon-btn" data-del aria-label="Видалити рядок">${I.trash}</button>

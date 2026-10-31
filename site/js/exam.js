@@ -259,7 +259,7 @@ function qWord(cd, pool) {
   const x = `${cd.japanese}${cd.reading && cd.reading !== cd.japanese ? `(${cd.reading})` : ''} — ${cd.ukrainian}${cd.verbGroup ? `, дієслово ${cd.verbGroup} групи` : ''}${cd.hint ? ` ${cd.hint}` : ''}.`;
   const correct = `${wordHTML(cd)} — ${esc(cd.ukrainian)}`;
   if (dir === 'ja') return { ...base, mode: typing ? 'type' : 'choice', side: 'uk', label: typing ? 'Напишіть значення українською' : 'Виберіть значення', prompt: `<div class="ex-word">${wordHTML(cd)}</div>`, options: shuffle([cd, ...others]).map(o => ({ v: o.ukrainian, h: esc(o.ukrainian) })), answer: cd.ukrainian, correct, x };
-  return { ...base, mode: typing ? 'type' : 'choice', side: 'ja', label: typing ? 'Напишіть японською (кандзі або каною)' : 'Виберіть японське слово', prompt: `<div class="ex-big-uk">${esc(cd.ukrainian)}</div>`, options: shuffle([cd, ...others]).map(o => ({ v: o.japanese, h: wordHTML(o) })), answer: cd.japanese, correct, x };
+  return { ...base, mode: typing ? 'type' : 'choice', side: 'ja', label: typing ? 'Напишіть японською (канджі або каною)' : 'Виберіть японське слово', prompt: `<div class="ex-big-uk">${esc(cd.ukrainian)}</div>`, options: shuffle([cd, ...others]).map(o => ({ v: o.japanese, h: wordHTML(o) })), answer: cd.japanese, correct, x };
 }
 function qConj(cd, maxL) {
   if (!cd) return null;
@@ -297,11 +297,11 @@ function qKanji(k, pool) {
     if (sent) {
       const shown = sent.replace(new RegExp(`\\{${e.word}\\|([^}]+)\\}`), '<b class="ex-hl">$1</b>');
       const opts = shuffle([e, ...pick(wordsAll.filter(w => w.kana !== e.kana), 3)]);
-      return { ...base, uid: 'kc' + e.id, mode: 'choice', label: 'Виберіть, як записати виділене слово кандзі', prompt: `<div class="ex-sent" lang="ja">${furi(shown)}</div>`, options: opts.map(o => ({ v: o.word, h: `<span lang="ja">${esc(o.word)}</span>` })), answer: e.word, correct: `<span lang="ja">${esc(e.word)}<span class="fg">(${esc(e.kana)})</span></span>`, x: ex };
+      return { ...base, uid: 'kc' + e.id, mode: 'choice', label: 'Виберіть, як записати виділене слово канджі', prompt: `<div class="ex-sent" lang="ja">${furi(shown)}</div>`, options: opts.map(o => ({ v: o.word, h: `<span lang="ja">${esc(o.word)}</span>` })), answer: e.word, correct: `<span lang="ja">${esc(e.word)}<span class="fg">(${esc(e.kana)})</span></span>`, x: ex };
     }
   }
   const opts = shuffle([e, ...pick(wordsAll.filter(w => w.kana !== e.kana && w.word.length === e.word.length), 3).concat(pick(wordsAll, 3)).filter((w, i, a) => a.findIndex(z => z.word === w.word) === i).slice(0, 3)]);
-  return { ...base, uid: 'kp' + e.id, mode: 'choice', label: 'Виберіть правильний запис кандзі', prompt: `<div class="ex-word" lang="ja">${esc(e.kana)}</div><div class="ex-uk">${esc(e.uk)}</div>`, options: opts.map(o => ({ v: o.word, h: `<span lang="ja">${esc(o.word)}</span>` })), answer: e.word, correct: `<span lang="ja">${esc(e.word)}<span class="fg">(${esc(e.kana)})</span></span>`, x: ex, say: e.kana };
+  return { ...base, uid: 'kp' + e.id, mode: 'choice', label: 'Виберіть правильний запис канджі', prompt: `<div class="ex-word" lang="ja">${esc(e.kana)}</div><div class="ex-uk">${esc(e.uk)}</div>`, options: opts.map(o => ({ v: o.word, h: `<span lang="ja">${esc(o.word)}</span>` })), answer: e.word, correct: `<span lang="ja">${esc(e.word)}<span class="fg">(${esc(e.kana)})</span></span>`, x: ex, say: e.kana };
 }
 function findContext(word) {
   for (const L of shuffle(grammarLessons())) for (const p of L.points) for (const b of p.blocks) if (b.ex && b.ex.includes(`{${word}|`) && !/[×→]/.test(b.ex)) return b.ex;
