@@ -26,8 +26,8 @@ document.addEventListener('keydown', e => {
 function refreshStreak() {
   const n = streak();
   const el = $('#streak');
-  el.innerHTML = `<span class="streak-dot ${studiedToday() ? 'on' : ''}"></span><b>${n}</b><span class="streak-lbl">day${n === 1 ? '' : 's'}</span>`;
-  el.title = studiedToday() ? 'Studied today' : 'Study today to keep your streak';
+  el.innerHTML = `<span class="streak-dot ${studiedToday() ? 'on' : ''}"></span><b>${n}</b><span class="streak-lbl">дн.</span>`;
+  el.title = studiedToday() ? 'Сьогодні ви вже вчилися' : 'Повчіться сьогодні, щоб не перервати серію';
 }
 
 function route() {

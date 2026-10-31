@@ -7,7 +7,8 @@ import { MODES, faceHTML, metaHTML } from './modes.js';
 import { mountWordForm, openWordModal, afterSave } from './edit.js';
 
 const setUrl = id => `#/set/${encodeURIComponent(id)}`;
-const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
+const pl = (n, [one, few, many]) => { const a = n % 10, b = n % 100; return `${n} ${a === 1 && b !== 11 ? one : a >= 2 && a <= 4 && (b < 12 || b > 14) ? few : many}`; };
+const UROK = ['урок', 'уроки', 'уроків'], SLOVO = ['слово', 'слова', 'слів'];
 const slov = n => { // Ukrainian plural for "слово"
   const a = n % 10, b = n % 100;
   return `${n} ${a === 1 && b !== 11 ? 'слово' : a >= 2 && a <= 4 && (b < 12 || b > 14) ? 'слова' : 'слів'}`;
@@ -22,7 +23,7 @@ function syncBox(compact = false) {
   return `<div class="sync-box ${s.error ? 'err' : ''}">
     <div>${s.busy ? '<span class="spinner"></span> Зберігаю в GitHub…'
       : `<b>Є незбережені в GitHub зміни (${pend === 1 ? '1 урок' : pend + ' уроки(ів)'}) — вони в цьому браузері, нічого не втрачено.</b>${s.error ? `<br><span class="small">${esc(s.error)}</span>` : ''}`}</div>
-    ${s.busy ? '' : `<div class="sync-btns"><button class="btn sm primary" data-sync>${s.error ? 'Спробувати ще' : 'Зберегти в GitHub'}</button>${compact ? '' : '<button class="btn sm ghost" data-backup>Export backup</button>'}</div>`}
+    ${s.busy ? '' : `<div class="sync-btns"><button class="btn sm primary" data-sync>${s.error ? 'Спробувати ще' : 'Зберегти в GitHub'}</button>${compact ? '' : '<button class="btn sm ghost" data-backup>Резервна копія</button>'}</div>`}
   </div>`;
 }
 function wireSync(root, redraw) {
@@ -49,25 +50,25 @@ export function homeView(root) {
       <section class="hero">
         <div>
           <p class="eyebrow" lang="ja">日本語の単語</p>
-          <h1>My sets</h1>
-          <p class="muted">${plural(sets.length, 'set')} · ${plural(sets.reduce((n, s) => n + s.cards.length, 0), 'term')}</p>
+          <h1>Слова</h1>
+          <p class="muted">${pl(sets.length, UROK)} · ${pl(sets.reduce((n, s) => n + s.cards.length, 0), SLOVO)}</p>
         </div>
-        <div class="streak-card ${st ? 'on' : ''}"><span class="streak-sun"></span><div><b>${st}</b><span>day streak</span></div></div>
+        <div class="streak-card ${st ? 'on' : ''}"><span class="streak-sun"></span><div><b>${st}</b><span>днів поспіль</span></div></div>
       </section>
       <div class="home-tools">
-        <label class="search">${I.search}<input type="search" placeholder="Search sets and words…" aria-label="Search"></label>
+        <label class="search">${I.search}<input type="search" placeholder="Пошук уроків і слів…" aria-label="Пошук"></label>
         <a class="btn primary" href="#/new">${I.plus}<span>Створити мій урок</span></a>
       </div>
       <div class="sync-slot">${syncBox()}</div>
       <div class="groups"></div>
       <section class="panel data-panel">
-        <h2 class="sec-title">Backup &amp; data</h2>
-        <p class="muted">Progress and stars are saved in this browser only. Export a backup now and then.</p>
-        ${changes ? `<p class="note">You have ${plural(changes, 'local change')} that aren't in <code>sets.json</code> yet.</p>` : ''}
+        <h2 class="sec-title">Резервна копія і дані</h2>
+        <p class="muted">Прогрес і позначки ★ зберігаються лише в цьому браузері. Час від часу робіть резервну копію.</p>
+        ${changes ? `<p class="note">Локальних змін, яких ще немає в <code>sets.json</code>: ${changes}.</p>` : ''}
         <div class="btn-row">
-          <button class="btn ghost" data-exp>${I.download}<span>Export backup</span></button>
-          <button class="btn ghost" data-imp>${I.upload}<span>Import backup</span></button>
-          <button class="btn ghost" data-claude>${I.download}<span>Export words for Claude</span></button>
+          <button class="btn ghost" data-exp>${I.download}<span>Зберегти резервну копію</span></button>
+          <button class="btn ghost" data-imp>${I.upload}<span>Відновити з копії</span></button>
+          <button class="btn ghost" data-claude>${I.download}<span>Експорт слів для Claude</span></button>
         </div>
       </section>
     </div>`;
@@ -77,10 +78,10 @@ export function homeView(root) {
       const x = setStats(s);
       return `<a class="set-card" href="${setUrl(s.id)}">
         <div class="set-card-top"><h3>${esc(s.title)}</h3>${state.custom.pending[s.id] ? '<span class="badge">Лише тут</span>' : ''}</div>
-        <div class="muted small">${plural(x.total, 'term')}${x.starred ? ` · ★ ${x.starred}` : ''}</div>
+        <div class="muted small">${pl(x.total, SLOVO)}${x.starred ? ` · ★ ${x.starred}` : ''}</div>
         <div class="hits"></div>
         <div class="stack-bar"><i class="m" style="width:${x.total ? (x.m / x.total) * 100 : 0}%"></i><i class="l" style="width:${x.total ? (x.l / x.total) * 100 : 0}%"></i></div>
-        <div class="set-card-foot"><span>${x.pct}% mastered</span><span>${esc(s.dateCreated || '')}</span></div>
+        <div class="set-card-foot"><span>вивчено ${x.pct}%</span><span>${esc(s.dateCreated || '')}</span></div>
       </a>`;
     };
     const filter = q => {
@@ -105,7 +106,7 @@ export function homeView(root) {
     wireSync(root, draw);
 
     $('[data-exp]', root).onclick = backupNow;
-    $('[data-claude]', root).onclick = () => { download(`kotoba-sets-${today()}.json`, setsExport()); toast('Sets exported — send the file to Claude'); };
+    $('[data-claude]', root).onclick = () => { download(`kotoba-sets-${today()}.json`, setsExport()); toast('Слова експортовано — надішліть файл Claude'); };
     $('[data-imp]', root).onclick = async () => {
       const text = await pickFile();
       if (!text) return;
@@ -129,7 +130,7 @@ export function homeView(root) {
 export function setView(root, id, api) {
   const set = getSet(id);
   if (!set) {
-    root.innerHTML = `<div class="empty"><div class="empty-jp" lang="ja">無</div><p>This set doesn't exist.</p><a class="btn primary" href="#/">All sets</a></div>`;
+    root.innerHTML = `<div class="empty"><div class="empty-jp" lang="ja">無</div><p>Такого уроку немає.</p><a class="btn primary" href="#/">Усі уроки</a></div>`;
     return;
   }
   const mine = isMine(set);
@@ -143,11 +144,11 @@ export function setView(root, id, api) {
   };
   const nCheck = set.cards.filter(c => c.check).length;
   root.innerHTML = `<div class="set-page fade-in">
-    <a class="back" href="#/">${I.back}<span>All sets</span></a>
+    <a class="back" href="#/">${I.back}<span>Усі уроки</span></a>
     <div class="set-head">
       <div>
         <h1 class="set-title">${esc(set.title)}</h1>
-        <p class="muted">${plural(set.cards.length, 'term')}${set.dateCreated ? ` · ${esc(set.dateCreated)}` : ''} · ${mine ? 'Мій урок' : 'Підручник'}</p>
+        <p class="muted">${pl(set.cards.length, SLOVO)}${set.dateCreated ? ` · ${esc(set.dateCreated)}` : ''} · ${mine ? 'Мій урок' : 'Підручник'}</p>
       </div>
       <div class="set-actions">
         <a class="btn ghost sm" href="${setUrl(set.id)}/add" title="Імпорт: текст, фото, PDF">${I.plus}<span>Імпорт</span></a>
@@ -164,33 +165,33 @@ export function setView(root, id, api) {
     <div class="preview">
       <div class="flip-wrap">
         <div class="flip" tabindex="0"><div class="face front"></div><div class="face back"></div></div>
-        <div class="card-tools"><button class="icon-btn star" data-star aria-label="Star">${I.star}</button><button class="icon-btn" data-say aria-label="Play pronunciation">${I.speaker}</button><button class="icon-btn" data-pedit aria-label="Редагувати слово">${I.edit}</button></div>
+        <div class="card-tools"><button class="icon-btn star" data-star aria-label="Позначити">${I.star}</button><button class="icon-btn" data-say aria-label="Вимова">${I.speaker}</button><button class="icon-btn" data-pedit aria-label="Редагувати слово">${I.edit}</button></div>
       </div>
       <div class="preview-ctrl">
-        <button class="round-btn" data-prev aria-label="Previous">${I.left}</button>
+        <button class="round-btn" data-prev aria-label="Назад">${I.left}</button>
         <span class="pv-pos"></span>
-        <button class="round-btn" data-next aria-label="Next">${I.right}</button>
-        <a class="icon-btn pv-expand" href="${setUrl(set.id)}/flashcards" aria-label="Open flashcards">${I.expand}</a>
+        <button class="round-btn" data-next aria-label="Далі">${I.right}</button>
+        <a class="icon-btn pv-expand" href="${setUrl(set.id)}/flashcards" aria-label="Відкрити картки">${I.expand}</a>
       </div>
     </div>
 
     <section class="panel">
-      <h2 class="sec-title">Your progress</h2>
+      <h2 class="sec-title">Ваш прогрес</h2>
       <div class="stats3">
-        <div class="stat"><b>${x.n}</b><span>New</span></div>
-        <div class="stat l"><b>${x.l}</b><span>Learning</span></div>
-        <div class="stat m"><b>${x.m}</b><span>Mastered</span></div>
+        <div class="stat"><b>${x.n}</b><span>Нові</span></div>
+        <div class="stat l"><b>${x.l}</b><span>Вчу</span></div>
+        <div class="stat m"><b>${x.m}</b><span>Вивчені</span></div>
       </div>
       <div class="stack-bar big"><i class="m" style="width:${(x.m / x.total) * 100}%"></i><i class="l" style="width:${(x.l / x.total) * 100}%"></i></div>
-      ${missed.length ? `<h3 class="sub-title">Missed most often</h3>
+      ${missed.length ? `<h3 class="sub-title">Найчастіші помилки</h3>
         <ol class="missed">${missed.map(({ c, p }) => `<li><span class="jp" lang="ja">${esc(c.japanese)} <small class="reading">${esc(readingTxt(c))}</small></span><span class="uk">${esc(c.ukrainian)}</span><span class="miss-n">✕ ${p.w}</span></li>`).join('')}</ol>
-        <button class="btn primary" data-difficult>Study difficult terms</button>`
-      : `<p class="muted small">No mistakes recorded yet. Terms you miss will show up here.</p>`}
+        <button class="btn primary" data-difficult>Вчити важкі слова</button>`
+      : `<p class="muted small">Помилок ще немає. Слова, у яких ви помиляєтеся, з’являться тут.</p>`}
     </section>` : `<div class="empty"><div class="empty-jp" lang="ja">空</div><p>У цьому уроці ще немає слів.</p></div>`}
 
     <section class="terms">
       <div class="terms-head">
-        <h2 class="sec-title">Terms <span class="muted">(${set.cards.length})</span></h2>
+        <h2 class="sec-title">Слова <span class="muted">(${set.cards.length})</span></h2>
         <div class="seg small" data-tf><button class="on" data-v="all">Усі</button><button data-v="star">★ Важкі</button>${nCheck ? `<button data-v="check">Перевірити <span class="count-pill">${nCheck}</span></button>` : ''}</div>
       </div>
       <div class="term-list"></div>
@@ -205,7 +206,7 @@ export function setView(root, id, api) {
   let termFilter = 'all';
   let editing = null; // card id being edited inline
   const list = $('.term-list', root);
-  const lvlName = ['New', 'Learning', 'Mastered'];
+  const lvlName = ['Нове', 'Вчу', 'Вивчене'];
   const sectionName = { dialogue: '会話 · діалог', reading: '読み物 · читання' };
   const rowHTML = c => {
     const p = prog(set.id, c.id);
@@ -217,8 +218,8 @@ export function setView(root, id, api) {
       </div>
       <div class="term-acts">
         ${c.check ? `<button class="check-badge as-btn" data-act="checked" title="Позначити як перевірене">перевірити ✓</button>` : ''}
-        <button class="icon-btn star ${p.star ? 'on' : ''}" data-act="star" aria-label="Star">${I.star}</button>
-        <button class="icon-btn" data-act="say" aria-label="Play pronunciation">${I.speaker}</button>
+        <button class="icon-btn star ${p.star ? 'on' : ''}" data-act="star" aria-label="Позначити">${I.star}</button>
+        <button class="icon-btn" data-act="say" aria-label="Вимова">${I.speaker}</button>
         <button class="icon-btn" data-act="edit" aria-label="Редагувати">${I.edit}</button>
         <button class="icon-btn" data-act="del" aria-label="Видалити">${I.trash}</button>
       </div></div>`;
@@ -233,7 +234,7 @@ export function setView(root, id, api) {
       const sec = c.section && c.section !== lastSec && sectionName[c.section] ? `<div class="term-sec">◊ ${sectionName[c.section]} ◊</div>` : '';
       if (c.section) lastSec = c.section;
       return sec + (editing === c.id ? `<div class="term editing" data-id="${esc(c.id)}"><div class="inline-form"></div></div>` : rowHTML(c));
-    }).join('') : `<p class="muted center">${termFilter === 'star' ? 'Немає позначених слів — натисніть ★ на важких.' : termFilter === 'check' ? 'Усі слова перевірено ✓' : 'No terms.'}</p>`;
+    }).join('') : `<p class="muted center">${termFilter === 'star' ? 'Немає позначених слів — натисніть ★ на важких.' : termFilter === 'check' ? 'Усі слова перевірено ✓' : 'Немає слів.'}</p>`;
     if (editing) {
       const c = set.cards.find(k => k.id === editing);
       const slot = $(`.term.editing .inline-form`, list);

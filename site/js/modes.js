@@ -3,17 +3,17 @@ import { openWordModal } from './edit.js';
 import { state, getSet, prog, record, toggleStar, saveOpts, studyCards, difficultCards, getBest, setBest } from './store.js';
 
 export const MODES = {
-  flashcards: { name: 'Flashcards', jp: '札', desc: 'Flip and sort', run: flashcards },
-  learn: { name: 'Learn', jp: '学', desc: 'Adaptive rounds', run: learn },
-  write: { name: 'Write', jp: '書', desc: 'Type the answer', run: write },
-  test: { name: 'Test', jp: '試', desc: 'Check yourself', run: test },
-  match: { name: 'Match', jp: '合', desc: 'Race the clock', run: match, noAnswer: true },
-  listen: { name: 'Listening', jp: '聴', desc: 'Hear and answer', run: listen },
+  flashcards: { name: 'Картки', jp: '札', desc: 'Перегортай і сортуй', run: flashcards },
+  learn: { name: 'Заучування', jp: '学', desc: 'Адаптивні раунди', run: learn },
+  write: { name: 'Письмо', jp: '書', desc: 'Введи відповідь', run: write },
+  test: { name: 'Тест', jp: '試', desc: 'Перевір себе', run: test },
+  match: { name: 'Пари', jp: '合', desc: 'На швидкість', run: match, noAnswer: true },
+  listen: { name: 'Аудіювання', jp: '聴', desc: 'Слухай і відповідай', run: listen },
 };
 Object.entries(MODES).forEach(([k, v]) => (v.key = k));
 
 let curSetId = null;
-const PRAISE = ['Correct!', 'Nice!', 'Great job!', 'You got it!', 'Perfect!', 'その通り!', 'すごい!'];
+const PRAISE = ['Правильно!', 'Чудово!', 'Молодець!', 'Так тримати!', 'Ідеально!', 'その通り!', 'すごい!'];
 const pickOne = a => a[(Math.random() * a.length) | 0];
 
 // ---------- Sides & rendering ----------
@@ -40,11 +40,11 @@ function optionHTML(c, side) {
     : `<span class="opt-main">${esc(c.ukrainian)}</span>`;
 }
 export function fullLine(c) {
-  return `<div class="reveal" data-card="${esc(c.id)}"><span class="jp" lang="ja">${esc(c.japanese)}</span>${hasReading(c) ? `<span class="reading" lang="ja">${esc(rd(c))}</span>` : ''}<span class="dash">—</span><span class="uk">${esc(c.ukrainian)}</span><button class="icon-btn sm" data-say aria-label="Play pronunciation">${I.speaker}</button><button class="icon-btn sm" data-edit aria-label="Редагувати слово">${I.edit}</button></div>`;
+  return `<div class="reveal" data-card="${esc(c.id)}"><span class="jp" lang="ja">${esc(c.japanese)}</span>${hasReading(c) ? `<span class="reading" lang="ja">${esc(rd(c))}</span>` : ''}<span class="dash">—</span><span class="uk">${esc(c.ukrainian)}</span><button class="icon-btn sm" data-say aria-label="Вимова">${I.speaker}</button><button class="icon-btn sm" data-edit aria-label="Редагувати слово">${I.edit}</button></div>`;
 }
 function promptHTML(c) {
   const side = promptSide();
-  return `<div class="prompt-box">${faceHTML(c, side)}${side === 'ja' ? `<button class="icon-btn say" data-say aria-label="Play pronunciation">${I.speaker}</button>` : ''}</div>`;
+  return `<div class="prompt-box">${faceHTML(c, side)}${side === 'ja' ? `<button class="icon-btn say" data-say aria-label="Вимова">${I.speaker}</button>` : ''}</div>`;
 }
 function wireSay(el, card) {
   $$('[data-say]', el).forEach(b => (b.onclick = e => { e.stopPropagation(); speakCard(card); }));
@@ -91,9 +91,9 @@ export function modeView(root, setId, mode, api) {
   curSetId = set.id;
   root.innerHTML = `<div class="mode-page">
     <div class="mode-top">
-      <a class="icon-btn" href="#/set/${encodeURIComponent(set.id)}" aria-label="Back to set">${I.close}</a>
+      <a class="icon-btn" href="#/set/${encodeURIComponent(set.id)}" aria-label="Назад до уроку">${I.close}</a>
       <div class="mode-title"><span class="mode-jp" lang="ja">${def.jp}</span><div><div class="mode-name">${def.name}</div><div class="mode-set">${esc(set.title)}</div></div></div>
-      <button class="icon-btn opts-btn" data-opts aria-label="Options">${I.sliders}<span>Options</span></button>
+      <button class="icon-btn opts-btn" data-opts aria-label="Налаштування">${I.sliders}<span>Налаштування</span></button>
     </div>
     <div class="opts-panel" hidden></div>
     <div class="mode-body"></div>
@@ -107,7 +107,7 @@ export function modeView(root, setId, mode, api) {
     const cards = studyCards(set);
     renderOpts(panel, def, set, start);
     if (!cards.length) {
-      body.innerHTML = `<div class="empty fade-in"><div class="empty-jp" lang="ja">空</div><p>No terms match this filter${state.opts.filter === 'starred' ? ' — star some terms first' : state.opts.filter === 'difficult' ? ' — no mistakes yet' : ''}.</p><button class="btn primary" data-all>Study all terms</button></div>`;
+      body.innerHTML = `<div class="empty fade-in"><div class="empty-jp" lang="ja">空</div><p>Немає слів за цим фільтром${state.opts.filter === 'starred' ? ' — спершу позначте слова ★' : state.opts.filter === 'difficult' ? ' — помилок ще немає' : ''}.</p><button class="btn primary" data-all>Вчити всі слова</button></div>`;
       $('[data-all]', body).onclick = () => { saveOpts({ filter: 'all' }); start(); };
       return;
     }
@@ -127,11 +127,11 @@ function renderOpts(panel, def, set, restart) {
   const nDiff = difficultCards(set).length;
   panel.innerHTML =
     (def.noAnswer ? '' : def.key === 'listen'
-      ? seg('answer', 'Answer with', [['uk', 'Meaning (UA)'], ['ja', '日本語 dictation']], o.answer)
-      : seg('answer', 'Answer with', [['uk', 'Українська'], ['ja', '日本語']], o.answer)) +
-    (def.key === 'listen' ? seg('listenType', 'Answer by', [['choose', 'Choosing'], ['type', 'Typing']], o.listenType) : '') +
-    seg('filter', 'Terms', [['all', `All ${set.cards.length}`], ['starred', `★ Starred ${nStar}`], ['difficult', `Difficult ${nDiff}`]], o.filter) +
-    seg('shuffle', 'Order', [['false', 'In order'], ['true', 'Shuffled']], o.shuffle);
+      ? seg('answer', 'Відповідь', [['uk', 'Значення (UA)'], ['ja', '日本語 диктант']], o.answer)
+      : seg('answer', 'Відповідь', [['uk', 'Українська'], ['ja', '日本語']], o.answer)) +
+    (def.key === 'listen' ? seg('listenType', 'Спосіб', [['choose', 'Вибір'], ['type', 'Введення']], o.listenType) : '') +
+    seg('filter', 'Слова', [['all', `Усі ${set.cards.length}`], ['starred', `★ Позначені ${nStar}`], ['difficult', `Важкі ${nDiff}`]], o.filter) +
+    seg('shuffle', 'Порядок', [['false', 'По порядку'], ['true', 'Перемішати']], o.shuffle);
   $$('.seg', panel).forEach(s => (s.onclick = e => {
     const b = e.target.closest('button');
     if (!b) return;
@@ -145,9 +145,9 @@ function renderOpts(panel, def, set, restart) {
 // ---------- Question components ----------
 function finish(el, api, card, ok, onDone, { auto = false, override = false, note = '' } = {}) {
   const foot = $('.q-foot', el);
-  foot.innerHTML = `<div class="feedback ${ok ? 'good' : 'bad'}">${ok ? pickOne(PRAISE) : 'Not quite — remember this one:'}${note ? ` <small>${note}</small>` : ''}</div>
+  foot.innerHTML = `<div class="feedback ${ok ? 'good' : 'bad'}">${ok ? pickOne(PRAISE) : 'Не зовсім — запам’ятайте:'}${note ? ` <small>${note}</small>` : ''}</div>
     ${fullLine(card)}
-    <div class="foot-btns">${override ? `<button class="btn ghost" data-over>I was right</button>` : ''}<button class="btn primary" data-next>Continue <kbd>Enter</kbd></button></div>`;
+    <div class="foot-btns">${override ? `<button class="btn ghost" data-over>Я мав(ла) рацію</button>` : ''}<button class="btn primary" data-next>Далі <kbd>Enter</kbd></button></div>`;
   foot.classList.add('fade-in');
   wireSay(foot, card);
   let gone = false, t = null;
@@ -168,7 +168,7 @@ function finish(el, api, card, ok, onDone, { auto = false, override = false, not
 function mcQ(el, api, { card, set, side, prompt, label, onDone, onKey }) {
   const opts = shuffle([card, ...distractors(card, set, side)]);
   el.innerHTML = `<div class="q fade-in">
-    <div class="q-label">${label || 'Choose the matching term'}</div>
+    <div class="q-label">${label || 'Виберіть правильну відповідь'}</div>
     ${prompt}
     <div class="choices">${opts.map((c, i) => `<button class="choice" data-i="${i}"><kbd>${i + 1}</kbd>${optionHTML(c, side)}</button>`).join('')}</div>
     <div class="q-foot"></div></div>`;
@@ -195,11 +195,11 @@ function mcQ(el, api, { card, set, side, prompt, label, onDone, onKey }) {
 /** Written answer. onDone(ok, given) */
 function writeQ(el, api, { card, side, prompt, label, onDone }) {
   el.innerHTML = `<div class="q fade-in">
-    <div class="q-label">${label || (side === 'uk' ? 'Type the meaning in Ukrainian' : 'Type the Japanese')}</div>
+    <div class="q-label">${label || (side === 'uk' ? 'Напишіть значення українською' : 'Напишіть японською')}</div>
     ${prompt}
     <form class="write-form" autocomplete="off">
       <input class="answer-input" lang="${side === 'ja' ? 'ja' : 'uk'}" placeholder="${side === 'ja' ? '日本語で…' : 'Українською…'}" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="done">
-      <div class="write-btns"><button type="button" class="btn ghost" data-dk>Don't know</button><button class="btn primary" type="submit">Check</button></div>
+      <div class="write-btns"><button type="button" class="btn ghost" data-dk>Не знаю</button><button class="btn primary" type="submit">Перевірити</button></div>
     </form>
     <div class="q-foot"></div></div>`;
   wireSay(el, card);
@@ -220,7 +220,7 @@ function writeQ(el, api, { card, side, prompt, label, onDone }) {
     input.classList.add(r.ok ? 'good' : 'bad');
     if (r.ok) input.classList.add('glow'); else input.classList.add('shake');
     finish(el, api, card, r.ok, ok => onDone(ok, dontKnow ? '' : val), {
-      auto: r.ok && !r.typo, override: !r.ok && !dontKnow, note: r.typo ? '(small typo accepted)' : '',
+      auto: r.ok && !r.typo, override: !r.ok && !dontKnow, note: r.typo ? '(дрібну помилку зараховано)' : '',
     });
   };
   $('form', el).onsubmit = e => { e.preventDefault(); submit(false); };
@@ -234,9 +234,9 @@ function showResults(body, api, { title, results, onRetry, onRestart }) {
   body.innerHTML = `<div class="results fade-in">
     <div class="score-ring" style="--p:${pct}"><span>${pct}<small>%</small></span></div>
     <h2>${title}</h2>
-    <p class="muted">${ok} of ${n} correct</p>
-    ${missed.length ? `<h3 class="sec-title">Mistakes</h3><div class="miss-list">${missed.map(r => `<div class="miss">${fullLine(r.card)}${r.given ? `<div class="given">You wrote: <s>${esc(r.given)}</s></div>` : ''}</div>`).join('')}</div>` : `<p class="perfect" lang="ja">完璧 — perfect!</p>`}
-    <div class="res-btns">${missed.length && onRetry ? `<button class="btn primary" data-retry>Retry ${missed.length} missed</button>` : ''}<button class="btn ${missed.length && onRetry ? 'ghost' : 'primary'}" data-restart>Start over</button></div>
+    <p class="muted">${ok} з ${n} правильно</p>
+    ${missed.length ? `<h3 class="sec-title">Помилки</h3><div class="miss-list">${missed.map(r => `<div class="miss">${fullLine(r.card)}${r.given ? `<div class="given">Ви написали: <s>${esc(r.given)}</s></div>` : ''}</div>`).join('')}</div>` : `<p class="perfect" lang="ja">完璧 — ідеально!</p>`}
+    <div class="res-btns">${missed.length && onRetry ? `<button class="btn primary" data-retry>Повторити помилки (${missed.length})</button>` : ''}<button class="btn ${missed.length && onRetry ? 'ghost' : 'primary'}" data-restart>Почати знову</button></div>
   </div>`;
   $$('.miss', body).forEach((m, i) => wireSay(m, missed[i].card));
   $('[data-retry]', body)?.addEventListener('click', onRetry);
@@ -281,25 +281,25 @@ function flashcards(body, set, allCards, api, restart) {
     stopAuto();
     body.innerHTML = `<div class="fc">
       <div class="fc-top">
-        ${sorting ? `<div class="fc-count bad"><b data-n-still>0</b><span>Still learning</span></div>` : '<span></span>'}
+        ${sorting ? `<div class="fc-count bad"><b data-n-still>0</b><span>Ще вчу</span></div>` : '<span></span>'}
         <div class="fc-pos"></div>
-        ${sorting ? `<div class="fc-count good"><span>Know</span><b data-n-know>0</b></div>` : '<span></span>'}
+        ${sorting ? `<div class="fc-count good"><span>Знаю</span><b data-n-know>0</b></div>` : '<span></span>'}
       </div>
       <div class="bar thin"><i class="fc-bar"></i></div>
       <div class="fc-stage">
         <div class="flip-wrap">
-          <div class="flip" tabindex="0" aria-label="Flashcard, press space to flip"><div class="face front"></div><div class="face back"></div></div>
-          <div class="card-tools"><button class="icon-btn star" data-star aria-label="Star">${I.star}</button><button class="icon-btn" data-say aria-label="Play pronunciation">${I.speaker}</button><button class="icon-btn" data-fedit aria-label="Редагувати слово">${I.edit}</button></div>
-          <div class="tap-hint">Tap to flip</div>
+          <div class="flip" tabindex="0" aria-label="Картка, пробіл — перевернути"><div class="face front"></div><div class="face back"></div></div>
+          <div class="card-tools"><button class="icon-btn star" data-star aria-label="Позначити">${I.star}</button><button class="icon-btn" data-say aria-label="Вимова">${I.speaker}</button><button class="icon-btn" data-fedit aria-label="Редагувати слово">${I.edit}</button></div>
+          <div class="tap-hint">Торкніться, щоб перевернути</div>
         </div>
         <div class="fc-ctrl"></div>
       </div>
       <div class="fc-tools">
-        <button class="tool ${sorting ? 'on' : ''}" data-t="sort"><span class="sw"></span>Track progress</button>
-        <button class="tool ${state.opts.shuffle ? 'on' : ''}" data-t="shuffle">${I.shuffle}<span>Shuffle</span></button>
-        <button class="tool" data-t="auto">${I.play}<span>Autoplay</span></button>
+        <button class="tool ${sorting ? 'on' : ''}" data-t="sort"><span class="sw"></span>Відстежувати прогрес</button>
+        <button class="tool ${state.opts.shuffle ? 'on' : ''}" data-t="shuffle">${I.shuffle}<span>Перемішати</span></button>
+        <button class="tool" data-t="auto">${I.play}<span>Автопрогравання</span></button>
       </div>
-      <p class="kbd-hint">Space flip · ${sorting ? '← still learning · → know · Backspace undo' : '← → previous / next'} · S star · V sound · E edit</p>
+      <p class="kbd-hint">Пробіл — перевернути · ${sorting ? '← ще вчу · → знаю · Backspace — скасувати' : '← → назад / далі'} · S — позначити · V — звук · E — редагувати</p>
     </div>`;
     const flip = $('.flip', body), front = $('.front', body), back = $('.back', body), wrap = $('.flip-wrap', body);
     const cur = () => deck[i];
@@ -324,12 +324,12 @@ function flashcards(body, set, allCards, api, restart) {
     };
     const ctrl = () => {
       $('.fc-ctrl', body).innerHTML = sorting
-        ? `<button class="big-btn bad" data-a="still">${I.close}<span>Still learning</span></button>
-           <button class="icon-btn" data-a="undo" ${hist.length ? '' : 'disabled'} aria-label="Undo">${I.undo}</button>
-           <button class="big-btn good" data-a="know">${I.check}<span>Know</span></button>`
-        : `<button class="round-btn" data-a="prev" ${i ? '' : 'disabled'} aria-label="Previous">${I.left}</button>
+        ? `<button class="big-btn bad" data-a="still">${I.close}<span>Ще вчу</span></button>
+           <button class="icon-btn" data-a="undo" ${hist.length ? '' : 'disabled'} aria-label="Скасувати">${I.undo}</button>
+           <button class="big-btn good" data-a="know">${I.check}<span>Знаю</span></button>`
+        : `<button class="round-btn" data-a="prev" ${i ? '' : 'disabled'} aria-label="Назад">${I.left}</button>
            <span class="fc-pos2">${i + 1} / ${deck.length}</span>
-           <button class="round-btn" data-a="next" aria-label="Next">${I.right}</button>`;
+           <button class="round-btn" data-a="next" aria-label="Далі">${I.right}</button>`;
     };
     const doFlip = () => {
       if (ended) return;
@@ -363,12 +363,12 @@ function flashcards(body, set, allCards, api, restart) {
       const allKnown = sorting && !still.length;
       $('.fc-stage', body).innerHTML = `<div class="results fade-in">
         <div class="big-jp" lang="ja">${allKnown ? '完' : '続'}</div>
-        <h2>${!sorting ? 'You went through all the cards' : allKnown ? 'You know all of them!' : "Nice work — keep going!"}</h2>
-        ${sorting ? `<div class="sum-counts"><div class="good"><b>${know.length}</b>Know</div><div class="bad"><b>${still.length}</b>Still learning</div></div>` : ''}
+        <h2>${!sorting ? 'Ви переглянули всі картки' : allKnown ? 'Ви знаєте всі слова!' : 'Добра робота — продовжуйте!'}</h2>
+        ${sorting ? `<div class="sum-counts"><div class="good"><b>${know.length}</b>Знаю</div><div class="bad"><b>${still.length}</b>Ще вчу</div></div>` : ''}
         <div class="res-btns">
-          ${sorting && still.length ? `<button class="btn primary" data-again>Keep reviewing ${still.length} term${still.length > 1 ? 's' : ''}</button>` : ''}
-          <button class="btn ${sorting && still.length ? 'ghost' : 'primary'}" data-restart>Restart flashcards</button>
-          <a class="btn ghost" href="#/set/${encodeURIComponent(set.id)}/learn">Go to Learn</a>
+          ${sorting && still.length ? `<button class="btn primary" data-again>Повторити ще ${still.length}</button>` : ''}
+          <button class="btn ${sorting && still.length ? 'ghost' : 'primary'}" data-restart>Почати картки знову</button>
+          <a class="btn ghost" href="#/set/${encodeURIComponent(set.id)}/learn">Перейти до заучування</a>
         </div></div>`;
       $('.fc-bar', body).style.width = '100%';
       $('[data-again]', body)?.addEventListener('click', () => begin(state.opts.shuffle ? shuffle(still) : still));
@@ -448,7 +448,7 @@ function learn(body, set, cards, api) {
   const drawProg = () => {
     const { n, f, m, t } = counts();
     progEl.innerHTML = `<div class="stack-bar"><i class="m" style="width:${(m / t) * 100}%"></i><i class="l" style="width:${(f / t) * 100}%"></i></div>
-      <div class="legend"><span><i class="dot n"></i>New ${n}</span><span><i class="dot l"></i>Familiar ${f}</span><span><i class="dot m"></i>Mastered ${m}</span>${roundNo ? `<span class="round-tag">Round ${roundNo}</span>` : ''}</div>`;
+      <div class="legend"><span><i class="dot n"></i>Нові ${n}</span><span><i class="dot l"></i>Знайомі ${f}</span><span><i class="dot m"></i>Вивчені ${m}</span>${roundNo ? `<span class="round-tag">Раунд ${roundNo}</span>` : ''}</div>`;
   };
 
   const nextRound = () => {
@@ -472,18 +472,18 @@ function learn(body, set, cards, api) {
       ask();
     };
     if (s === 0) mcQ(stage, api, { card: c, set, side, prompt: promptHTML(c), onDone });
-    else writeQ(stage, api, { card: c, side, prompt: promptHTML(c), onDone, label: side === 'uk' ? 'Now write it — in Ukrainian' : 'Now write it — in Japanese' });
+    else writeQ(stage, api, { card: c, side, prompt: promptHTML(c), onDone, label: side === 'uk' ? 'Тепер напишіть — українською' : 'Тепер напишіть — японською' });
   };
   const summary = () => {
     drawProg();
     const { m, t } = counts();
-    const label = s => ['New', 'Familiar', 'Mastered'][s];
+    const label = s => ['Нові', 'Знайомі', 'Вивчені'][s];
     stage.innerHTML = `<div class="results fade-in">
-      <div class="round-badge">Round ${roundNo} complete</div>
-      <h2>${m === t ? 'All mastered!' : missed.size ? 'Good effort — keep going' : 'Great round!'}</h2>
-      <p class="muted">${m} of ${t} terms mastered</p>
+      <div class="round-badge">Раунд ${roundNo} завершено</div>
+      <h2>${m === t ? 'Усе вивчено!' : missed.size ? 'Добре — продовжуйте' : 'Чудовий раунд!'}</h2>
+      <p class="muted">Вивчено ${m} з ${t}</p>
       <div class="round-list">${roundCards.map(c => `<div class="round-item"><span class="jp" lang="ja">${esc(c.japanese)} <small class="reading">${esc(rd(c))}</small></span><span class="uk">${esc(c.ukrainian)}</span><span class="chip lvl${st.get(c.id)}">${label(st.get(c.id))}</span><button class="icon-btn sm" data-ledit="${esc(c.id)}" aria-label="Редагувати">${I.edit}</button></div>`).join('')}</div>
-      <div class="res-btns"><button class="btn primary" data-go>${m === t ? 'Finish' : 'Continue'} <kbd>Enter</kbd></button></div>
+      <div class="res-btns"><button class="btn primary" data-go>${m === t ? 'Завершити' : 'Далі'} <kbd>Enter</kbd></button></div>
     </div>`;
     $('[data-go]', stage).onclick = nextRound;
     $$('[data-ledit]', stage).forEach(b => (b.onclick = () => {
@@ -498,9 +498,9 @@ function learn(body, set, cards, api) {
     api.setKey(null);
     stage.innerHTML = `<div class="results fade-in">
       <div class="big-jp" lang="ja">完</div>
-      <h2>${fresh ? 'You already mastered all these terms' : `You've mastered all ${cards.length} terms!`}</h2>
-      <p class="muted">${fresh ? 'Study them again from the start, or test yourself.' : 'お疲れさまでした — great work.'}</p>
-      <div class="res-btns"><button class="btn primary" data-again>Study again</button><a class="btn ghost" href="#/set/${encodeURIComponent(set.id)}/test">Take a test</a><a class="btn ghost" href="#/set/${encodeURIComponent(set.id)}">Back to set</a></div>
+      <h2>${fresh ? 'Ви вже вивчили всі ці слова' : `Ви вивчили всі слова (${cards.length})!`}</h2>
+      <p class="muted">${fresh ? 'Повторіть їх з початку або пройдіть тест.' : 'お疲れさまでした — чудова робота.'}</p>
+      <div class="res-btns"><button class="btn primary" data-again>Вчити знову</button><a class="btn ghost" href="#/set/${encodeURIComponent(set.id)}/test">Пройти тест</a><a class="btn ghost" href="#/set/${encodeURIComponent(set.id)}">До уроку</a></div>
     </div>`;
     $('[data-again]', stage).onclick = () => { cards.forEach(c => st.set(c.id, 0)); roundNo = 0; nextRound(); };
   };
@@ -515,7 +515,7 @@ function learn(body, set, cards, api) {
 function write(body, set, cards, api) {
   const side = ansSide();
   sequence(body, api, cards, {
-    title: 'Write — results',
+    title: 'Письмо — результати',
     ask: (el, c, done) => writeQ(el, api, {
       card: c, side, prompt: promptHTML(c),
       onDone: (ok, given) => { record(set.id, c.id, ok, 'write'); done(ok, given); },
@@ -530,12 +530,12 @@ function listen(body, set, cards, api) {
   const side = ansSide();
   const type = state.opts.listenType === 'type' ? 'type' : 'choose';
   sequence(body, api, cards, {
-    title: 'Listening — results',
+    title: 'Аудіювання — результати',
     ask: (el, c, done) => {
       const prompt = `<div class="listen-prompt">
-        <button class="listen-btn" data-play aria-label="Play">${I.speaker}</button>
-        <button class="btn ghost sm" data-slow>Slow</button>
-        <div class="listen-hint">${side === 'uk' ? 'Listen — what does it mean?' : 'Listen — write what you hear'}${type === 'choose' ? ' · R replay' : ''}</div>
+        <button class="listen-btn" data-play aria-label="Відтворити">${I.speaker}</button>
+        <button class="btn ghost sm" data-slow>Повільно</button>
+        <div class="listen-hint">${side === 'uk' ? 'Слухайте — що це означає?' : 'Слухайте — напишіть, що чуєте'}${type === 'choose' ? ' · R — повторити' : ''}</div>
       </div>`;
       const args = {
         card: c, set, side, prompt, label: ' ',
@@ -555,7 +555,7 @@ function listen(body, set, cards, api) {
 // =====================================================================
 function test(body, set, cards, api) {
   const side = ansSide();
-  const TYPES = [['written', 'Written'], ['match', 'Matching'], ['mc', 'Multiple choice'], ['tf', 'True / False']];
+  const TYPES = [['written', 'Письмові'], ['match', 'Відповідність'], ['mc', 'Вибір відповіді'], ['tf', 'Правда / неправда']];
   let lastTypes = ['written', 'match', 'mc', 'tf'];
 
   const setup = () => {
@@ -563,18 +563,18 @@ function test(body, set, cards, api) {
     const n = cards.length, def = Math.min(n, 20);
     body.innerHTML = `<div class="panel test-setup fade-in">
       <div class="big-jp" lang="ja">試</div>
-      <h2>Create a test</h2>
-      <label class="field"><span class="field-label">Questions <b class="qn">${def}</b> <span class="muted">of ${n}</span></span>
+      <h2>Створити тест</h2>
+      <label class="field"><span class="field-label">Питань <b class="qn">${def}</b> <span class="muted">з ${n}</span></span>
         <input type="range" min="1" max="${n}" value="${def}" class="range"></label>
-      <div class="field"><span class="field-label">Question types</span>
+      <div class="field"><span class="field-label">Типи питань</span>
         <div class="checks">${TYPES.map(([k, t]) => `<label class="check"><input type="checkbox" value="${k}" ${lastTypes.includes(k) ? 'checked' : ''}><span>${t}</span></label>`).join('')}</div></div>
-      <button class="btn primary wide" data-go>Start test</button>
+      <button class="btn primary wide" data-go>Почати тест</button>
     </div>`;
     const range = $('.range', body);
     range.oninput = () => ($('.qn', body).textContent = range.value);
     $('[data-go]', body).onclick = () => {
       const types = $$('.checks input:checked', body).map(i => i.value);
-      if (!types.length) return toast('Choose at least one question type');
+      if (!types.length) return toast('Виберіть хоча б один тип питань');
       lastTypes = types;
       generate(+range.value, types);
     };
@@ -615,26 +615,26 @@ function test(body, set, cards, api) {
   const render = qs => {
     const total = qs.reduce((n, q) => n + (q.type === 'match' ? q.group.length : 1), 0);
     let num = 0;
-    const titles = { written: 'Written', match: 'Matching', mc: 'Multiple choice', tf: 'True or false' };
+    const titles = { written: 'Письмові відповіді', match: 'Відповідність', mc: 'Вибір відповіді', tf: 'Правда чи неправда' };
     let lastType = null;
     const html = qs.map((q, qi) => {
       const head = q.type !== lastType ? `<h3 class="sec-title tsec">${titles[q.type]}</h3>` : '';
       lastType = q.type;
       if (q.type === 'match') {
         const rows = q.group.map((c, ri) => `<div class="mrow" data-row="${ri}"><span class="tq-num">${++num}</span><div class="mprompt">${faceHTML(c, promptSide())}</div>
-          <select class="select"><option value="">Choose…</option>${q.answers.map(a => `<option value="${esc(a.id)}">${esc(answerText(a, side))}</option>`).join('')}</select><div class="tq-correct"></div></div>`).join('');
-        return `${head}<div class="tq match-q" data-q="${qi}"><div class="tq-label">Match each term with its answer</div>${rows}</div>`;
+          <select class="select"><option value="">Виберіть…</option>${q.answers.map(a => `<option value="${esc(a.id)}">${esc(answerText(a, side))}</option>`).join('')}</select><div class="tq-correct"></div></div>`).join('');
+        return `${head}<div class="tq match-q" data-q="${qi}"><div class="tq-label">Зіставте кожне слово з відповіддю</div>${rows}</div>`;
       }
       const n = ++num;
       const pr = `<div class="tq-prompt">${faceHTML(q.card, promptSide())}</div>`;
       let inner = '';
       if (q.type === 'written') inner = `<input class="answer-input" lang="${side === 'ja' ? 'ja' : 'uk'}" placeholder="${side === 'ja' ? '日本語で…' : 'Українською…'}" autocapitalize="off" autocorrect="off" spellcheck="false">`;
       if (q.type === 'mc') inner = `<div class="choices">${q.opts.map((c, i) => `<button class="choice" data-i="${i}">${optionHTML(c, side)}</button>`).join('')}</div>`;
-      if (q.type === 'tf') inner = `<div class="tf-pair"><span class="tf-eq">=</span><div class="tf-ans">${optionHTML(q.shown, side)}</div></div><div class="choices two"><button class="choice" data-v="1">True</button><button class="choice" data-v="0">False</button></div>`;
-      return `${head}<div class="tq" data-q="${qi}"><div class="tq-label"><span class="tq-num">${n}</span><span class="muted">of ${total}</span></div>${pr}${inner}<div class="tq-correct"></div></div>`;
+      if (q.type === 'tf') inner = `<div class="tf-pair"><span class="tf-eq">=</span><div class="tf-ans">${optionHTML(q.shown, side)}</div></div><div class="choices two"><button class="choice" data-v="1">Правда</button><button class="choice" data-v="0">Неправда</button></div>`;
+      return `${head}<div class="tq" data-q="${qi}"><div class="tq-label"><span class="tq-num">${n}</span><span class="muted">з ${total}</span></div>${pr}${inner}<div class="tq-correct"></div></div>`;
     }).join('');
     body.innerHTML = `<div class="test fade-in"><div class="test-score"></div>${html}
-      <div class="test-submit"><button class="btn primary wide" data-submit>Submit test</button></div></div>`;
+      <div class="test-submit"><button class="btn primary wide" data-submit>Завершити тест</button></div></div>`;
     // selection behaviour
     $$('.tq', body).forEach(el => {
       el.addEventListener('click', e => {
@@ -652,7 +652,7 @@ function test(body, set, cards, api) {
       if (el.classList.contains('match-q')) return $$('select', el).every(s => s.value);
       return $('.choice.sel', el) || $('input', el)?.value.trim();
     });
-    if (!answered && !confirm('Some questions are not answered. Submit anyway?')) return;
+    if (!answered && !confirm('Є питання без відповіді. Все одно завершити?')) return;
     let ok = 0;
     const mark = (el, card, good, given) => {
       el.classList.add(good ? 'good' : 'bad');
@@ -693,11 +693,11 @@ function test(body, set, cards, api) {
     const pct = Math.round((ok / total) * 100);
     $('.test-score', body).innerHTML = `<div class="results fade-in">
       <div class="score-ring" style="--p:${pct}"><span>${pct}<small>%</small></span></div>
-      <h2>${pct === 100 ? '完璧 — perfect score!' : pct >= 80 ? 'Great result!' : pct >= 50 ? 'Getting there' : 'Keep practicing'}</h2>
-      <p class="muted">${ok} of ${total} correct · ${total - ok} mistake${total - ok === 1 ? '' : 's'} shown below with the right answers</p>
-      <div class="res-btns"><button class="btn primary" data-new>New test</button>${total - ok ? `<a class="btn ghost" href="#/set/${encodeURIComponent(set.id)}/learn">Study in Learn</a>` : ''}</div></div>`;
+      <h2>${pct === 100 ? '完璧 — ідеальний результат!' : pct >= 80 ? 'Чудовий результат!' : pct >= 50 ? 'Непогано, ще трохи!' : 'Тренуйтеся далі'}</h2>
+      <p class="muted">${ok} з ${total} правильно · помилок: ${total - ok} (правильні відповіді — нижче)</p>
+      <div class="res-btns"><button class="btn primary" data-new>Новий тест</button>${total - ok ? `<a class="btn ghost" href="#/set/${encodeURIComponent(set.id)}/learn">Вчити в «Заучуванні»</a>` : ''}</div></div>`;
     $('[data-new]', body).onclick = setup;
-    $('.test-submit', body).innerHTML = `<button class="btn primary wide" data-new2>New test</button>`;
+    $('.test-submit', body).innerHTML = `<button class="btn primary wide" data-new2>Новий тест</button>`;
     $('[data-new2]', body).onclick = () => { setup(); window.scrollTo({ top: 0 }); };
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -708,20 +708,20 @@ function test(body, set, cards, api) {
 // =====================================================================
 // 5. MATCH
 // =====================================================================
-const fmtTime = s => s.toFixed(1) + 's';
+const fmtTime = s => s.toFixed(1) + ' с';
 function match(body, set, cards, api) {
   if (cards.length < 2) {
-    body.innerHTML = `<div class="empty"><div class="empty-jp" lang="ja">合</div><p>Match needs at least 2 terms.</p></div>`;
+    body.innerHTML = `<div class="empty"><div class="empty-jp" lang="ja">合</div><p>Для гри потрібно щонайменше 2 слова.</p></div>`;
     return;
   }
   const intro = () => {
     const best = getBest(set.id);
     body.innerHTML = `<div class="panel match-intro fade-in">
       <div class="big-jp" lang="ja">合</div>
-      <h2>Ready to play?</h2>
-      <p class="muted">Match all ${Math.min(6, cards.length)} pairs as fast as you can — Japanese with Ukrainian.</p>
-      ${best ? `<p class="best">Best time <b>${fmtTime(best)}</b></p>` : ''}
-      <button class="btn primary wide" data-start>Start game <kbd>Enter</kbd></button></div>`;
+      <h2>Готові?</h2>
+      <p class="muted">З’єднайте всі пари (${Math.min(6, cards.length)}) якнайшвидше — японське з українським.</p>
+      ${best ? `<p class="best">Найкращий час <b>${fmtTime(best)}</b></p>` : ''}
+      <button class="btn primary wide" data-start>Почати гру <kbd>Enter</kbd></button></div>`;
     $('[data-start]', body).onclick = play;
     api.setKey(e => { if (e.key === 'Enter') play(); });
   };
@@ -731,7 +731,7 @@ function match(body, set, cards, api) {
     const pairs = shuffle(cards).slice(0, 6);
     const tiles = shuffle(pairs.flatMap(c => [{ id: c.id, kind: 'ja', c }, { id: c.id, kind: 'uk', c }]));
     body.innerHTML = `<div class="match fade-in">
-      <div class="match-top"><span class="timer">0.0</span>${best ? `<span class="muted">Best ${fmtTime(best)}</span>` : ''}</div>
+      <div class="match-top"><span class="timer">0.0</span>${best ? `<span class="muted">Рекорд ${fmtTime(best)}</span>` : ''}</div>
       <div class="tiles">${tiles.map((t, i) => `<button class="tile ${t.kind}" data-i="${i}">${t.kind === 'ja'
         ? `<span class="jp ${sizeClass(t.c.japanese)}" lang="ja">${esc(t.c.japanese)}</span>${hasReading(t.c) ? `<small class="reading" lang="ja">${esc(rd(t.c))}</small>` : ''}`
         : `<span class="${sizeClass(t.c.ukrainian)}">${esc(t.c.ukrainian)}</span>`}</button>`).join('')}</div></div>`;
@@ -768,9 +768,9 @@ function match(body, set, cards, api) {
         body.innerHTML = `<div class="panel match-intro fade-in">
           <div class="big-jp" lang="ja">${record_ ? '祝' : '合'}</div>
           <div class="win-time">${fmtTime(time)}</div>
-          <h2>${record_ ? (best ? 'New record!' : 'First record set!') : 'Nice matching!'}</h2>
-          <p class="muted">${record_ && best ? `Previous best ${fmtTime(best)}` : `Best time ${fmtTime(Math.min(time, best || time))}`}</p>
-          <div class="res-btns"><button class="btn primary" data-start>Play again <kbd>Enter</kbd></button><a class="btn ghost" href="#/set/${encodeURIComponent(set.id)}">Back to set</a></div></div>`;
+          <h2>${record_ ? (best ? 'Новий рекорд!' : 'Перший рекорд!') : 'Чудово!'}</h2>
+          <p class="muted">${record_ && best ? `Попередній рекорд ${fmtTime(best)}` : `Найкращий час ${fmtTime(Math.min(time, best || time))}`}</p>
+          <div class="res-btns"><button class="btn primary" data-start>Ще раз <kbd>Enter</kbd></button><a class="btn ghost" href="#/set/${encodeURIComponent(set.id)}">До уроку</a></div></div>`;
         $('[data-start]', body).onclick = play;
         api.setKey(e => { if (e.key === 'Enter') play(); });
       }, 450);
