@@ -25,7 +25,7 @@ const PART_GEN = {
   'を': 'прямий додаток (урок 6), місце руху (урок 23), вихідне місце (урок 13)', 'に': 'час (урок 4), адресат (урок 7), місцезнаходження (урок 10), мета (урок 13)',
   'で': 'місце дії (урок 6), транспорт (урок 5), знаряддя чи спосіб (урок 7)', 'へ': 'напрямок руху (урок 5)',
   'と': '«і» між іменниками (урок 4), «разом з» (урок 5), цитата (урок 21)', 'も': '«також» (урок 1)', 'の': 'поєднує два іменники (уроки 1, 2)',
-  'から': '«з» (час, місце – урок 4), причина (урок 9)', 'まで': '«до» (урок 4)', 'や': 'неповний перелік (урок 10)', 'か': 'питання (урок 1)',
+  'から': '«з» (час, місце — урок 4), причина (урок 9)', 'まで': '«до» (урок 4)', 'や': 'неповний перелік (урок 10)', 'か': 'питання (урок 1)',
   'よ': 'нова інформація (урок 5)', 'ね': 'сподівання на згоду (урок 4)',
 };
 
@@ -238,7 +238,7 @@ function qTransJ(it, pool) {
     uid: it.id, type: 'tj', mode: 'choice', self: true, lesson: it.l, ref: gref(it.pt), weak: plainT(p?.title || ''), label: 'Виберіть правильний переклад (або напишіть свій)',
     prompt: `<div class="ex-sent" lang="ja">${furi(it.ja)}</div>`, options: shuffle([it.uk, ...ds]).map(o => ({ v: o, h: esc(o) })), answer: it.uk,
     correct: `<div lang="ja">${furi(it.ja)}</div><div>${esc(it.uk)}</div>`,
-    x: `Речення ілюструє конструкцію «${plainT(p?.title || '')}»${it.src ? ` (${it.src})` : ''}. Переклад – з розділу «II. Переклад»${it.src ? '' : ' / IV. Граматика'}.`, say: furiSay(it.ja), src: `урок ${it.l}`,
+    x: `Речення ілюструє конструкцію «${plainT(p?.title || '')}»${it.src ? ` (${it.src})` : ''}. Переклад — з розділу «II. Переклад»${it.src ? '' : ' / IV. Граматика'}.`, say: furiSay(it.ja), src: `урок ${it.l}`,
   };
 }
 function qTiles(it) {
@@ -332,11 +332,11 @@ function judge(q, given) {
 }
 function whyWrong(q, given) {
   if (!given) return '';
-  if (q.type === 'p' || (q.type === 'e' && q.kind === 'p')) return PART_GEN[given] ? `Ви вибрали «${given}»: ${given} – це ${PART_GEN[given]}. Тут потрібна «${q.answer}».` : '';
+  if (q.type === 'p' || (q.type === 'e' && q.kind === 'p')) return PART_GEN[given] ? `Ви вибрали «${given}»: ${given} — це ${PART_GEN[given]}. Тут потрібна «${q.answer}».` : '';
   if (q.verb) {
     const f = detectForm(q.verb.base, q.verb.g, given, q.verb.kana);
-    if (f === 'masu') return `«${given}» – це ввічлива ます-форма, а потрібна ${FORMS[q.verb.f].label}.`;
-    if (f && f !== q.verb.f) return `«${given}» – це ${FORMS[f].label}, а тут потрібна ${FORMS[q.verb.f].label}.`;
+    if (f === 'masu') return `«${given}» — це ввічлива ます-форма, а потрібна ${FORMS[q.verb.f].label}.`;
+    if (f && f !== q.verb.f) return `«${given}» — це ${FORMS[f].label}, а тут потрібна ${FORMS[q.verb.f].label}.`;
     if (!f) return `«${given}» не є правильною формою дієслова ${q.verb.base}.`;
   }
   return '';

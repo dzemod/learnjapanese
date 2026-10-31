@@ -71,3 +71,8 @@
 - Progress, stars, unsynced lessons, streak, best times: browser localStorage (`jp.*`), Export/Import backup on the home page.
 - Everything must stay 100% free: no paid/AI APIs.
 - Run locally: `npx serve site` (the save API only works on Vercel or with `vercel dev`).
+
+## Review (REVIEW.md)
+- Review in progress (user request): batches words 1–10 … 41–50, grammar by 10, kanji by chapters, exam bank, interface; after each batch commit "Review: …" and update REVIEW.md (corrections table, «Потребує перевірки», statistics). Done: batch 1 (words 0–10 + global typography).
+- After rebuilding grammar/exam always run `node tools/typo-uk.js` (quotes «», apostrophe ’, dash —, …).
+- Transcription: kana only for readings; Cyrillic names/terms by the Ukrainian (Kovalenko) system (し сі, ち ті, じ дзі, つ цу, しゃ ся, ちゃ тя, じゃ дзя).
