@@ -42,7 +42,7 @@ export function homeView(root) {
     const sets = getSets();
     const st = streak();
     const changes = localChangeCount();
-    const lessonNo = s => { const m = /^mnn-(d+)$/.exec(s.id); return m ? +m[1] : 999; };
+    const lessonNo = s => { const m = /^mnn-(\d+)$/.exec(s.id); return m ? +m[1] : 999; };
     const mine = sets.filter(isMine), book = sets.filter(s => !isMine(s)).sort((a, b) => lessonNo(a) - lessonNo(b));
     root.innerHTML = `<div class="home fade-in">
       ${state.loadError ? `<div class="alert">Не вдалося завантажити <code>data/sets.json</code>. Якщо ви відкрили файл напряму, запустіть локальний сервер: <code>npx serve site</code>.</div>` : ''}

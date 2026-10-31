@@ -29,7 +29,7 @@
 - `learnjapanesetextbook/minna-2.pdf` — Part II: lessons 26–50. PDF page = book page + 23 (lesson 26 on PDF page 27; contents PDF 13–20).
 - Vocabulary section "I. Нові слова та вирази": columns kana | kanji | Ukrainian; verbs marked I/II/III; hints in [ ]; sub-lists ◊ 会話 ◊ (section "dialogue") and 読み物 (section "reading"); lines starting with ※ are proper names — skip.
 - Textbook sets: id `mnn-00` (Вступний урок), `mnn-01` … `mnn-50`, `source: "textbook"`.
-- Imported so far: Вступний урок, lessons 1–5.
+- Imported: Вступний урок + all lessons 1–50 (2,217 words). Proper names (※ in Part II; fictional names/landmarks after the wavy line in Part I) are skipped; real countries/cities without ※ are kept. Home page groups them as Частина I (0–25) and Частина II (26–50).
 
 ## Merging a browser export
 "Export words for Claude" downloads `kotoba-sets-YYYY-MM-DD.json` (`{ sets, hiddenSets }`, same card format). Upsert sets by id, ask before removing `hiddenSets`, show a summary table, commit and push.
