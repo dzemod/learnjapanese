@@ -46,6 +46,13 @@
 - kanji-300 PDF: lesson 1 kanji on PDF pp. 27–34, lesson 2 pp. 37–44 (4 kanji per full page + 1 on the next page, then exercises). Book has 15 lessons (contents PDF p. 4–5).
 - Stroke order: KanjiVG SVGs from jsDelivr (CC BY-SA 3.0, attribution shown in the kanji card).
 
+## Exam tab — `site/js/exam.js`, `site/data/exam.json`, `site/js/conjugate.js`
+- `#/exam` setup (lesson range, Мої уроки, kanji book/range, task types, count / full mock, timer, presets), `#/exam/run`, `#/exam/result`. Session in sessionStorage (`jp.examSession`), history in localStorage (`jp.examHistory`), presets in localStorage + `site/data/exam-presets.json` (API action `exam-presets`).
+- Bank `exam.json`: `{ lessons: [{ lesson, items: [...] }] }`, items: `t:"p"` particle blank, `t:"v"` verb form, `t:"tr"` translation (+ distractors `d`), `t:"e"` error finding. Each item: `l` lesson, `pt` grammar point for the reference, `spt` point of the sentence, `x` explanation (from IV. Граматика / conjugation rules).
+- Build/refresh per lessons: `npm i --no-save kuromoji@0.1.2` (or `KUROMOJI=<path>`), then `node tools/build-exam.js <from> <to>` — run after adding grammar lessons.
+- Particle explanations = rules in `tools/build-exam.js` (`explainParticle`) — add rules for lessons 26–50 when their grammar is imported; verb forms of lessons 26+ need `FORMS[...].point` in `conjugate.js` (potential 27, volitional 31, imperative 33, ば 35, passive 37, causative 48).
+- References: grammar `#/grammar/<l>/<pointId>`, kanji `#/kanji/<lessonId>/<kanjiId>`, words `#/set/<id>`; floating «Повернутися до екзамену» button (exam.js `returnButton`).
+
 ## Progress of the textbook import (update after each batch)
 - Grammar: lessons 1–25 done (Part I complete). L22 160,162–163 · L23 166,168–169 · L24 172,174–175 · L25 178,180–181; main L22 186, L23 196, L24 204, L25 212. L17 130,132–133 · L18 136,138–139 · L19 142,144–145 · L20 148,150–151 · L21 154,156–157; main L16 134, L17 144, L18 152, L19 160, L20 170, L21 178. L12 100,102–103 · L13 106,108–109 · L14 112,114–115 · L15 118,120–121 · L16 124,126–127; main L12 98, L13 110, L14 118, L15 126. Translation book pages: L6 64,66–67 · L7 70,72–73 · L8 76,78–79 · L9 82,84–85 · L10 88,90–91 · L11 94,96–97 (pattern: lesson start, vocab, II at +2, III at +3, IV at +4..+5). Main book: L6 48, L7 56, L8 66, L9 74, L10 82, L11 90.
 - Kanji: kanji-300 lessons 1–2 done (40 kanji); kanji-700 not started.

@@ -333,7 +333,7 @@ export function kanjiHome(root) {
   </div>`;
 }
 
-export function kanjiLessonView(root, id) {
+export function kanjiLessonView(root, id, openId) {
   const l = lesson(id);
   if (!l) { root.innerHTML = `<div class="empty"><div class="empty-jp" lang="ja">無</div><p>Такого уроку немає.</p><a class="btn primary" href="#/kanji">Канджі</a></div>`; return; }
   const book = bookOf(id);
@@ -397,5 +397,6 @@ export function kanjiLessonView(root, id) {
   };
   const redraw = () => { const y = window.scrollY; draw(); window.scrollTo(0, y); };
   draw();
+  if (openId) setTimeout(() => openKanji(id, openId, redraw), 50);
   return onSync(() => { if (!document.querySelector('.modal-back')) redraw(); });
 }

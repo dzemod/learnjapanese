@@ -119,6 +119,10 @@ export function markKanjiPending(lessonId) {
   emit();
 }
 export const saveCustomNow = () => saveCustom();
+// Exam presets (Екзамен tab) — synced as one file through the same API.
+let presetsPayload = () => [];
+export const registerPresetsPayload = fn => (presetsPayload = fn);
+export function markPresetsPending() { state.custom.pending['exam-presets'] = 'presets'; saveCustom(); emit(); }
 export const isMine = set => !!set && set.source !== 'textbook';
 
 /**
@@ -342,6 +346,7 @@ export async function syncAll({ interactive = true } = {}) {
     for (const id of ids) {
       const action = state.custom.pending[id];
       if (action === 'delete') await call({ action: 'delete', setId: id });
+      else if (action === 'presets') await call({ action: 'exam-presets', presets: presetsPayload() });
       else if (action === 'kanji') { const lesson = kanjiPayload(id); if (lesson) await call({ action: 'kanji-lesson', lesson }); }
       else {
         const set = getSet(id);

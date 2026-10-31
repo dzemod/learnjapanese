@@ -12,6 +12,7 @@ export function loadGrammar() {
     .catch(e => { console.error('Could not load data/grammar.json', e); G.data = []; G.error = true; }));
 }
 const byNo = n => G.data.find(l => l.lesson === n);
+export const grammarLessons = () => G.data || [];
 const pointsTxt = n => { const a = n % 10, b = n % 100; return `${n} ${a === 1 && b !== 11 ? 'пункт' : a >= 2 && a <= 4 && (b < 12 || b > 14) ? 'пункти' : 'пунктів'}`; };
 
 function blockHTML(b) {

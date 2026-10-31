@@ -5,6 +5,7 @@ import { homeView, setView, editorView } from './views.js';
 import { modeView } from './modes.js';
 import { loadKanji, kanjiHome, kanjiLessonView, isKanjiSet } from './kanji.js';
 import { loadGrammar, grammarHome, grammarLesson } from './grammar.js';
+import { examView, returnButton } from './exam.js';
 
 const app = $('#app');
 let cleanup = null;
@@ -45,7 +46,8 @@ async function route() {
   window.scrollTo(0, 0);
   const kanjiRoute = parts[0] === 'kanji' || (parts[0] === 'set' && isKanjiSet(parts[1] || ''));
   document.body.dataset.view = parts[0] === 'set' && parts[2] && !['add', 'edit'].includes(parts[2]) ? 'mode' : parts[0] || 'home';
-  document.body.dataset.tab = kanjiRoute ? 'kanji' : parts[0] === 'grammar' ? 'grammar' : 'words';
+  document.body.dataset.tab = kanjiRoute ? 'kanji' : parts[0] === 'grammar' ? 'grammar' : parts[0] === 'exam' ? 'exam' : 'words';
+  returnButton(parts[0]);
   if (kanjiRoute || parts[0] === 'grammar') {
     app.innerHTML = '<div class="loading"><span class="sun pulse"></span></div>';
     await (kanjiRoute ? loadKanji() : loadGrammar());
@@ -54,7 +56,8 @@ async function route() {
   const out = v => { cleanup = typeof v === 'function' ? v : null; };
   if (!parts.length) cleanup = homeView(app, api);
   else if (parts[0] === 'grammar') out(parts[1] ? grammarLesson(app, +parts[1], parts[2]) : grammarHome(app));
-  else if (parts[0] === 'kanji') out(parts[1] ? kanjiLessonView(app, parts[1]) : kanjiHome(app));
+  else if (parts[0] === 'kanji') out(parts[1] ? kanjiLessonView(app, parts[1], parts[2]) : kanjiHome(app));
+  else if (parts[0] === 'exam') { const v = await examView(app, parts[1]); if (my === routeNo) out(v); }
   else if (parts[0] === 'set' && parts[1] && isKanjiSet(parts[1]) && (!parts[2] || ['add', 'edit'].includes(parts[2]))) {
     location.replace('#/kanji/' + encodeURIComponent(parts[1].replace(/-w$/, ''))); return;
   }

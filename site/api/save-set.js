@@ -117,6 +117,22 @@ function cleanKanjiLesson(l) {
   };
 }
 
+async function savePresets(res, raw) {
+  if (!Array.isArray(raw) || raw.length > 200) return res.status(400).json({ error: 'Неправильні пресети.' });
+  const presets = raw.filter(p => p && typeof p === 'object' && p.name).map(p => JSON.parse(JSON.stringify(p, (k, v) => (typeof v === 'string' ? v.slice(0, 200) : v))));
+  const file = 'site/data/exam-presets.json';
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const r = await gh(`contents/${file}?ref=${encodeURIComponent(BRANCH)}`);
+    if (!r.ok && r.status !== 404) throw ghError(r.status);
+    const sha = r.ok ? (await r.json()).sha : undefined;
+    const content = Buffer.from(JSON.stringify({ presets }, null, 2) + String.fromCharCode(10), 'utf8').toString('base64');
+    const w = await gh(`contents/${file}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: 'Update exam presets from the site', content, sha, branch: BRANCH }) });
+    if (w.ok) return res.status(200).json({ ok: true });
+    const e = ghError(w.status);
+    if (e.code !== 'conflict' || attempt === 2) throw e;
+  }
+}
+
 async function saveKanjiLesson(res, raw) {
   const lesson = cleanKanjiLesson(raw);
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -180,6 +196,7 @@ module.exports = async function handler(req, res) {
 
   try {
     if (body.action === 'kanji-lesson') return await saveKanjiLesson(res, body.lesson);
+    if (body.action === 'exam-presets') return await savePresets(res, body.presets);
     let set = null, setId = '';
     if (body.action === 'upsert') { set = cleanSet(body.set); setId = set.id; }
     else if (body.action === 'delete') { setId = str(body.setId, 100); }

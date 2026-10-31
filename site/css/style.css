@@ -829,3 +829,85 @@ body[data-view="grammar"] main, body[data-view="kanji"] main { max-width: 1040px
 .kb-readings { font-family: var(--jp); font-size: 1.15rem; text-align: center; display: grid; gap: 4px; }
 .jp-big.kanji-face { font-size: clamp(5rem, 24vw, 8rem); }
 .set-actions .btn span[lang] { display: inline; font-family: var(--jp); }
+
+/* ==========================================================================
+   Exam tab
+   ========================================================================== */
+.tabs-nav { grid-template-columns: repeat(4, 1fr); }
+.tabs-nav a { font-size: .82rem; gap: 5px; }
+@media (min-width: 760px) { .tabs-nav { min-width: 480px; } .tabs-nav a { font-size: .9rem; } }
+@media (max-width: 420px) { .tn-jp { display: none; } }
+body[data-tab="exam"] .tabs-nav [data-tab="exam"] { background: var(--red); color: #fff; }
+body[data-view="exam"] main { max-width: 860px; }
+.ex-setup .sec-title { margin-top: 18px; }
+.ex-setup .sec-title:first-child { margin-top: 0; }
+.ex-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 10px; }
+.ex-range { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; color: var(--muted); font-size: .9rem; }
+.ex-range .input { width: 76px; text-align: center; padding: 8px; }
+.ex-kanji-opts { display: grid; gap: 10px; margin-top: 10px; }
+.ex-types { display: grid; grid-template-columns: 1fr; gap: 6px; }
+@media (min-width: 600px) { .ex-types { grid-template-columns: 1fr 1fr; } }
+.ex-start { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 20px; }
+.ex-start .btn { flex: 1 1 200px; }
+.ex-presets { display: flex; flex-wrap: wrap; gap: 8px; }
+.ex-preset { display: inline-flex; align-items: center; gap: 2px; }
+.exam-run { max-width: 720px; margin: 0 auto; }
+.ex-top { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.ex-progress { flex: 1; display: flex; align-items: center; gap: 10px; font-size: .85rem; color: var(--muted); }
+.ex-progress .bar { flex: 1; }
+.ex-timer { font-variant-numeric: tabular-nums; font-weight: 700; min-width: 44px; text-align: right; }
+.ex-timer.low { color: #ff6b81; }
+.ex-q { background: var(--panel); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 18px; }
+.ex-type { font-size: .75rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--red); margin-bottom: 6px; }
+.ex-type .muted { text-transform: none; letter-spacing: 0; font-weight: 500; }
+.ex-prompt { position: relative; margin: 12px 0 16px; padding-right: 36px; }
+.ex-say { position: absolute; top: 0; right: 0; }
+.ex-sent { font-family: var(--jp); font-size: clamp(1.15rem, 4.6vw, 1.45rem); line-height: 1.9; }
+.ex-uk { color: var(--muted); margin-top: 6px; font-size: .95rem; }
+.ex-big-uk { font-size: 1.25rem; font-weight: 700; }
+.ex-word { font-family: var(--jp); font-size: 2rem; }
+.ex-kanji { font-family: var(--jp); font-size: 5rem; line-height: 1.1; text-align: center; }
+.ex-kanji.word { font-size: 3rem; }
+.ex-blank { display: inline-block; min-width: 2.4em; text-align: center; color: var(--amber); border-bottom: 2px solid var(--amber); margin: 0 2px; font-size: .9em; }
+.ex-hl { color: #5fd38f; font-weight: 700; }
+.ex-listen { display: flex; align-items: center; gap: 14px; justify-content: center; padding: 10px 0; }
+.ex-feedback:empty { display: none; }
+.ex-feedback { margin-top: 14px; display: grid; gap: 10px; }
+.ex-given { color: #ff8a9b; }
+.ex-correct { background: var(--panel-2); border-radius: 10px; padding: 10px 12px; }
+.ex-correct [lang="ja"], .ex-correct .ex-sent { font-family: var(--jp); }
+.ex-expl { border-left: 3px solid var(--amber); padding: 4px 0 4px 12px; font-size: .93rem; }
+.ex-expl p { margin: 4px 0; }
+.ex-why { color: #ffb4bf; }
+.ex-refs { display: flex; flex-direction: column; gap: 6px; }
+.ex-ref { display: inline-flex; align-items: center; gap: 8px; text-align: left; border: 1px solid var(--border-2); background: var(--panel-2); border-radius: 10px; padding: 8px 12px; font-size: .85rem; color: var(--text); }
+.ex-ref:hover { border-color: var(--red); }
+.ex-ref svg { flex: none; color: var(--red); }
+.ex-ref.sm { padding: 4px 10px; font-size: .78rem; }
+.ex-self { margin-top: 12px; font-size: .9rem; }
+.ex-self summary { cursor: pointer; color: var(--muted); }
+.ex-self textarea { margin: 8px 0; width: 100%; }
+.ex-built { min-height: 52px; display: flex; flex-wrap: wrap; gap: 6px; padding: 10px; border: 1px dashed var(--border-2); border-radius: 12px; margin-bottom: 12px; align-items: center; }
+.ex-tiles, .ex-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.tile-chip { font-family: var(--jp); font-size: 1.1rem; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--border-2); background: var(--panel-2); min-height: 44px; }
+.tile-chip.on { background: var(--red-bg); border-color: var(--red-d); }
+.tile-chip.sel { border-color: var(--amber); background: rgba(217, 162, 91, .15); }
+.tile-chip.glue { margin-right: -6px; border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.ex-fix { margin-top: 6px; }
+.answer-input[lang="ja"] { font-family: var(--jp); }
+.ex-stats { display: grid; gap: 8px; }
+.ex-stat { display: grid; grid-template-columns: minmax(110px, 1.4fr) 2fr auto auto; gap: 10px; align-items: center; font-size: .9rem; }
+.ex-stat .stack-bar { margin: 0; }
+.ex-mistakes { display: grid; gap: 12px; }
+.ex-mistake { border: 1px solid var(--border); border-radius: 14px; padding: 12px; display: grid; gap: 8px; background: var(--panel-2); }
+.ex-mprompt .ex-sent { font-size: 1.05rem; }
+.ex-chart { width: 100%; height: 110px; display: block; margin-bottom: 10px; }
+.ex-chart polyline { fill: none; stroke: var(--red); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.ex-chart line { stroke: var(--border-2); stroke-dasharray: 4 4; vector-effect: non-scaling-stroke; }
+.ex-chart circle { fill: var(--red); }
+.ex-hist { display: grid; gap: 4px; font-size: .88rem; }
+.ex-hist div { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; }
+.ex-weak { display: grid; gap: 8px; }
+.ex-weak-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; font-size: .92rem; }
+.ex-weak-row .chip { font-size: .7rem; padding: 2px 8px; border-radius: 99px; background: var(--panel-3); color: var(--muted); }
+.exam-return { position: fixed; z-index: 70; left: 50%; transform: translateX(-50%); bottom: max(16px, env(safe-area-inset-bottom)); box-shadow: 0 10px 30px rgba(0, 0, 0, .5); }
