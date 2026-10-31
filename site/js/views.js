@@ -151,6 +151,7 @@ export function setView(root, id, api) {
         <p class="muted">${pl(set.cards.length, SLOVO)}${set.dateCreated ? ` · ${esc(set.dateCreated)}` : ''} · ${mine ? 'Мій урок' : 'Підручник'}</p>
       </div>
       <div class="set-actions">
+        ${/^mnn-(0[1-9]|[1-4]d|50)$/.test(set.id) ? `<a class="btn ghost sm g-link" href="#/grammar/${+set.id.slice(4)}"><span lang="ja">文法</span><span>Граматика уроку</span></a>` : ''}
         <a class="btn ghost sm" href="${setUrl(set.id)}/add" title="Імпорт: текст, фото, PDF">${I.plus}<span>Імпорт</span></a>
         <a class="btn ghost sm" href="${setUrl(set.id)}/edit">${I.edit}<span>Редагувати все</span></a>
         <button class="icon-btn" data-rename aria-label="Перейменувати" title="Перейменувати">Aa</button>

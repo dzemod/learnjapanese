@@ -1,7 +1,7 @@
 import { uid, today, fmtDate, shuffle, hasKanji } from './util.js';
 
 const K = { progress: 'jp.progress', custom: 'jp.custom', opts: 'jp.opts', days: 'jp.days', best: 'jp.best', pw: 'jp.pw' };
-const DEFAULT_OPTS = { answer: 'uk', filter: 'all', shuffle: false, fcSort: true, listenType: 'choose' };
+const DEFAULT_OPTS = { answer: 'uk', filter: 'all', shuffle: false, fcSort: true, listenType: 'choose', kanjiAns: 'both' };
 
 function load(k, def) {
   try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : def; } catch { return def; }
@@ -24,6 +24,7 @@ state.custom.newSets ||= [];
 state.custom.mods ||= {};
 state.custom.pending ||= {};
 state.custom.history ||= {};
+state.custom.kanji ||= {}; // locally edited kanji lessons (until the deployed kanji.json matches)
 
 const saveCustom = () => save(K.custom, state.custom);
 
@@ -105,7 +106,19 @@ export function getSets() {
   for (const s of state.custom.newSets) if (!shown.has(s.id) && !state.base.some(b => b.id === s.id)) out.push({ ...s, source: s.source || 'my', origin: 'local' });
   return out;
 }
-export const getSet = id => getSets().find(s => s.id === id);
+// Extra (virtual) sets, e.g. kanji lessons — registered by kanji.js.
+let extraProvider = () => null;
+export const registerSetProvider = fn => (extraProvider = fn);
+export const getSet = id => getSets().find(s => s.id === id) || extraProvider(id);
+// Kanji lesson payloads for syncing (registered by kanji.js).
+let kanjiPayload = () => null;
+export const registerKanjiPayload = fn => (kanjiPayload = fn);
+export function markKanjiPending(lessonId) {
+  state.custom.pending[lessonId] = 'kanji';
+  saveCustom();
+  emit();
+}
+export const saveCustomNow = () => saveCustom();
 export const isMine = set => !!set && set.source !== 'textbook';
 
 /**
@@ -329,6 +342,7 @@ export async function syncAll({ interactive = true } = {}) {
     for (const id of ids) {
       const action = state.custom.pending[id];
       if (action === 'delete') await call({ action: 'delete', setId: id });
+      else if (action === 'kanji') { const lesson = kanjiPayload(id); if (lesson) await call({ action: 'kanji-lesson', lesson }); }
       else {
         const set = getSet(id);
         if (set) await call({ action: 'upsert', set: toStoredSet(set) });
@@ -450,7 +464,7 @@ export function backupData() {
 export function restoreBackup(obj) {
   if (!obj || typeof obj !== 'object' || !('progress' in obj || 'custom' in obj)) throw new Error('Це не файл резервної копії Kotoba');
   state.progress = obj.progress || {};
-  state.custom = { newSets: [], mods: {}, pending: {}, history: {}, ...(obj.custom || {}) };
+  state.custom = { newSets: [], mods: {}, pending: {}, history: {}, kanji: {}, ...(obj.custom || {}) };
   state.opts = { ...DEFAULT_OPTS, ...(obj.opts || {}) };
   state.days = obj.days || [];
   state.best = obj.best || {};

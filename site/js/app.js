@@ -3,6 +3,8 @@ import { loadBase, streak, studiedToday, setPasswordPrompt, syncAll, state, onSy
 import { bulkEditView } from './edit.js';
 import { homeView, setView, editorView } from './views.js';
 import { modeView } from './modes.js';
+import { loadKanji, kanjiHome, kanjiLessonView, isKanjiSet } from './kanji.js';
+import { loadGrammar, grammarHome, grammarLesson } from './grammar.js';
 
 const app = $('#app');
 let cleanup = null;
@@ -30,16 +32,32 @@ function refreshStreak() {
   el.title = studiedToday() ? 'Сьогодні ви вже вчилися' : 'Повчіться сьогодні, щоб не перервати серію';
 }
 
-function route() {
+let routeNo = 0;
+async function route() {
+  const my = ++routeNo;
   try { cleanup?.(); } catch (e) { console.error(e); }
   cleanup = null;
+  document.querySelectorAll('.modal-back').forEach(m => m.remove()); // dialogs never survive navigation
   keyHandler = null;
   api.clearTimers();
   stopSpeech();
   const parts = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean).map(decodeURIComponent);
   window.scrollTo(0, 0);
-  document.body.dataset.view = parts[2] && !['add', 'edit'].includes(parts[2]) ? 'mode' : parts[0] || 'home';
+  const kanjiRoute = parts[0] === 'kanji' || (parts[0] === 'set' && isKanjiSet(parts[1] || ''));
+  document.body.dataset.view = parts[0] === 'set' && parts[2] && !['add', 'edit'].includes(parts[2]) ? 'mode' : parts[0] || 'home';
+  document.body.dataset.tab = kanjiRoute ? 'kanji' : parts[0] === 'grammar' ? 'grammar' : 'words';
+  if (kanjiRoute || parts[0] === 'grammar') {
+    app.innerHTML = '<div class="loading"><span class="sun pulse"></span></div>';
+    await (kanjiRoute ? loadKanji() : loadGrammar());
+    if (my !== routeNo) return;
+  }
+  const out = v => { cleanup = typeof v === 'function' ? v : null; };
   if (!parts.length) cleanup = homeView(app, api);
+  else if (parts[0] === 'grammar') out(parts[1] ? grammarLesson(app, +parts[1], parts[2]) : grammarHome(app));
+  else if (parts[0] === 'kanji') out(parts[1] ? kanjiLessonView(app, parts[1]) : kanjiHome(app));
+  else if (parts[0] === 'set' && parts[1] && isKanjiSet(parts[1]) && (!parts[2] || ['add', 'edit'].includes(parts[2]))) {
+    location.replace('#/kanji/' + encodeURIComponent(parts[1].replace(/-w$/, ''))); return;
+  }
   else if (parts[0] === 'new') cleanup = editorView(app, null, api);
   else if (parts[0] === 'set' && parts[1]) {
     if (!parts[2]) cleanup = setView(app, parts[1], api);

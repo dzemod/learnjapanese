@@ -8,6 +8,7 @@ const crypto = require('crypto');
 const REPO = process.env.GITHUB_REPO || 'dzemod/learnjapanese';
 const BRANCH = process.env.GITHUB_BRANCH || 'main';
 const FILE = 'site/data/sets.json';
+const KANJI_FILE = 'site/data/kanji.json';
 const MAX_CARDS = 3000;
 
 function gh(path, opts = {}) {
@@ -77,9 +78,67 @@ function format(data) {
   return `{\n  "sets": [\n${sets.join(',\n')}\n  ]\n}\n`;
 }
 
-async function readFile() {
-  const r = await gh(`contents/${FILE}?ref=${encodeURIComponent(BRANCH)}`);
-  if (r.status === 404) return { sha: undefined, data: { sets: [] } };
+/** kanji.json layout: one kanji per line. */
+function formatKanji(data) {
+  const NL = "\n";
+  const books = (data.books || []).map(b => {
+    const { lessons = [], ...meta } = b;
+    const head = Object.entries(meta).map(([k, v]) => "      " + JSON.stringify(k) + ": " + JSON.stringify(v)).join("," + NL);
+    const ls = lessons.map(l => {
+      const { kanji = [], ...lm } = l;
+      const lh = Object.entries(lm).map(([k, v]) => "          " + JSON.stringify(k) + ": " + JSON.stringify(v)).join("," + NL);
+      return "        {" + NL + lh + "," + NL + "          \"kanji\": [" + NL + kanji.map(k => "            " + JSON.stringify(k)).join("," + NL) + NL + "          ]" + NL + "        }";
+    });
+    return "    {" + NL + head + "," + NL + "      \"lessons\": [" + NL + ls.join("," + NL) + NL + "      ]" + NL + "    }";
+  });
+  return "{" + NL + "  \"books\": [" + NL + books.join("," + NL) + NL + "  ]" + NL + "}" + NL;
+}
+
+function cleanKanjiLesson(l) {
+  const bad = () => Object.assign(new Error('Неправильні дані уроку канджі.'), { status: 400 });
+  if (!l || typeof l !== 'object' || !/^k\d+-\d+$/.test(String(l.id)) || !Array.isArray(l.kanji) || l.kanji.length > 200) throw bad();
+  const list = v => (Array.isArray(v) ? v : []).map(x => str(x, 40)).filter(Boolean).slice(0, 20);
+  return {
+    ...l,
+    kanji: l.kanji.map(k => {
+      if (!k || typeof k !== 'object' || !k.id || !k.kanji) throw bad();
+      const out = {
+        id: str(k.id, 40), no: +k.no || 0, kanji: str(k.kanji, 4), strokes: +k.strokes || 0, radical: str(k.radical, 10),
+        en: str(k.en, 200), meaning: str(k.meaning, 200), on: list(k.on), kun: list(k.kun),
+        examples: (Array.isArray(k.examples) ? k.examples : []).slice(0, 60).map(e => {
+          const x = { id: str(e.id, 60), word: str(e.word, 60), kana: str(e.kana, 80), en: str(e.en, 200), uk: str(e.uk, 300) };
+          if (e.check) x.check = true;
+          return x;
+        }).filter(e => e.id && e.word),
+      };
+      if (k.check) out.check = true;
+      return out;
+    }),
+  };
+}
+
+async function saveKanjiLesson(res, raw) {
+  const lesson = cleanKanjiLesson(raw);
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const { sha, data } = await readFile(KANJI_FILE);
+    let found = false;
+    for (const b of data.books || []) {
+      const i = (b.lessons || []).findIndex(l => l.id === lesson.id);
+      if (i >= 0) { b.lessons[i] = { ...b.lessons[i], kanji: lesson.kanji }; found = true; }
+    }
+    if (!found) return res.status(404).json({ error: 'Такого уроку канджі немає в kanji.json.' });
+    try {
+      await writeFile(data, sha, `Update kanji lesson ${lesson.id} from the site`, KANJI_FILE);
+      return res.status(200).json({ ok: true });
+    } catch (e) {
+      if (e.code !== 'conflict' || attempt === 2) throw e;
+    }
+  }
+}
+
+async function readFile(file = FILE) {
+  const r = await gh(`contents/${file}?ref=${encodeURIComponent(BRANCH)}`);
+  if (r.status === 404) return { sha: undefined, data: file === FILE ? { sets: [] } : { books: [] } };
   if (!r.ok) throw ghError(r.status);
   const j = await r.json();
   let b64 = j.content;
@@ -89,15 +148,15 @@ async function readFile() {
     b64 = (await b.json()).content;
   }
   const data = JSON.parse(Buffer.from(b64, 'base64').toString('utf8'));
-  if (!Array.isArray(data.sets)) data.sets = [];
+  if (file === FILE && !Array.isArray(data.sets)) data.sets = [];
   return { sha: j.sha, data };
 }
 
-async function writeFile(data, sha, message) {
-  const r = await gh(`contents/${FILE}`, {
+async function writeFile(data, sha, message, file = FILE) {
+  const r = await gh(`contents/${file}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message, content: Buffer.from(format(data), 'utf8').toString('base64'), sha, branch: BRANCH }),
+    body: JSON.stringify({ message, content: Buffer.from(file === FILE ? format(data) : formatKanji(data), 'utf8').toString('base64'), sha, branch: BRANCH }),
   });
   if (!r.ok) throw ghError(r.status);
 }
@@ -120,6 +179,7 @@ module.exports = async function handler(req, res) {
   if (body.action === 'check') return res.status(200).json({ ok: true });
 
   try {
+    if (body.action === 'kanji-lesson') return await saveKanjiLesson(res, body.lesson);
     let set = null, setId = '';
     if (body.action === 'upsert') { set = cleanSet(body.set); setId = set.id; }
     else if (body.action === 'delete') { setId = str(body.setId, 100); }

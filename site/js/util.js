@@ -63,6 +63,7 @@ const KANA_ONLY = /^[぀-ヿ\s・ー〜~]+$/;
 /** Speak a card: prefer the kana reading (avoids kanji misreads), else the Japanese text. */
 export function speakCard(card, slow = false) {
   if (!card) return;
+  if (card.say) return speak(card.say, slow);
   speak(card.reading && KANA_ONLY.test(card.reading) ? card.reading : card.japanese, slow);
 }
 
@@ -292,3 +293,12 @@ export const I = {
   upload: svg('<path d="M12 15V4M7 9l5-5 5 5"/><path d="M4 19h16"/>'),
   back: svg('<path d="M19 12H5M11 6l-6 6 6 6"/>'),
 };
+
+// ---------- Furigana markup: {漢字|かんじ} ----------
+const FG = /\{([^{}|]+)\|([^{}]+)\}/g;
+/** HTML: kanji followed by the hiragana reading in brackets, e.g. 先生(せんせい). */
+export const furi = s => esc(s).replace(FG, (_, k, r) => `${k}<span class="fg">(${r})</span>`);
+/** Plain text with readings in brackets (for search). */
+export const furiPlain = s => String(s ?? '').replace(FG, '$1($2)');
+/** Text for speech: readings instead of kanji. */
+export const furiSay = s => String(s ?? '').replace(FG, '$2');

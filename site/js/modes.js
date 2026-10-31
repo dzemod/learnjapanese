@@ -29,7 +29,18 @@ export function metaHTML(c) {
 }
 export const answerText = (c, side = ansSide()) => (side === 'ja' ? c.japanese : c.ukrainian);
 
+/** Answer side of a kanji card: meaning and/or readings (option "kanjiAns"). */
+function kanjiBackHTML(c) {
+  const a = state.opts.kanjiAns || 'both', k = c.k;
+  const rd = (k.on.length ? `<div class="kb-on" lang="ja"><span class="kb-l">он</span>${esc(k.on.join('、'))}</div>` : '') +
+    (k.kun.length ? `<div class="kb-kun" lang="ja"><span class="kb-l">кун</span>${k.kun.map(kunHTML).join('、')}</div>` : '');
+  return `<div class="kanji-back">${a !== 'readings' ? `<div class="uk-big ${sizeClass(k.meaning)}">${esc(k.meaning)}</div>` : ''}${a !== 'meaning' ? `<div class="kb-readings">${rd}</div>` : ''}</div>`;
+}
+/** Kun reading with okurigana after "-" shown lighter: ひと-つ → ひと<span>つ</span> */
+export const kunHTML = r => { const [a, b] = String(r).split(/[-.]/); return b != null ? `${esc(a)}<span class="okuri">${esc(b)}</span>` : esc(a); };
+
 export function faceHTML(card, side) {
+  if (card.kind === 'kanji') return side === 'ja' ? `<div class="jp-big kanji-face" lang="ja">${esc(card.japanese)}</div>` : kanjiBackHTML(card);
   if (side === 'ja')
     return `<div class="jp-big ${sizeClass(card.japanese)}" lang="ja">${esc(card.japanese)}</div>${hasReading(card) ? `<div class="reading" lang="ja">${esc(rd(card))}</div>` : ''}${metaHTML(card)}`;
   return `<div class="uk-big ${sizeClass(card.ukrainian)}">${esc(card.ukrainian)}</div>`;
@@ -52,6 +63,14 @@ function wireSay(el, card) {
 }
 /** Edit a word without leaving the mode; updates the card object in place. */
 export function editInMode(card, after) {
+  const set = getSet(curSetId);
+  const done = () => {
+    const fresh = getSet(curSetId)?.cards.find(x => x.id === card.id);
+    if (fresh) Object.assign(card, fresh);
+    card._deleted = !fresh;
+    after?.();
+  };
+  if (set?.onEdit) return set.onEdit(card, done);
   openWordModal(curSetId, card, (c, action) => {
     const fresh = getSet(curSetId)?.cards.find(x => x.id === card.id);
     if (fresh) Object.assign(card, fresh);
@@ -85,13 +104,13 @@ function distractors(card, set, side, n = 3) {
 
 // ---------- Mode shell (top bar + options) ----------
 export function modeView(root, setId, mode, api) {
-  const set = getSet(setId);
+  let set = getSet(setId);
   const def = MODES[mode];
   if (!set || !def) { location.hash = '#/'; return; }
   curSetId = set.id;
   root.innerHTML = `<div class="mode-page">
     <div class="mode-top">
-      <a class="icon-btn" href="#/set/${encodeURIComponent(set.id)}" aria-label="Назад до уроку">${I.close}</a>
+      <a class="icon-btn" href="${set.backUrl || '#/set/' + encodeURIComponent(set.id)}" aria-label="Назад до уроку">${I.close}</a>
       <div class="mode-title"><span class="mode-jp" lang="ja">${def.jp}</span><div><div class="mode-name">${def.name}</div><div class="mode-set">${esc(set.title)}</div></div></div>
       <button class="icon-btn opts-btn" data-opts aria-label="Налаштування">${I.sliders}<span>Налаштування</span></button>
     </div>
@@ -104,6 +123,7 @@ export function modeView(root, setId, mode, api) {
   const start = () => {
     sub?.(); sub = null;
     api.clearTimers(); api.setKey(null); stopSpeech();
+    set = getSet(setId) || set;
     const cards = studyCards(set);
     renderOpts(panel, def, set, start);
     if (!cards.length) {
@@ -126,6 +146,7 @@ function renderOpts(panel, def, set, restart) {
   const nStar = set.cards.filter(c => prog(set.id, c.id).star).length;
   const nDiff = difficultCards(set).length;
   panel.innerHTML =
+    (set.kind === 'kanji' ? seg('kanjiAns', 'Що показувати у відповіді', [['both', 'Значення + читання'], ['meaning', 'Лише значення'], ['readings', 'Лише читання']], o.kanjiAns || 'both') : '') +
     (def.noAnswer ? '' : def.key === 'listen'
       ? seg('answer', 'Відповідь', [['uk', 'Значення (UA)'], ['ja', '日本語 диктант']], o.answer)
       : seg('answer', 'Відповідь', [['uk', 'Українська'], ['ja', '日本語']], o.answer)) +
