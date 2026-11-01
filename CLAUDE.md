@@ -36,6 +36,8 @@
 - Japanese text uses furigana markup `{漢字|かんじ}` (shown as 漢字(かんじ)); every kanji in examples gets a reading.
 - Source: `minna-1/2.pdf` "IV. Граматика" (explanation exactly as written) + main book 文型/例文 with translations from "II. Переклад". Main book lesson starts: L1 p6, L2 p14, L3 p22, L4 p32, L5 p40 (≈8–10 pages per lesson).
 - Add lessons: write `L06-10.js` (CommonJS array of lessons, same shape) in a temp dir, run `node tools/build-grammar.js <dir>` (upserts only those lessons).
+- **Textbook guard**: `point.blocks` = textbook only (IV. Граматика, 文型, 例文 + translations) — never removed/shortened. Extra explanations («Детальніше») go ONLY into `point.details` (same block format, rendered as a collapsible «Детальніше» under the textbook part; exam bank uses blocks only). `site/data/grammar.json` is the source of truth — never rebuild existing lessons from old L*.js sources (they are stale). `node tools/check-grammar.js` compares every point with `tools/grammar-baseline.json` (examples count + hash of every textbook block) and fails if anything is missing/changed; build-grammar runs it and refuses to write. Run it after every grammar batch. Only after a deliberate textbook correction: `node tools/check-grammar.js --update`.
+- Grammar labels: abbreviations are written in full (іменник₁, дієслово, い-/な-прикметник, речення); `node tools/expand-abbr.js <files>` converts new text. util.js `gram()` shows labels as chips (titles: `furiT`), indexes as <sub>.
 
 ## Kanji tab — `site/data/kanji.json`
 - `{ books: [{ id: "k300"|"k700", title, titleJp, source, lessons: [{ id: "k300-01", no, title, titleUk, range, kanji: [...] }] }] }`, one kanji per line.
@@ -74,5 +76,5 @@
 
 ## Review (REVIEW.md)
 - Review in progress (user request): batches words 1–10 … 41–50, grammar by 10, kanji by chapters, exam bank, interface; after each batch commit "Review: …" and update REVIEW.md (corrections table, «Потребує перевірки», statistics). Done: batch 1 (words 0–10 + global typography), batch 2 (words 11–20), batch 3 (words 21–30), batch 4 (words 31–40), batch 5 (words 41–50). batch 6 (grammar 1–50: furigana auto-check tools/review-furigana.js, IM→ІМ). batch 7 (kanji 1–4課), batch 8 (exam bank: safe distractors/errors, verb reading guard). batch 9 (interface). REVIEW COMPLETE for existing content — re-review new kanji lessons after import. Next: resume kanji import (k300 5課 PDF 69–76).
-- After rebuilding grammar/exam always run `node tools/typo-uk.js` (quotes «», apostrophe ’, dash —, …).
+- After rebuilding grammar/exam always run `node tools/typo-uk.js` (quotes «», apostrophe ’, dash —, …) — it touches Ukrainian string values only, never Japanese fields (ex, ja, pre, post…).
 - Transcription: kana only for readings; Cyrillic names/terms by the Ukrainian (Kovalenko) system (し сі, ち ті, じ дзі, つ цу, しゃ ся, ちゃ тя, じゃ дзя).

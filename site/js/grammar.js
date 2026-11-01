@@ -1,5 +1,6 @@
 // Grammar tab: explanations from "IV. Граматика" + 文型 / 例文 with Ukrainian translations.
 // Data: data/grammar.json → { lessons: [{ lesson, points: [{ id, title, blocks: [...] }] }] }
+// point.blocks = textbook (IV. Граматика, 文型, 例文 — never changed by extra work); point.details = «Детальніше» (optional extra blocks).
 // Blocks: { h } subheading · { p } paragraph · { note } note · { ex, uk, src? } example · { table: [[...]] }
 // Japanese text uses furigana markup {漢字|かんじ}, shown as 漢字(かんじ).
 import { $, $$, esc, I, furi, furiT, furiPlain, furiSay, speak, norm } from './util.js';
@@ -27,7 +28,7 @@ function blockHTML(b) {
     </div>`;
   return '';
 }
-const pointText = pt => [pt.title, ...pt.blocks.flatMap(b => [b.h, b.p, b.note, b.ex, b.uk, ...(b.table || []).flat()])].filter(Boolean).map(furiPlain).join(' ');
+const pointText = pt => [pt.title, ...[...pt.blocks, ...(pt.details || [])].flatMap(b => [b.h, b.p, b.note, b.ex, b.uk, ...(b.table || []).flat()])].filter(Boolean).map(furiPlain).join(' ');
 
 function wireSay(root) {
   root.addEventListener('click', e => {
@@ -99,7 +100,7 @@ export async function grammarLesson(root, n, pointId) {
       <button class="btn ghost sm" data-toggle>Згорнути все</button></div></div>
     <div class="g-cards">${l.points.map((pt, i) => `<details class="g-card" id="g-${esc(pt.id)}" open>
       <summary><span class="g-num">${i + 1}</span><span class="g-title" lang="ja">${furiT(pt.title)}</span><span class="g-chev" aria-hidden="true"></span></summary>
-      <div class="g-body">${pt.blocks.map(blockHTML).join('')}</div></details>`).join('')}</div>
+      <div class="g-body">${pt.blocks.map(blockHTML).join('')}${pt.details?.length ? `<details class="g-more"><summary>Детальніше</summary><div class="g-more-body">${pt.details.map(blockHTML).join('')}</div></details>` : ''}</div></details>`).join('')}</div>
     <div class="g-pager">${prev ? `<a class="btn ghost" href="#/grammar/${prev.lesson}">${I.left}<span>Урок ${prev.lesson}</span></a>` : '<span></span>'}
       ${next ? `<a class="btn ghost" href="#/grammar/${next.lesson}"><span>Урок ${next.lesson}</span>${I.right}</a>` : '<span></span>'}</div>
   </div>`;
