@@ -1,4 +1,4 @@
-import { $, stopSpeech, modal } from './util.js';
+import { $, stopSpeech, modal, plWord, soundOn, setSound, I } from './util.js';
 import { loadBase, streak, studiedToday, setPasswordPrompt, syncAll, state, onSync } from './store.js';
 import { bulkEditView } from './edit.js';
 import { homeView, setView, editorView } from './views.js';
@@ -29,7 +29,7 @@ document.addEventListener('keydown', e => {
 function refreshStreak() {
   const n = streak();
   const el = $('#streak');
-  el.innerHTML = `<span class="streak-dot ${studiedToday() ? 'on' : ''}"></span><b>${n}</b><span class="streak-lbl">дн.</span>`;
+  el.innerHTML = `<span class="streak-dot ${studiedToday() ? 'on' : ''}"></span><b>${n}</b><span class="streak-lbl">${plWord(n, ['день', 'дні', 'днів'])}</span>`;
   el.title = studiedToday() ? 'Сьогодні ви вже вчилися' : 'Повчіться сьогодні, щоб не перервати серію';
 }
 
@@ -124,3 +124,19 @@ onSync(drawSyncBar);
   window.addEventListener('hashchange', route);
   route();
 })();
+
+// Sound: header toggle 🔊/🔇 (remembered on this device) and a floating Stop while speech plays.
+function drawSound() {
+  const b = $('#sound-btn'), on = soundOn();
+  b.innerHTML = on ? I.speaker : I.mute;
+  b.classList.toggle('off', !on);
+  b.setAttribute('aria-pressed', String(on));
+  b.setAttribute('aria-label', on ? 'Звук увімкнено — натисніть, щоб вимкнути' : 'Звук вимкнено — натисніть, щоб увімкнути');
+  b.title = on ? 'Звук увімкнено (🔊)' : 'Звук вимкнено (🔇)';
+  document.querySelectorAll('[data-sound]').forEach(c => (c.checked = on)); // home settings checkbox, if shown
+}
+$('#sound-btn').onclick = () => setSound(!soundOn());
+$('#speech-stop').onclick = () => stopSpeech();
+document.addEventListener('kotoba:sound', drawSound);
+document.addEventListener('kotoba:speaking', e => ($('#speech-stop').hidden = !e.detail));
+drawSound();

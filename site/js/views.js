@@ -1,5 +1,5 @@
 import { sortGojuon } from './util.js';
-import { $, $$, esc, I, speakCard, toast, modal, download, pickFile, parseText, norm, today, onSwipe, justSwiped, isTyping, hasKanji } from './util.js';
+import { $, $$, esc, I, speakCard, toast, modal, download, pickFile, parseText, norm, today, onSwipe, justSwiped, isTyping, hasKanji, soundOn, setSound, autoSpeakOn, setAutoSpeak } from './util.js';
 import {
   state, getSets, getSet, isMine, setStats, prog, toggleStar, createSet, addCards, deleteCard, renameSet, deleteSet, markChecked,
   mostMissed, saveOpts, backupData, restoreBackup, setsExport, localChangeCount, streak, syncAll, onSync,
@@ -62,6 +62,12 @@ export function homeView(root) {
       </div>
       <div class="sync-slot">${syncBox()}</div>
       <div class="groups"></div>
+      <section class="panel sound-panel">
+        <h2 class="sec-title">Звук</h2>
+        <p class="muted small">Вимова звучить лише тоді, коли ви натискаєте кнопку динаміка, «▶ Прослухати» або клавішу V. Кнопка 🔊/🔇 угорі вимикає звук повністю.</p>
+        <label class="check"><input type="checkbox" data-sound ${soundOn() ? 'checked' : ''}><span>Звук увімкнено</span></label>
+        <label class="check sound-auto"><input type="checkbox" data-autospeak ${autoSpeakOn() ? 'checked' : ''}><span>Автоматично озвучувати картки <small class="muted">(картки й автопрогравання; за замовчуванням вимкнено)</small></span></label>
+      </section>
       <section class="panel data-panel">
         <h2 class="sec-title">Резервна копія і дані</h2>
         <p class="muted">Прогрес і позначки ★ зберігаються лише в цьому браузері. Час від часу робіть резервну копію.</p>
@@ -107,6 +113,8 @@ export function homeView(root) {
     wireSync(root, draw);
 
     $('[data-exp]', root).onclick = backupNow;
+    $('[data-sound]', root).onchange = e => setSound(e.target.checked);
+    $('[data-autospeak]', root).onchange = e => setAutoSpeak(e.target.checked);
     $('[data-claude]', root).onclick = () => { download(`kotoba-sets-${today()}.json`, setsExport()); toast('Слова експортовано — надішліть файл Claude'); };
     $('[data-imp]', root).onclick = async () => {
       const text = await pickFile();
@@ -360,7 +368,7 @@ export function editorView(root, setId, api) {
   root.innerHTML = `<div class="editor fade-in">
     <a class="back" href="${set ? setUrl(set.id) : '#/'}">${I.back}<span>${set ? esc(set.title) : 'Усі уроки'}</span></a>
     <h1>${set ? `Додати слова до «${esc(set.title)}»` : 'Створити мій урок'}</h1>
-    ${set ? '' : `<label class="field"><span class="field-label">Назва уроку</span><input class="input" data-title placeholder="Напр.: Урок 6 — мої слова (або залиште порожнім: ${today()})"></label>`}
+    ${set ? '' : `<label class="field"><span class="field-label">Назва уроку</span><input class="input" data-title placeholder="Наприклад: Урок 6 — мої слова (або залиште порожнім: ${today()})"></label>`}
 
     <div class="panel import-panel">
       <div class="seg tabs" role="tablist"><button class="on" data-tab="text">Текст</button><button data-tab="image">Фото / скріншот</button><button data-tab="pdf">PDF</button></div>
@@ -388,7 +396,7 @@ export function editorView(root, setId, api) {
           <b>Виберіть PDF</b>
           <span class="muted small">Текстовий PDF читається напряму, скан — через розпізнавання (OCR)</span>
         </label>
-        <label class="field inline-field"><span class="field-label">Сторінки</span><input class="input" data-pages placeholder="усі (напр. 1-3, 5)"></label>
+        <label class="field inline-field"><span class="field-label">Сторінки</span><input class="input" data-pages placeholder="усі (наприклад, 1–3, 5)"></label>
       </div>
 
       <div class="progress" hidden><div class="bar"><i></i></div><span class="progress-label small muted"></span></div>

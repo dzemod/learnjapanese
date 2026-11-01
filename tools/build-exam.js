@@ -63,12 +63,12 @@ function explainParticle(toks, i, L) {
       return R('1-4', 'も ставиться після теми замість は, якщо про неї стверджується те саме, що й про тему попереднього речення («також»).');
     case 'の':
       if (t.pos_detail_1 !== '連体化') return null;
-      if (next && ['です', 'じゃ', 'だ', 'では'].includes(next.surface_form)) return R('2-5', 'の поєднує два іменники; якщо з контексту зрозуміло, про що йдеться, ІМ₂ після の можна випустити («わたしの» — «мій»).');
-      return R('1-5', 'Частка の поєднує два іменники: ІМ₁ є означенням для ІМ₂ (приналежність, організація, тема, країна чи фірма-виробник).');
+      if (next && ['です', 'じゃ', 'だ', 'では'].includes(next.surface_form)) return R('2-5', 'の поєднує два іменники; якщо з контексту зрозуміло, про що йдеться, іменник₂ після の можна випустити («わたしの» — «мій»).');
+      return R('1-5', 'Частка の поєднує два іменники: іменник₁ є означенням для іменник₂ (приналежність, організація, тема, країна чи фірма-виробник).');
     case 'か':
       if (prev && ['何', 'なに', 'どこ'].includes(prev.surface_form) && next && next.surface_form !== '。') return R('13-5', 'どこか означає «десь, кудись», なにか — «щось»; частки へ та を після них можна випустити.');
       if (!next || ['。', '？', '?'].includes(next.surface_form)) return R('1-3', 'Частка か в кінці речення робить його питанням; порядок слів не змінюється.');
-      if (next.surface_form === '、') return R('2-4', 'РЕЧ₁か、РЕЧ₂か — питання з вибором: співрозмовнику пропонують вибрати один із варіантів.');
+      if (next.surface_form === '、') return R('2-4', 'речення₁か、речення₂か — питання з вибором: співрозмовнику пропонують вибрати один із варіантів.');
       return null;
     case 'を':
       if (t.pos_detail_1 !== '格助詞') return null;
@@ -84,16 +84,16 @@ function explainParticle(toks, i, L) {
       if (prev && ['みんな', '自分', '二人', '家族'].includes(prev.surface_form)) return null; // みんなで / 自分で — not drilled
       if (prev && ['一人', 'ひとり'].includes(prev.surface_form)) return R('5-4', 'ひとりで — «сам, наодинці»; частка と у такому разі не використовується.');
       if (prev && ['会議', 'パーティー', '試合'].includes(prev.surface_form)) return R('21-5', 'Частка で позначає ситуацію (подію), у якій відбувається дія.');
-      if (toks.some(x => x.surface_form === 'いちばん')) return R('12-5', 'ІМ₁ で … いちばん — вибір з групи чи категорії ІМ₁; група позначається часткою で.');
+      if (toks.some(x => x.surface_form === 'いちばん')) return R('12-5', 'іменник₁ で … いちばん — вибір з групи чи категорії іменник₁; група позначається часткою で.');
       return R('6-5', 'Частка で після іменника зі значенням місця вказує на місце, де відбувається дія.');
     case 'に': {
       if (t.pos_detail_1 !== '格助詞') return null;
-      if (['なる'].includes(vb)) return R('19-4', 'ІМ に なります — «ставати»; перед なります іменник і な-прикметник беруть に.');
+      if (['なる'].includes(vb)) return R('19-4', 'іменник に なります — «ставати»; перед なります іменник і な-прикметник беруть に.');
       if (['あげる', '貸す', '教える', 'かける', '送る', 'おくる', 'かす', 'おしえる', '書く', '出す', 'くれる'].includes(vb)) return R('7-3', 'З дієсловами あげます, かします, おしえます тощо частка に вказує на людину, якій щось дають, позичають, викладають.');
       if (['もらう', '借りる', '習う', 'かりる', 'ならう'].includes(vb)) return R('7-4', 'З もらいます, かります, ならいます частка に вказує на особу, від якої отримують щось.');
-      if (['ある', 'いる'].includes(vb) && v?.pos_detail_1 === '自立') return R('10-2', 'Частка に позначає місцезнаходження: ІМ (місце) に ІМ が あります／います.');
+      if (['ある', 'いる'].includes(vb) && v?.pos_detail_1 === '自立') return R('10-2', 'Частка に позначає місцезнаходження: іменник (місце) に іменник が あります／います.');
       if (['入る', '乗る', 'はいる', 'のる'].includes(vb)) return R('13-4', 'Частка に позначає мету (куди) з такими дієсловами, як はいります, のります.');
-      if (['行く', '来る', '帰る', 'いく', 'くる', 'かえる'].includes(vb) && prev && (prev.pos === '動詞' || ['買い物', '散歩', '勉強', '食事', '祭り', 'スキー', '見学', '迎え', '旅行', '出張'].includes(prev.surface_form))) return R('13-3', 'ДІЄСЛ ます-форма／ІМ + に いきます／きます／かえります — частка に позначає мету руху.');
+      if (['行く', '来る', '帰る', 'いく', 'くる', 'かえる'].includes(vb) && prev && (prev.pos === '動詞' || ['買い物', '散歩', '勉強', '食事', '祭り', 'スキー', '見学', '迎え', '旅行', '出張'].includes(prev.surface_form))) return R('13-3', 'дієслово ます-форма／іменник + に いきます／きます／かえります — частка に позначає мету руху.');
       if (prev && (prev.pos_detail_1 === '接尾' || /(時|分|日|月|年|曜日|半)$/.test(prev.surface_form)) && toks.slice(i + 1).some(x => /回$/.test(x.surface_form))) return R('11-2', 'Період に кількість 回 — частота дії (наприклад, «двічі на місяць»).');
       if (prev && (/(時|分|日|月|年|曜日|半)$/.test(prev.surface_form) || prev.pos_detail_2 === '助数詞')) return R('4-4', 'Частка に позначає час одноразової дії, коли в обставині часу є числівник (з днями тижня — за бажанням).');
       return null;
@@ -101,10 +101,10 @@ function explainParticle(toks, i, L) {
     case 'と':
       if (['申す', '書く', '読む', '伝える', '呼ぶ'].includes(next?.basic_form)) return null; // quotation with other verbs — not drilled
       if (['言う', '思う', 'いう', 'おもう'].includes(next?.basic_form)) return next.basic_form.match(/言|いう/) ? R('21-2', 'Частка と позначає зміст сказаного (цитату) перед いいます.') : R('21-1', 'Частка と позначає зміст думки перед おもいます.');
-      if (prev && prev.pos === '動詞' && prev.conjugated_form === '基本形') return R('23-3', 'ДІЄСЛ словникова форма と、～ — після цієї дії неминуче відбувається інша.');
-      if (toks.some(x => x.surface_form === 'どちら')) return R('12-4', 'ІМ₁ と ІМ₂ と どちらが … — вибір з двох; предмети поєднуються часткою と.');
+      if (prev && prev.pos === '動詞' && prev.conjugated_form === '基本形') return R('23-3', 'дієслово словникова форма と、～ — після цієї дії неминуче відбувається інша.');
+      if (toks.some(x => x.surface_form === 'どちら')) return R('12-4', 'іменник₁ と іменник₂ と どちらが … — вибір з двох; предмети поєднуються часткою と.');
       {
-        // AとB + が/を/は/も/の/です → «і»; otherwise ІМ(особа)と + дієслово → «разом з»
+        // AとB + が/を/は/も/の/です → «і»; otherwise іменник(особа)と + дієслово → «разом з»
         const j = toks.indexOf(next), after = next && NOUN(next) ? toks.slice(j + 1).find(x => x.pos_detail_1 !== '空白') : null;
         const joined = after && (['が', 'を', 'は', 'も', 'の', 'です', '、', 'じゃ', 'で'].includes(after.surface_form) && !(after.surface_form === 'で' && v));
         if (prev && NOUN(prev) && next && NOUN(next) && joined) return R('4-6', 'Частка と поєднує два іменники сурядним зв’язком («і»), перелічуючи всі предмети.');
@@ -113,8 +113,8 @@ function explainParticle(toks, i, L) {
       return null;
     case 'から':
       if (t.pos_detail_1 === '接続助詞') {
-        if (prev && prev.surface_form === 'て' || prev?.surface_form === 'で') return R('16-4', 'ДІЄСЛ₁ て-форма から、ДІЄСЛ₂ — дія ДІЄСЛ₂ відбувається після закінчення ДІЄСЛ₁.');
-        return R('9-4', 'Частка から поєднує два речення з причинно-наслідковим зв’язком: РЕЧ₁ — причина («тому що»).');
+        if (prev && prev.surface_form === 'て' || prev?.surface_form === 'で') return R('16-4', 'дієслово₁ て-форма から、дієслово₂ — дія дієслово₂ відбувається після закінчення дієслово₁.');
+        return R('9-4', 'Частка から поєднує два речення з причинно-наслідковим зв’язком: речення₁ — причина («тому що»).');
       }
       if (['もらう', '借りる'].includes(vb)) return R('7-4', 'Замість に можна вжити から — «від кого/чого отримують»; від організацій — лише から.');
       return R('4-5', 'Частка から вказує на місце або час, з якого починається дія.');
@@ -136,8 +136,8 @@ function explainParticle(toks, i, L) {
       }
       if (prev && QW.includes(prev.surface_form)) return R('24-4', 'Якщо питальне слово є підметом, після нього ставиться が.') || R('12-5', 'Якщо питальне слово виконує роль підмета, використовується частка が.');
       if (['わかる', '好き', '嫌い', '上手', '下手', 'できる', '欲しい', 'ほしい', 'ある'].some(w => words.includes(w)) && words.indexOf('ある') !== 0 && i > 0 && toks.slice(0, i).some(x => x.surface_form === 'は')) {
-        if (words.includes('欲しい') || words.includes('ほしい')) return R('13-1', 'ІМ が ほしいです — об’єкт бажання позначається часткою が.');
-        if (words.includes('できる')) return R('18-2', 'ІМ／ДІЄСЛ こと が できます — зміст можливості позначається часткою が.');
+        if (words.includes('欲しい') || words.includes('ほしい')) return R('13-1', 'іменник が ほしいです — об’єкт бажання позначається часткою が.');
+        if (words.includes('できる')) return R('18-2', 'іменник／дієслово こと が できます — зміст можливості позначається часткою が.');
         return R('9-1', 'Додатки до あります, わかります, すきです, じょうずです тощо оформляються часткою が.');
       }
       if (['ある', 'いる'].includes(vb)) return R('10-1', 'Підмет у реченні з あります／います (наявність предмета чи істоти) позначається часткою が.');
@@ -246,7 +246,13 @@ function masuOf(dict, g) {
         // ます-form markup: reuse the kanji reading from the sentence
         const kanjiPrefix = (dict.match(/^[^぀-ヿ]+/) || [''])[0];
         const kseg = sg.find((s, si) => s.r && s.t === kanjiPrefix.slice(-s.t.length));
-        const masuMk = kanjiPrefix && kseg ? masu.replace(kanjiPrefix, kanjiPrefix.slice(0, -kseg.t.length) + `{${kseg.t}|${kseg.r}}`) : masu;
+        let masuMk = kanjiPrefix && kseg ? masu.replace(kanjiPrefix, kanjiPrefix.slice(0, -kseg.t.length) + `{${kseg.t}|${kseg.r}}`) : masu;
+        // every later kanji run gets its reading too (組み立てます → {組|く}み{立|た}てます)
+        masuMk = masuMk.replace(/(\{[^}]*\})|([㐀-鿿々]+)/g, (m, done, run) => {
+          if (done) return m;
+          const s = sg.find(x => x.r && x.t === run);
+          return s ? `{${run}|${s.r}}` : m;
+        });
         const masuKana = masuMk.replace(/\{([^|}]+)\|([^}]+)\}/g, '$2');
         const expect = conj.conjugate(masu, g, form);
         if (expect !== ans.pl) { bad++; continue; }
@@ -255,7 +261,7 @@ function masuOf(dict, g) {
         const anaRead = k2h(toks.filter(x => x.a >= a && x.a < end).map(x => x.reading || x.surface_form).join(''));
         if (anaRead !== ans.kana) { bad++; continue; }
         const fp = conj.FORMS[form].point;
-        const x = conj.explainConj(masuKana, g, form) + ` Конструкція речення — «${pt.title.replace(/\{([^|}]+)\|[^}]+\}/g, '$1')}».`;
+        const x = (conj.explainConj(masuKana, g, form) + ` Конструкція речення — «${pt.title.replace(/\{([^|}]+)\|[^}]+\}/g, '$1')}».`).trim();
         const pre = span(sg, 0, a).mk, post = span(sg, end, plain.length).mk;
         items.push({ id: `v${L.lesson}-${++nv}`, t: 'v', ...base, pt: fp && has(fp) ? fp : pt.id, spt: pt.id, pre, a: ans.mk, ak: ans.kana, post, base: masuMk, g, f: form, uk: b.uk, x });
         const wf = /^[ 　]*[、。？!…]/.test(post.replace(/\{[^|}]+\|[^}]+\}/g, 'x')) ? null : { te: 'dict', ta: 'te' }[form]; // only swaps that are surely ungrammatical

@@ -73,7 +73,7 @@ export async function ocrImage(img, onProgress) {
     const labels = {
       'loading tesseract core': 'Завантаження OCR…',
       'initializing tesseract': 'Ініціалізація…',
-      'loading language traineddata': 'Завантаження мовних даних (jpn + ukr, один раз ≈ 15 МБ)…',
+      'loading language traineddata': 'Завантаження мовних даних (японська й українська, один раз ≈ 15 МБ)…',
       'initializing api': 'Підготовка…',
       'recognizing text': 'Розпізнавання тексту…',
     };

@@ -330,7 +330,7 @@ export async function syncAll({ interactive = true } = {}) {
   if (state.sync.busy) return { ok: false, saved: 0 };
   if (state.sync.configured !== true) await checkSyncConfigured();
   if (!state.sync.configured) {
-    state.sync.error = 'Збереження в GitHub ще не налаштоване — зміни збережено лише в цьому браузері (див. SETUP.md).';
+    state.sync.error = 'Збереження в GitHub ще не налаштоване — зміни збережено лише в цьому браузері (дивіться SETUP.md).';
     emit();
     return { ok: false, saved: 0, error: state.sync.error };
   }

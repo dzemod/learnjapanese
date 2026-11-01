@@ -45,19 +45,41 @@ if (hasTTS) {
   pickVoice();
   speechSynthesis.addEventListener?.('voiceschanged', pickVoice);
 }
+// RULE: speech plays only after an explicit action (speaker button, Прослухати, the V / R key).
+// Nothing speaks on load, route change, flip, next card, answer or timers — except flashcards
+// when the user turned on «Автоматично озвучувати картки» (speakAuto). The header 🔊/🔇 toggle
+// mutes everything. Every new utterance cancels the previous one (no queue).
+const SOUND_KEY = 'jp.sound', AUTO_KEY = 'jp.autoSpeak';
+const lsGet = (k, d) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch { /* ignore */ } };
+export const soundOn = () => lsGet(SOUND_KEY, 'on') !== 'off';
+export const autoSpeakOn = () => lsGet(AUTO_KEY, '0') === '1';
+export function setSound(on) { lsSet(SOUND_KEY, on ? 'on' : 'off'); if (!on) stopSpeech(); document.dispatchEvent(new CustomEvent('kotoba:sound')); }
+export function setAutoSpeak(on) { lsSet(AUTO_KEY, on ? '1' : '0'); document.dispatchEvent(new CustomEvent('kotoba:sound')); }
+let speaking = false;
+const setSpeaking = v => { if (speaking !== v) { speaking = v; document.dispatchEvent(new CustomEvent('kotoba:speaking', { detail: v })); } };
+export const isSpeaking = () => speaking;
+
 export function speak(text, slow = false) {
-  if (!hasTTS || !text) return;
+  if (!hasTTS || !text || !soundOn()) return;
   try {
     speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(String(text).replace(/[〜~]/g, ''));
     u.lang = 'ja-JP';
     if (voice) u.voice = voice;
     u.rate = slow ? 0.55 : 0.9;
+    u.onstart = () => setSpeaking(true);
+    u.onend = u.onerror = () => { if (!speechSynthesis.speaking) setSpeaking(false); };
     speechSynthesis.speak(u);
   } catch { /* ignore */ }
 }
 export function stopSpeech() {
   if (hasTTS) try { speechSynthesis.cancel(); } catch { /* ignore */ }
+  setSpeaking(false);
+}
+if (hasTTS) {
+  document.addEventListener('visibilitychange', () => { if (document.hidden) stopSpeech(); });
+  window.addEventListener('pagehide', stopSpeech);
 }
 const KANA_ONLY = /^[぀-ヿ\s・ー〜~]+$/;
 /** Speak a card: prefer the kana reading (avoids kanji misreads), else the Japanese text. */
@@ -66,6 +88,8 @@ export function speakCard(card, slow = false) {
   if (card.say) return speak(card.say, slow);
   speak(card.reading && KANA_ONLY.test(card.reading) ? card.reading : card.japanese, slow);
 }
+/** Automatic speech (flashcards only) — silent unless «Автоматично озвучувати картки» is on. */
+export function speakCardAuto(card) { if (autoSpeakOn()) speakCard(card); }
 
 // ---------- Answer checking ----------
 const kataToHira = s => s.replace(/[ァ-ヶ]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60));
@@ -228,7 +252,7 @@ export function modal(html, onMount) {
   wrap.innerHTML = `<div class="modal" role="dialog" aria-modal="true">${html}</div>`;
   document.body.append(wrap);
   const onKey = e => { if (e.key === 'Escape') close(); };
-  const close = () => { wrap.remove(); document.removeEventListener('keydown', onKey); };
+  const close = () => { stopSpeech(); wrap.remove(); document.removeEventListener('keydown', onKey); };
   document.addEventListener('keydown', onKey);
   wrap.addEventListener('click', e => { if (e.target === wrap) close(); });
   onMount?.(wrap.firstElementChild, close);
@@ -275,6 +299,7 @@ const svg = p => `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" st
 export const I = {
   star: svg('<path d="M12 3.6l2.6 5.2 5.8.9-4.2 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.2-4.1 5.8-.9z"/>'),
   speaker: svg('<path d="M11 5L6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 010 7"/><path d="M18.5 5.5a9 9 0 010 13"/>'),
+  mute: svg('<path d="M11 5L6 9H3v6h3l5 4z"/><path d="M16 9l6 6M22 9l-6 6"/>'),
   edit: svg('<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>'),
   trash: svg('<path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6 7l1 13h10l1-13"/>'),
   shuffle: svg('<path d="M3 6h3c5 0 7 12 12 12h3"/><path d="M3 18h3c2 0 3.5-2 4.5-4.5"/><path d="M13.5 9.5C14.5 7.5 16 6 18 6h3"/><path d="M18 3l3 3-3 3"/><path d="M18 15l3 3-3 3"/>'),
@@ -297,7 +322,28 @@ export const I = {
 // ---------- Furigana markup: {漢字|かんじ} ----------
 const FG = /\{([^{}|]+)\|([^{}]+)\}/g;
 /** HTML: kanji followed by the hiragana reading in brackets, e.g. 先生(せんせい). */
-export const furi = s => esc(s).replace(FG, (_, k, r) => `${k}<span class="fg">(${r})</span>`);
+export const furi = s => gram(esc(s).replace(FG, (_, k, r) => `${k}<span class="fg">(${r})</span>`));
+/** Same for construction titles: every grammar label becomes a chip. */
+export const furiT = s => gram(esc(s).replace(FG, (_, k, r) => `${k}<span class="fg">(${r})</span>`), true);
+/** Escaped Ukrainian text with grammar labels (explanations, references). */
+export const gtext = s => gram(esc(s));
+
+// ---------- Grammar labels: іменник₁, дієслово, い-прикметник … ----------
+// Shown as small accent chips with the index as <sub> (the ₁₂₃ glyphs are missing in the site fonts).
+// Only lowercase labels are chips; in prose a label is a chip when indexed or next to Japanese text.
+const LBL = /(?<![А-Яа-яІіЇїЄєҐґ’A-Za-z])((?:[いな]-)?(?:іменник|дієслово|речення|прикметник))([₁₂₃]?)(?![А-Яа-яІіЇїЄєҐґ’A-Za-z])/g;
+const JPC = /[぀-ヿ㐀-鿿～〜／、。>]/;
+const SUB = { '₁': 1, '₂': 2, '₃': 3 };
+export function gram(html, all = false) {
+  return html.replace(LBL, (m, w, idx, off, s) => {
+    if (!all && !idx) {
+      const after = s.slice(off + m.length).replace(/^\s*(\([^)]*\)\s*)?/, '')[0] || '';
+      const before = s.slice(0, off).replace(/\s+$/, '').slice(-1);
+      if (!JPC.test(after) && !JPC.test(before)) return m;
+    }
+    return `<span class="gl">${w}${idx ? `<sub>${SUB[idx]}</sub>` : ''}</span>`;
+  }).replace(/[₁₂₃]/g, c => `<sub>${SUB[c]}</sub>`);
+}
 /** Plain text with readings in brackets (for search). */
 export const furiPlain = s => String(s ?? '').replace(FG, '$1($2)');
 /** Text for speech: readings instead of kanji. */
@@ -310,3 +356,6 @@ const toHira = s => String(s || '').replace(/[ァ-ヶ]/g, c => String.fromCharCo
 export const kanaKey = c => toHira(c.reading || c.kana || c.japanese || c.word || '');
 /** Sort a copy of the list in gojūon order (stable for equal keys). */
 export const sortGojuon = (list, key = kanaKey) => list.map((x, i) => [x, i]).sort((a, b) => JA_COLL.compare(key(a[0]), key(b[0])) || a[1] - b[1]).map(x => x[0]);
+
+/** Ukrainian plural form of a word for n: plWord(5, ['день', 'дні', 'днів']) → 'днів'. */
+export const plWord = (n, [one, few, many]) => { const a = Math.abs(n) % 10, b = Math.abs(n) % 100; return a === 1 && b !== 11 ? one : a >= 2 && a <= 4 && (b < 12 || b > 14) ? few : many; };

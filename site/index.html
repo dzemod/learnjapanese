@@ -29,11 +29,15 @@
       <a href="#/kanji" data-tab="kanji"><span class="tn-jp" lang="ja">漢字</span><span>Канджі</span></a>
       <a href="#/exam" data-tab="exam"><span class="tn-jp" lang="ja">試験</span><span>Екзамен</span></a>
     </nav>
-    <div class="streak" id="streak"></div>
+    <div class="top-right">
+      <button type="button" class="icon-btn sound-btn" id="sound-btn" aria-pressed="true"></button>
+      <div class="streak" id="streak"></div>
+    </div>
   </header>
   <main id="app"><div class="loading"><span class="sun pulse"></span></div></main>
   <div id="syncbar" role="status" aria-live="polite"></div>
   <div id="toast" role="status" aria-live="polite"></div>
+  <button type="button" class="speech-stop" id="speech-stop" hidden>■ Стоп</button>
   <script type="module" src="js/app.js"></script>
 </body>
 </html>

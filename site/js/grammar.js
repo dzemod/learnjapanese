@@ -2,7 +2,7 @@
 // Data: data/grammar.json → { lessons: [{ lesson, points: [{ id, title, blocks: [...] }] }] }
 // Blocks: { h } subheading · { p } paragraph · { note } note · { ex, uk, src? } example · { table: [[...]] }
 // Japanese text uses furigana markup {漢字|かんじ}, shown as 漢字(かんじ).
-import { $, $$, esc, I, furi, furiPlain, furiSay, speak, norm } from './util.js';
+import { $, $$, esc, I, furi, furiT, furiPlain, furiSay, speak, norm } from './util.js';
 
 const G = { data: null, loading: null, error: false };
 export function loadGrammar() {
@@ -45,11 +45,24 @@ export async function grammarHome(root) {
       <p class="muted">${G.data.length} уроків · ${pointsTxt(total)}</p></div></section>
     ${G.error ? '<div class="alert">Не вдалося завантажити <code>data/grammar.json</code>.</div>' : ''}
     <div class="home-tools"><label class="search">${I.search}<input type="search" placeholder="Пошук у граматиці: は, です, дієслово…" aria-label="Пошук у граматиці"></label></div>
+    <details class="panel g-legend"><summary>Позначення</summary><dl>
+      <dt>${furiT('іменник')}</dt><dd>іменник (слово-предмет: ${furi('{本|ほん}')}, ${furi('{学生|がくせい}')}, ${furi('{東京|とうきょう}')})</dd>
+      <dt>${furiT('дієслово')}</dt><dd>дієслово (${furi('{行|い}きます')}, ${furi('{食|た}べます')}); форму позначено поруч: ます-форма, て-форма, ない-форма, словникова форма…</dd>
+      <dt>${furiT('い-прикметник')}</dt><dd>い-прикметник (${furi('{大|おお}きい')}, ${furi('{高|たか}い')})</dd>
+      <dt>${furiT('な-прикметник')}</dt><dd>な-прикметник (${furi('{元気|げんき}[な]')}, ${furi('{静|しず}か[な]')})</dd>
+      <dt>${furiT('речення')}</dt><dd>речення (ціла думка з присудком)</dd>
+      <dt>${furiT('іменник₁ は іменник₂')}</dt><dd>індекси <sub>1</sub> <sub>2</sub> <sub>3</sub> розрізняють слова одного типу в конструкції</dd>
+      <dt lang="ja">～</dt><dd>місце для слова або частини речення</dd>
+      <dt lang="ja">Ａ／Ｂ</dt><dd>варіанти: можна вжити будь-який</dd>
+      <dt lang="ja">[ ]</dt><dd>частину в квадратних дужках можна пропустити</dd>
+      <dt>( )</dt><dd>уточнення українською: (місце), (час), (людина)…</dd>
+      <dt lang="ja">${furi('{漢字|かんじ}')}</dt><dd>читання канджі хіраганою в дужках</dd>
+    </dl></details>
     <div class="g-results"></div>
     <div class="g-lessons">${groups.map(([t, jp, a, b]) => `<h2 class="group-title"><span lang="ja">${jp}</span> ${t}</h2>
       <div class="g-grid">${Array.from({ length: b - a + 1 }, (_, i) => a + i).map(n => {
         const l = byNo(n);
-        return l ? `<a class="g-tile" href="#/grammar/${n}"><b>Урок ${n}</b><span class="muted small">${pointsTxt(l.points.length)}</span><span class="g-tile-t" lang="ja">${furi(l.points[0]?.title || '')}</span></a>`
+        return l ? `<a class="g-tile" href="#/grammar/${n}"><b>Урок ${n}</b><span class="muted small">${pointsTxt(l.points.length)}</span><span class="g-tile-t" lang="ja">${furiT(l.points[0]?.title || '')}</span></a>`
           : `<div class="g-tile off"><b>Урок ${n}</b><span class="muted small">ще не додано</span></div>`;
       }).join('')}</div>`).join('')}</div>
   </div>`;
@@ -64,7 +77,7 @@ export async function grammarHome(root) {
       const at = norm(txt).indexOf(q);
       if (at >= 0) hits.push({ l, pt, snip: txt });
     }
-    res.innerHTML = hits.length ? `<p class="muted small">Знайдено: ${hits.length}</p><div class="g-hits">${hits.slice(0, 80).map(({ l, pt }) => `<a class="g-hit" href="#/grammar/${l.lesson}/${encodeURIComponent(pt.id)}"><span class="g-hit-l">Урок ${l.lesson}</span><span class="g-hit-t" lang="ja">${furi(pt.title)}</span></a>`).join('')}</div>`
+    res.innerHTML = hits.length ? `<p class="muted small">Знайдено: ${hits.length}</p><div class="g-hits">${hits.slice(0, 80).map(({ l, pt }) => `<a class="g-hit" href="#/grammar/${l.lesson}/${encodeURIComponent(pt.id)}"><span class="g-hit-l">Урок ${l.lesson}</span><span class="g-hit-t" lang="ja">${furiT(pt.title)}</span></a>`).join('')}</div>`
       : '<p class="muted center">Нічого не знайдено.</p>';
   };
 }
@@ -85,12 +98,12 @@ export async function grammarLesson(root, n, pointId) {
       <div class="set-actions"><a class="btn ghost sm" href="#/set/${wordsId}"><span lang="ja">言葉</span><span>Слова уроку</span></a>
       <button class="btn ghost sm" data-toggle>Згорнути все</button></div></div>
     <div class="g-cards">${l.points.map((pt, i) => `<details class="g-card" id="g-${esc(pt.id)}" open>
-      <summary><span class="g-num">${i + 1}</span><span class="g-title" lang="ja">${furi(pt.title)}</span><span class="g-chev" aria-hidden="true"></span></summary>
+      <summary><span class="g-num">${i + 1}</span><span class="g-title" lang="ja">${furiT(pt.title)}</span><span class="g-chev" aria-hidden="true"></span></summary>
       <div class="g-body">${pt.blocks.map(blockHTML).join('')}</div></details>`).join('')}</div>
     <div class="g-pager">${prev ? `<a class="btn ghost" href="#/grammar/${prev.lesson}">${I.left}<span>Урок ${prev.lesson}</span></a>` : '<span></span>'}
       ${next ? `<a class="btn ghost" href="#/grammar/${next.lesson}"><span>Урок ${next.lesson}</span>${I.right}</a>` : '<span></span>'}</div>
   </div>`;
-  wireSay(root);
+  wireSay($('.grammar-lesson', root)); // the lesson node is new on every render → one listener, never stacked on #app
   const tg = $('[data-toggle]', root);
   tg.onclick = () => {
     const anyOpen = $$('.g-card', root).some(d => d.open);

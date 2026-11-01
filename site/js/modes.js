@@ -1,4 +1,4 @@
-import { $, $$, esc, shuffle, speakCard, stopSpeech, check, I, onSwipe, justSwiped, isTyping, sizeClass, toast } from './util.js';
+import { $, $$, esc, shuffle, speakCard, speakCardAuto, autoSpeakOn, setAutoSpeak, stopSpeech, check, I, onSwipe, justSwiped, isTyping, sizeClass, toast } from './util.js';
 import { openWordModal } from './edit.js';
 import { state, getSet, prog, record, toggleStar, saveOpts, studyCards, difficultCards, getBest, setBest } from './store.js';
 
@@ -148,7 +148,7 @@ function renderOpts(panel, def, set, restart) {
   panel.innerHTML =
     (set.kind === 'kanji' ? seg('kanjiAns', 'Що показувати у відповіді', [['both', 'Значення + читання'], ['meaning', 'Лише значення'], ['readings', 'Лише читання']], o.kanjiAns || 'both') : '') +
     (def.noAnswer ? '' : def.key === 'listen'
-      ? seg('answer', 'Відповідь', [['uk', 'Значення (UA)'], ['ja', '日本語 диктант']], o.answer)
+      ? seg('answer', 'Відповідь', [['uk', 'Значення українською'], ['ja', '日本語 диктант']], o.answer)
       : seg('answer', 'Відповідь', [['uk', 'Українська'], ['ja', '日本語']], o.answer)) +
     (def.key === 'listen' ? seg('listenType', 'Спосіб', [['choose', 'Вибір'], ['type', 'Введення']], o.listenType) : '') +
     seg('filter', 'Слова', [['all', `Усі ${set.cards.length}`], ['starred', `★ Позначені ${nStar}`], ['difficult', `Важкі ${nDiff}`]], o.filter) +
@@ -282,6 +282,7 @@ function sequence(body, api, cards, { title, ask }) {
       bar.style.width = (i / list.length) * 100 + '%';
       pos.textContent = `${i + 1} / ${list.length}`;
       const c = list[i];
+      stopSpeech(); // new question: never keep talking about the previous one
       ask(stage, c, (ok, given) => { res.push({ card: c, ok, given }); i++; step(); });
     };
     step();
@@ -319,6 +320,7 @@ function flashcards(body, set, allCards, api, restart) {
         <button class="tool ${sorting ? 'on' : ''}" data-t="sort"><span class="sw"></span>Відстежувати прогрес</button>
         <button class="tool ${state.opts.shuffle ? 'on' : ''}" data-t="shuffle">${I.shuffle}<span>Перемішати</span></button>
         <button class="tool" data-t="auto">${I.play}<span>Автопрогравання</span></button>
+        <button class="tool ${autoSpeakOn() ? 'on' : ''}" data-t="voice" aria-pressed="${autoSpeakOn()}"><span class="sw"></span>Автоматично озвучувати картки</button>
       </div>
       <p class="kbd-hint">Пробіл — перевернути · ${sorting ? '← ще вчу · → знаю · Backspace — скасувати' : '← → назад / далі'} · S — позначити · V — звук · E — редагувати</p>
     </div>`;
@@ -341,7 +343,8 @@ function flashcards(body, set, allCards, api, restart) {
       $('[data-star]', body).classList.toggle('on', prog(set.id, c.id).star);
       if (sorting) { $('[data-n-still]', body).textContent = still.length; $('[data-n-know]', body).textContent = know.length; }
       ctrl();
-      if (auto && promptSide() === 'ja') speakCard(c);
+      stopSpeech(); // a new card never keeps talking about the previous one
+      if (promptSide() === 'ja') speakCardAuto(c); // silent unless «Автоматично озвучувати картки» is on
     };
     const ctrl = () => {
       $('.fc-ctrl', body).innerHTML = sorting
@@ -355,6 +358,7 @@ function flashcards(body, set, allCards, api, restart) {
     const doFlip = () => {
       if (ended) return;
       flip.classList.toggle('flipped');
+      if (flip.classList.contains('flipped') && promptSide() === 'uk') speakCardAuto(cur());
       $('.tap-hint', body)?.remove();
     };
     const sort = kind => {
@@ -418,16 +422,16 @@ function flashcards(body, set, allCards, api, restart) {
     };
     $('.fc-tools', body).onclick = e => {
       const t = e.target.closest('[data-t]')?.dataset.t;
+      if (t === 'voice') { setAutoSpeak(!autoSpeakOn()); const v = e.target.closest('.tool'); v.classList.toggle('on', autoSpeakOn()); v.setAttribute('aria-pressed', autoSpeakOn()); if (!autoSpeakOn()) stopSpeech(); return; }
       if (t === 'sort') { saveOpts({ fcSort: !sorting }); restart(); }
       else if (t === 'shuffle') { saveOpts({ shuffle: !state.opts.shuffle }); restart(); }
       else if (t === 'auto') {
         if (auto) return stopAuto();
         if (ended) return;
         e.target.closest('.tool').classList.add('on');
-        if (promptSide() === 'ja') speakCard(cur());
         auto = api.every(() => {
           if (ended) return stopAuto();
-          if (!flip.classList.contains('flipped')) { doFlip(); if (promptSide() === 'uk') speakCard(cur()); }
+          if (!flip.classList.contains('flipped')) doFlip();
           else if (i < deck.length - 1) next();
           else { stopAuto(); i++; show(); }
         }, 2800);
@@ -554,7 +558,7 @@ function listen(body, set, cards, api) {
     title: 'Аудіювання — результати',
     ask: (el, c, done) => {
       const prompt = `<div class="listen-prompt">
-        <button class="listen-btn" data-play aria-label="Відтворити">${I.speaker}</button>
+        <button class="btn primary listen-play" data-play>▶ Прослухати</button>
         <button class="btn ghost sm" data-slow>Повільно</button>
         <div class="listen-hint">${side === 'uk' ? 'Слухайте — що це означає?' : 'Слухайте — напишіть, що чуєте'}${type === 'choose' ? ' · R — повторити' : ''}</div>
       </div>`;
@@ -566,7 +570,6 @@ function listen(body, set, cards, api) {
       type === 'choose' ? mcQ(el, api, args) : writeQ(el, api, args);
       $('[data-play]', el).onclick = () => speakCard(c);
       $('[data-slow]', el).onclick = () => speakCard(c, true);
-      api.later(() => speakCard(c), 250);
     },
   });
 }
@@ -764,7 +767,7 @@ function match(body, set, cards, api) {
       const b = e.target.closest('.tile');
       if (!b || b.classList.contains('matched')) return;
       const i = +b.dataset.i, t = tiles[i];
-      if (t.kind === 'ja') speakCard(t.c);
+      if (t.kind === 'ja') speakCardAuto(t.c);
       if (sel === null) { sel = i; b.classList.add('sel'); return; }
       if (sel === i) { b.classList.remove('sel'); sel = null; return; }
       const a = tiles[sel], aEl = els[sel];

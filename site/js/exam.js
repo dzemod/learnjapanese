@@ -2,7 +2,7 @@
 // Data: data/exam.json (pre-built bank: particles, verb forms, translations, error finding — every item has an
 // explanation from IV. Граматика and a lesson/point reference) + words (sets.json), grammar.json, kanji.json.
 // Everything runs in the browser; nothing is sent anywhere except optional preset sync to GitHub.
-import { $, $$, esc, shuffle, furi, furiSay, speak, norm, toast, I, check as checkWord, today } from './util.js';
+import { $, $$, esc, shuffle, furi, gtext, furiSay, speak, norm, toast, I, check as checkWord, today } from './util.js';
 import { state, getSets, markPresetsPending, registerPresetsPayload, syncAll } from './store.js';
 import { loadGrammar, grammarLessons } from './grammar.js';
 import { loadKanji, books as kanjiBooks, lessonWords } from './kanji.js';
@@ -15,7 +15,7 @@ const sload = k => { try { return JSON.parse(sessionStorage.getItem(k) || 'null'
 const ssave = (k, v) => { try { v == null ? sessionStorage.removeItem(k) : sessionStorage.setItem(k, JSON.stringify(v)); } catch { /* ignore */ } };
 
 export const TYPES = {
-  p: 'Частки', v: 'Форми дієслів', c: 'Відмінювання (дріл)', tj: 'Переклад 日→UA', tu: 'Переклад UA→日 (збери речення)',
+  p: 'Частки', v: 'Форми дієслів', c: 'Відмінювання (дріл)', tj: 'Переклад: японська → українська', tu: 'Переклад: українська → японська (збери речення)',
   w: 'Слова', k: 'Канджі', g: 'Вибір граматики', l: 'Аудіювання', e: 'Пошук помилки',
 };
 const PARTICLES = ['は', 'が', 'を', 'に', 'で', 'へ', 'と', 'も', 'の', 'から', 'まで', 'や', 'か', 'よ', 'ね'];
@@ -72,15 +72,15 @@ export function refText(r) {
   if (!r) return '';
   if (r.kind === 'g') {
     const L = gLesson(r.lesson), i = L ? L.points.findIndex(p => p.id === r.point) : -1;
-    return `Minna no Nihongo, Урок ${r.lesson}` + (i >= 0 ? ` · Граматика п. ${i + 1} «${plainT(L.points[i].title)}»` : ' · Граматика');
+    return `Minna no Nihongo, Урок ${r.lesson}` + (i >= 0 ? ` · Граматика, пункт ${i + 1} «${plainT(L.points[i].title)}»` : ' · Граматика');
   }
   if (r.kind === 'k') return `漢字 ${r.book === 'k700' ? '中級700' : '初級300'} · ${r.lno}課 · №${r.no} ${r.ch}`;
   if (r.kind === 'w') return `${r.title} · Нові слова`;
   return '';
 }
 const refUrl = r => (r.kind === 'g' ? `#/grammar/${r.lesson}${r.point ? '/' + encodeURIComponent(r.point) : ''}` : r.kind === 'k' ? `#/kanji/${r.lessonId}/${r.kanjiId}` : `#/set/${encodeURIComponent(r.setId)}`);
-const refShort = r => (r.kind === 'g' ? `Урок ${r.lesson}${r.point && gLesson(r.lesson) ? ', п. ' + (gLesson(r.lesson).points.findIndex(p => p.id === r.point) + 1) : ''}` : r.kind === 'k' ? `${r.lno}課 №${r.no} ${r.ch}` : r.title);
-function refBtn(r) { return r ? `<button type="button" class="ex-ref" data-ref='${esc(JSON.stringify(r))}'>${I.back.replace('M19 12H5M11 6l-6 6 6 6', 'M5 12h14M13 6l6 6-6 6')}<span>${esc(refText(r))}</span></button>` : ''; }
+const refShort = r => (r.kind === 'g' ? `Урок ${r.lesson}${r.point && gLesson(r.lesson) ? ', пункт ' + (gLesson(r.lesson).points.findIndex(p => p.id === r.point) + 1) : ''}` : r.kind === 'k' ? `${r.lno}課 №${r.no} ${r.ch}` : r.title);
+function refBtn(r) { return r ? `<button type="button" class="ex-ref" data-ref='${esc(JSON.stringify(r))}'>${I.back.replace('M19 12H5M11 6l-6 6 6 6', 'M5 12h14M13 6l6 6-6 6')}<span>${gtext(refText(r))}</span></button>` : ''; }
 function wireRefs(root) {
   $$('[data-ref]', root).forEach(b => (b.onclick = () => {
     ssave(K.ret, { at: Date.now() });
@@ -311,13 +311,13 @@ function qListen(words, tr) {
   if (Math.random() < 0.5 && tr.length) {
     const it = pickOne(tr);
     const q = qTransJ(it, tr);
-    return { ...q, uid: 'l' + it.id, type: 'l', self: false, label: 'Послухайте речення і виберіть переклад', prompt: '<div class="ex-listen"><button type="button" class="listen-btn" data-play>' + I.speaker + '</button><button type="button" class="btn ghost sm" data-slow>Повільно</button></div>', autoplay: true };
+    return { ...q, uid: 'l' + it.id, type: 'l', self: false, label: 'Послухайте речення і виберіть переклад', prompt: '<div class="ex-listen"><button type="button" class="btn primary listen-play" data-play>▶ Прослухати</button><button type="button" class="btn ghost sm" data-slow>Повільно</button></div>' };
   }
   const cd = pickOne(words);
   if (!cd) return null;
   const others = pick(words.filter(o => o.ukrainian !== cd.ukrainian), 3);
-  return { uid: 'lw' + cd.setId + cd.id, type: 'l', mode: 'choice', lesson: cd.lesson, ref: wref(cd), weak: cd.japanese, label: 'Послухайте слово і виберіть значення', autoplay: true,
-    prompt: '<div class="ex-listen"><button type="button" class="listen-btn" data-play>' + I.speaker + '</button><button type="button" class="btn ghost sm" data-slow>Повільно</button></div>',
+  return { uid: 'lw' + cd.setId + cd.id, type: 'l', mode: 'choice', lesson: cd.lesson, ref: wref(cd), weak: cd.japanese, label: 'Послухайте слово і виберіть значення',
+    prompt: '<div class="ex-listen"><button type="button" class="btn primary listen-play" data-play>▶ Прослухати</button><button type="button" class="btn ghost sm" data-slow>Повільно</button></div>',
     options: shuffle([cd, ...others]).map(o => ({ v: o.ukrainian, h: esc(o.ukrainian) })), answer: cd.ukrainian, correct: `${wordHTML(cd)} — ${esc(cd.ukrainian)}`, x: `${cd.japanese}${cd.reading ? `(${cd.reading})` : ''} — ${cd.ukrainian}.`, say: cd.reading || cd.japanese, src: cd.setTitle };
 }
 
@@ -390,7 +390,7 @@ function setupView(root) {
         <h2 class="sec-title">Обсяг і час</h2>
         <div class="ex-row">
           <div class="seg" data-count>${[10, 20, 30, 50].map(v => `<button type="button" class="${!c.mock && +c.count === v ? 'on' : ''}" data-v="${v}">${v}</button>`).join('')}<button type="button" class="${c.mock ? 'on' : ''}" data-v="mock">Повний пробний (60)</button></div>
-          <label class="ex-range">Таймер, хв <input class="input" type="number" name="timer" min="0" max="180" value="${c.timer || 0}" inputmode="numeric"> <small class="muted">0 — без таймера</small></label>
+          <label class="ex-range">Таймер (хвилин) <input class="input" type="number" name="timer" min="0" max="180" value="${c.timer || 0}" inputmode="numeric"> <small class="muted">0 — без таймера</small></label>
         </div>
         <div class="ex-start">
           <button type="button" class="btn ghost" data-save>${I.download}<span>Зберегти як пресет</span></button>
@@ -461,7 +461,6 @@ function runView(root, api) {
       </div></div>`;
     $$('[data-play], [data-say]', root).forEach(b => (b.onclick = () => speak(q.say)));
     $('[data-slow]', root)?.addEventListener('click', () => speak(q.say, true));
-    if (q.autoplay && !ans) setTimeout(() => speak(q.say), 300);
     renderAnswer(q, $('.ex-answer', root), ans);
     if (ans) feedback(q, ans.given, ans.ok);
     tick();
@@ -493,7 +492,7 @@ function runView(root, api) {
     $('.ex-feedback', root).innerHTML = `<div class="feedback ${ok ? 'good' : 'bad'}">${ok ? 'Правильно!' : 'Неправильно'}</div>
       ${!ok && given ? `<div class="ex-given">Ваша відповідь: <s lang="ja">${furi(given)}</s></div>` : ''}
       <div class="ex-correct"><span class="muted small">Правильна відповідь:</span> ${q.correct}</div>
-      <div class="ex-expl">${why ? `<p class="ex-why">${esc(why)}</p>` : ''}<p>${esc(q.x || '')}</p></div>
+      <div class="ex-expl">${why ? `<p class="ex-why">${gtext(why)}</p>` : ''}<p>${gtext(q.x || '')}</p></div>
       <div class="ex-refs">${refBtn(q.ref)}${q.link2 ? refBtn(q.link2) : ''}</div>
       <button class="btn primary wide" data-next>Далі <kbd>Enter</kbd></button>`;
     wireRefs(root);
@@ -604,7 +603,7 @@ function resultView(root) {
       <div class="ex-mprompt">${q.type === 'l' || q.type === 'k' ? '' : q.prompt}</div>
       ${r.given ? `<div class="ex-given">Ваша відповідь: <s lang="ja">${furi(r.given)}</s></div>` : '<div class="ex-given muted">Без відповіді</div>'}
       <div class="ex-correct"><span class="muted small">Правильно:</span> ${q.correct}</div>
-      <div class="ex-expl">${(() => { const w = whyWrong(q, r.given); return w ? `<p class="ex-why">${esc(w)}</p>` : ''; })()}<p>${esc(q.x || '')}</p></div>
+      <div class="ex-expl">${(() => { const w = whyWrong(q, r.given); return w ? `<p class="ex-why">${gtext(w)}</p>` : ''; })()}<p>${gtext(q.x || '')}</p></div>
       <div class="ex-refs">${refBtn(q.ref)}</div></div>`).join('')}</div></section>` : ''}
     ${weakHTML(load(K.history, []))}
   </div>`;
