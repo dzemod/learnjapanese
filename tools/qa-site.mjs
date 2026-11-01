@@ -81,7 +81,7 @@ function modeActs(m) {
 function pageCheck(fontsWanted) {
   const W = innerWidth;
   const out = [];
-  const CYR = /[\u0400-\u04FF]/, LAT = /[A-Za-z]/, JP = /[\u3040-\u30FF\u3400-\u9FFF\uF900-\uFAFF\uFF66-\uFF9F]/;
+  const CYR = /[\u0400-\u04FF]/, LAT = /[A-Za-z]/, JP = /[\u3000-\u303F\u3040-\u30FF\u3400-\u9FFF\uF900-\uFAFF\uFF01-\uFF5E\uFF66-\uFF9F]/;
   const skip = el => el.closest('.bg-wave, .side-accent, #toast, .toast, #syncbar, script, style, noscript, head');
   const visible = el => el.checkVisibility?.({ opacityProperty: true, visibilityProperty: true }) ?? true;
   const label = el => {
@@ -139,7 +139,8 @@ function pageCheck(fontsWanted) {
     if (!el || el === document.body) return { fixed: false, face: null };
     if (cache.has(el)) return cache.get(el);
     const up = layer(el.parentElement), cs = getComputedStyle(el);
-    const v = { fixed: up.fixed || cs.position === 'fixed', face: up.face || (cs.backfaceVisibility === 'hidden' ? el : null) };
+    const clipsHere = cs.overflowX !== 'visible' || cs.overflowY !== 'visible';
+    const v = { fixed: up.fixed || cs.position === 'fixed' || cs.position === 'sticky', face: up.face || (cs.backfaceVisibility === 'hidden' ? el : null), clip: clipsHere ? el.getBoundingClientRect() : up.clip };
     cache.set(el, v);
     return v;
   };
@@ -151,8 +152,9 @@ function pageCheck(fontsWanted) {
     if (!el || skip(el) || !visible(el)) continue;
     const ly = layer(el);
     if (!modal && ly.fixed) continue;
+    const inClip = r => !ly.clip || (r.left + r.width / 2 >= ly.clip.left && r.left + r.width / 2 <= ly.clip.right && r.top + r.height / 2 >= ly.clip.top && r.top + r.height / 2 <= ly.clip.bottom);
     rng.selectNodeContents(n);
-    for (const r of rng.getClientRects()) if (r.width > 2 && r.height > 2) boxes.push({ el, r, face: ly.face, x: n.textContent.trim().slice(0, 30) });
+    for (const r of rng.getClientRects()) if (r.width > 2 && r.height > 2 && inClip(r)) boxes.push({ el, r, face: ly.face, x: n.textContent.trim().slice(0, 30) });
   }
   boxes.sort((a, b) => a.r.top - b.r.top);
   const seen = new Set();
@@ -174,7 +176,7 @@ function pageCheck(fontsWanted) {
 
   // empty blocks
   for (const el of vis) {
-    if (!el.matches('.panel, .card, section, .tile, .kcell, .choice, .chip, .badge, .btn, li, td, .g-block, .ex-q, .ex-answer:not(:empty), p, h1, h2, h3')) continue;
+    if (!el.matches('.panel, .card, section, .tile, .kcell, .choice, .chip, .badge, .btn, li, .g-block, .ex-q, .ex-answer:not(:empty), p, h1, h2, h3')) continue;
     const r = el.getBoundingClientRect();
     if (r.width < 8 || r.height < 8) continue;
     if ((el.innerText || '').trim() || el.querySelector('img, svg, canvas, input, textarea, select, video, iframe')) continue;
@@ -190,12 +192,17 @@ function pageCheck(fontsWanted) {
     let i = 0;
     for (const el of vis) {
       const txt = ownText(el);
-      if (!txt || /^(svg|text|tspan|title|path)$/i.test(el.tagName) || el.closest('svg')) continue;
-      const cyr = CYR.test(txt), lat = LAT.test(txt), jp = JP.test(txt);
+      // form fields render their value in a shadow tree: the platform-font API reports nothing for them
+      if (!txt || /^(svg|text|tspan|title|path|textarea|input|select|option)$/i.test(el.tagName) || el.closest('svg')) continue;
+      // fonts are reported for the whole subtree → classify the whole subtree text
+      const full = el.textContent;
+      const cyr = CYR.test(full), lat = LAT.test(full), jp = JP.test(full);
       if (!cyr && !lat && !jp) continue;
+      // symbols Manrope has no glyph for (★ ← → ◊ ①, combining accents…) legitimately come from Noto Serif JP
+      const sym = /[^\u0000-ɏЀ-ӿ -⁯№\s]/.test(full.replace(/[　-ヿ㐀-鿿豈-﫿＀-￯]/g, ''));
       el.setAttribute('data-qaf', i++);
       const cs = getComputedStyle(el);
-      texts.push({ el: label(el), x: txt.slice(0, 50), cyr, lat, jp, ls: cs.letterSpacing, ff: cs.fontFamily.slice(0, 40) });
+      texts.push({ el: label(el), x: txt.slice(0, 50), cyr, lat, jp, sym, ls: cs.letterSpacing, ff: cs.fontFamily.slice(0, 40), ownCyr: CYR.test(txt), ownJp: JP.test(txt) });
     }
   }
   const loaded = [...document.fonts].filter(f => f.status === 'loaded').map(f => f.family.replace(/"/g, ''));
@@ -243,14 +250,14 @@ async function fontCheck(P, texts) {
     if (!t) continue;
     let fonts = [];
     try { fonts = (await P.cdp.send('CSS.getPlatformFontsForNode', { nodeId: id })).fonts.map(f => f.familyName.toLowerCase()); } catch { continue; }
-    const symOnly = /[←-⯿☀-➿🀀-🿿]/u.test(t.x);
+    const symOnly = t.sym;
     const other = fonts.filter(f => !ALLOWED.some(a => f.startsWith(a)) && !(symOnly && /symbol|emoji/.test(f)));
     const noto = fonts.some(f => f.startsWith('noto serif jp')), man = fonts.some(f => f.startsWith('manrope'));
     if (other.length) res.push({ t: 'font-other', el: t.el, d: other.join(', '), x: t.x });
     if ((t.cyr || t.lat) && !man) res.push({ t: 'font-noUI', el: t.el, d: fonts.join(', '), x: t.x });
-    if ((t.cyr || t.lat) && !t.jp && noto) res.push({ t: 'font-jp-on-uk', el: t.el, d: fonts.join(', '), x: t.x });
+    if ((t.cyr || t.lat) && !t.jp && !t.sym && noto) res.push({ t: 'font-jp-on-uk', el: t.el, d: fonts.join(', '), x: t.x });
     if (t.jp && !noto) res.push({ t: 'font-noJP', el: t.el, d: fonts.join(', '), x: t.x });
-    if (t.cyr && t.jp && t.ls !== 'normal' && parseFloat(t.ls) !== 0) res.push({ t: 'letterspacing-mixed', el: t.el, d: t.ls, x: t.x });
+    if (t.ownCyr && t.ownJp && t.ls !== 'normal' && parseFloat(t.ls) !== 0) res.push({ t: 'letterspacing-mixed', el: t.el, d: t.ls, x: t.x });
   }
   await P.page.evaluate(() => document.querySelectorAll('[data-qaf]').forEach(e => e.removeAttribute('data-qaf')));
   return res;
