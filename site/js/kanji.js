@@ -71,7 +71,7 @@ function virtualSet(id) {
   const book = bookOf(l.id);
   return {
     id, kind: words ? 'kword' : 'kanji', source: 'textbook', origin: 'kanji', lessonId: l.id,
-    title: words ? `Слова уроку ${l.no} · ${book?.title || ''}` : `Канджі ${lessonTitle(l)} · ${book?.title || ''}`,
+    title: words ? `Слова уроку ${l.no} · ${book?.title || ''}` : `Кандзі ${lessonTitle(l)} · ${book?.title || ''}`,
     backUrl: lessonUrl(l.id),
     cards: words ? lessonWords(l).map(wordCard) : l.kanji.map(kanjiCard),
     onEdit: (card, done) => (card.kind === 'kanji' ? editKanji(l.id, card.id, done) : editWord(l.id, card.id, done)),
@@ -110,7 +110,7 @@ export function editKanji(lessonId, kanjiId, done) {
   const l = lesson(lessonId);
   const k = l.kanji.find(x => x.id === kanjiId);
   if (!k) return;
-  modal(`<div class="modal-head"><h2>Редагувати канджі <span class="jp" lang="ja">${esc(k.kanji)}</span></h2></div>
+  modal(`<div class="modal-head"><h2>Редагувати кандзі <span class="jp" lang="ja">${esc(k.kanji)}</span></h2></div>
     <form class="word-form kanji-form" autocomplete="off">
       ${k.check ? `<div class="check-note"><span class="check-badge">перевірити</span> Значення перекладено з англійської (${esc(k.en || '')}) — перевірте.</div>` : ''}
       <label class="field"><span class="field-label">Значення українською</span><input class="input big" name="meaning" value="${esc(k.meaning)}"></label>
@@ -265,7 +265,7 @@ export function openKanji(lessonId, kanjiId, onChange) {
           ${k.on.length ? `<div><span class="kb-l">он</span><span lang="ja">${esc(k.on.join('、'))}</span></div>` : ''}
           ${k.kun.length ? `<div><span class="kb-l">кун</span><span lang="ja">${k.kun.map(kunHTML).join('、')}</span></div>` : ''}
         </div>
-        <h3 class="sub-title">Слова з цим канджі</h3>
+        <h3 class="sub-title">Слова з цим кандзі</h3>
         <div class="kc-ex">${(k.examples || []).map(e => `<div class="kc-exrow ${e.check ? 'needs-check' : ''}" data-ex="${esc(e.id)}">
             <span class="jp" lang="ja">${esc(e.word)}</span>${e.kana && e.kana !== e.word ? `<span class="reading" lang="ja">(${esc(e.kana)})</span>` : ''}
             <span class="uk">— ${esc(e.uk)}</span>
@@ -312,11 +312,11 @@ const modesGrid = id => `<div class="modes-grid">${Object.values(MODES).map(m =>
 
 export function kanjiHome(root) {
   if (K.error || !K.base?.length) {
-    root.innerHTML = `<div class="empty fade-in"><div class="empty-jp" lang="ja">漢</div><p>${K.error ? 'Не вдалося завантажити <code>data/kanji.json</code>.' : 'Канджі ще не додано.'}</p></div>`;
+    root.innerHTML = `<div class="empty fade-in"><div class="empty-jp" lang="ja">漢</div><p>${K.error ? 'Не вдалося завантажити <code>data/kanji.json</code>.' : 'Кандзі ще не додано.'}</p></div>`;
     return;
   }
   root.innerHTML = `<div class="kanji-home fade-in">
-    <section class="hero"><div><p class="eyebrow" lang="ja">漢字</p><h1>Канджі</h1>
+    <section class="hero"><div><p class="eyebrow" lang="ja">漢字</p><h1>Кандзі</h1>
       <p class="muted">${books().map(b => `${esc(b.title)}: ${b.lessons.reduce((n, l) => n + l.kanji.length, 0)}`).join(' · ')}</p></div></section>
     ${books().map(b => `<h2 class="group-title"><span lang="ja">${esc(b.titleJp || '')}</span> ${esc(b.title)}</h2>
       ${b.lessons.length ? '' : '<p class="muted small">Уроки цієї книжки ще не додано.</p>'}
@@ -326,7 +326,7 @@ export function kanjiHome(root) {
           <div class="set-card-top"><h3>${l.no}課 <span lang="ja">${esc(l.title)}</span></h3>${state.custom.pending[l.id] ? '<span class="badge">Лише тут</span>' : ''}</div>
           <div class="muted small">${esc(l.titleUk || '')}${l.range ? ` · №${esc(l.range)}` : ''}</div>
           <div class="kl-preview" lang="ja">${l.kanji.slice(0, 12).map(k => esc(k.kanji)).join('')}${l.kanji.length > 12 ? '…' : ''}</div>
-          <div class="kl-row"><span>канджі ${l.kanji.length}</span><span>${pct(ks)}%</span></div>${progressBar(ks)}
+          <div class="kl-row"><span>кандзі ${l.kanji.length}</span><span>${pct(ks)}%</span></div>${progressBar(ks)}
           <div class="kl-row"><span>слова ${ws.cards.length}</span><span>${pct(ws)}%</span></div>${progressBar(ws)}
         </a>`;
       }).join('')}</div>`).join('')}
@@ -335,22 +335,22 @@ export function kanjiHome(root) {
 
 export function kanjiLessonView(root, id, openId) {
   const l = lesson(id);
-  if (!l) { root.innerHTML = `<div class="empty"><div class="empty-jp" lang="ja">無</div><p>Такого уроку немає.</p><a class="btn primary" href="#/kanji">Канджі</a></div>`; return; }
+  if (!l) { root.innerHTML = `<div class="empty"><div class="empty-jp" lang="ja">無</div><p>Такого уроку немає.</p><a class="btn primary" href="#/kanji">Кандзі</a></div>`; return; }
   const book = bookOf(id);
   const draw = () => {
     const ks = virtualSet(id), ws = virtualSet(id + '-w');
     const lv = ['Нове', 'Вчу', 'Вивчене'];
     const sync = state.custom.pending[id] ? `<div class="sync-box ${state.sync.error ? 'err' : ''}"><div>${state.sync.busy ? '<span class="spinner"></span> Зберігаю в GitHub…' : `<b>Зміни ще не збережено в GitHub — вони в цьому браузері.</b>${state.sync.error ? `<br><span class="small">${esc(state.sync.error)}</span>` : ''}`}</div>${state.sync.busy ? '' : '<div class="sync-btns"><button class="btn sm primary" data-sync>Зберегти в GitHub</button></div>'}</div>` : '';
     root.innerHTML = `<div class="kanji-lesson fade-in">
-      <a class="back" href="#/kanji">${I.back}<span>${esc(book?.title || 'Канджі')}</span></a>
+      <a class="back" href="#/kanji">${I.back}<span>${esc(book?.title || 'Кандзі')}</span></a>
       <div class="set-head"><div>
         <h1 class="set-title">${l.no}課 <span lang="ja">${esc(l.title)}</span></h1>
-        <p class="muted">${esc(l.titleUk || '')}${l.range ? ` · №${esc(l.range)}` : ''} · ${l.kanji.length} канджі · ${ws.cards.length} слів</p>
+        <p class="muted">${esc(l.titleUk || '')}${l.range ? ` · №${esc(l.range)}` : ''} · ${l.kanji.length} кандзі · ${ws.cards.length} слів</p>
       </div></div>
       <div class="sync-slot">${sync}</div>
 
       <section class="panel">
-        <h2 class="sec-title">Канджі <span class="muted">(${l.kanji.length})</span><span class="sec-pct">${pct(ks)}%</span></h2>
+        <h2 class="sec-title">Кандзі <span class="muted">(${l.kanji.length})</span><span class="sec-pct">${pct(ks)}%</span></h2>
         ${progressBar(ks)}
         <div class="kgrid">${l.kanji.map(k => {
           const p = prog(id, k.id);
@@ -359,7 +359,7 @@ export function kanjiLessonView(root, id, openId) {
             ${p.star ? '<i class="kcell-star">★</i>' : ''}${k.check ? '<i class="kcell-check" title="перевірити"></i>' : ''}<i class="kcell-lvl" title="${lv[p.lvl || 0]}"></i>
           </button>`;
         }).join('')}</div>
-        <h3 class="sub-title">Вчити канджі</h3>
+        <h3 class="sub-title">Вчити кандзі</h3>
         ${modesGrid(id)}
       </section>
 

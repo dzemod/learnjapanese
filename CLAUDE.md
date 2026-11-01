@@ -65,8 +65,8 @@
 
 ## Project
 - Plain HTML/CSS/JS, no build step: `site/index.html`, `site/css/style.css`, `site/js/*.js` (ES modules).
-  - `store.js` data/progress/sync/undo, `modes.js` study modes, `views.js` pages, `edit.js` word editing + bulk edit, `importer.js` OCR/PDF/readings (Tesseract.js, pdf.js, Kuroshiro — loaded lazily from CDNs), `grammar.js` Граматика tab (`#/grammar`, `#/grammar/<n>`), `kanji.js` Канджі tab (`#/kanji`, `#/kanji/<lessonId>`, virtual study sets, kanji editor, stroke order).
-  - Top tabs: Слова (`#/`) · Граматика · Канджі.
+  - `store.js` data/progress/sync/undo, `modes.js` study modes, `views.js` pages, `edit.js` word editing + bulk edit, `importer.js` OCR/PDF/readings (Tesseract.js, pdf.js, Kuroshiro — loaded lazily from CDNs), `grammar.js` Граматика tab (`#/grammar`, `#/grammar/<n>`), `kanji.js` Кандзі tab (`#/kanji`, `#/kanji/<lessonId>`, virtual study sets, kanji editor, stroke order).
+  - Top tabs: Слова (`#/`) · Граматика · Кандзі.
 - `site/api/save-set.js` — Vercel serverless function; commits a whole edited set into `site/data/sets.json` via the GitHub API (env `GITHUB_TOKEN`, `APP_PASSWORD`; see SETUP.md). Any set can be edited (textbook sets keep `source: "textbook"`); textbook sets cannot be deleted through it.
 - Editing on the site: inline edit / add / delete on the set page, edit buttons inside every study mode, bulk edit at `#/set/<id>/edit` (reorder + edit all), undo toast, per-word history (last 5 versions, browser only). Edited sets are kept as a local copy (`jp.custom.newSets`) until the redeployed sets.json matches, so nothing is lost if saving fails.
 - Card ids must never change when editing — learning progress is keyed by `setId/cardId`.

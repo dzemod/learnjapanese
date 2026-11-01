@@ -57,7 +57,7 @@ export async function grammarHome(root) {
       <dt lang="ja">Ａ／Ｂ</dt><dd>варіанти: можна вжити будь-який</dd>
       <dt lang="ja">[ ]</dt><dd>частину в квадратних дужках можна пропустити</dd>
       <dt>( )</dt><dd>уточнення українською: (місце), (час), (людина)…</dd>
-      <dt lang="ja">${furi('{漢字|かんじ}')}</dt><dd>читання канджі хіраганою в дужках</dd>
+      <dt lang="ja">${furi('{漢字|かんじ}')}</dt><dd>читання кандзі хіраганою в дужках</dd>
     </dl></details>
     <div class="g-results"></div>
     <div class="g-lessons">${groups.map(([t, jp, a, b]) => `<h2 class="group-title"><span lang="ja">${jp}</span> ${t}</h2>

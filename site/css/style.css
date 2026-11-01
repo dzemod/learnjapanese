@@ -721,7 +721,7 @@ textarea.input.big { line-height: 1.4; min-height: 64px; }
 }
 
 /* ==========================================================================
-   Navigation tabs: Слова · Граматика · Канджі
+   Navigation tabs: Слова · Граматика · Кандзі
    ========================================================================== */
 .topbar { flex-wrap: wrap; row-gap: 10px; }
 .tabs-nav { order: 3; width: 100%; display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 12px; }

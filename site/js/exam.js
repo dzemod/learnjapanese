@@ -16,7 +16,7 @@ const ssave = (k, v) => { try { v == null ? sessionStorage.removeItem(k) : sessi
 
 export const TYPES = {
   p: 'Частки', v: 'Форми дієслів', c: 'Відмінювання (дріл)', tj: 'Переклад: японська → українська', tu: 'Переклад: українська → японська (збери речення)',
-  w: 'Слова', k: 'Канджі', g: 'Вибір граматики', l: 'Аудіювання', e: 'Пошук помилки',
+  w: 'Слова', k: 'Кандзі', g: 'Вибір граматики', l: 'Аудіювання', e: 'Пошук помилки',
 };
 const PARTICLES = ['は', 'が', 'を', 'に', 'で', 'へ', 'と', 'も', 'の', 'から', 'まで', 'や', 'か', 'よ', 'ね'];
 // What each particle does, summarised from IV. Граматика (used to explain a wrong choice).
@@ -259,7 +259,7 @@ function qWord(cd, pool) {
   const x = `${cd.japanese}${cd.reading && cd.reading !== cd.japanese ? `(${cd.reading})` : ''} — ${cd.ukrainian}${cd.verbGroup ? `, дієслово ${cd.verbGroup} групи` : ''}${cd.hint ? ` ${cd.hint}` : ''}.`;
   const correct = `${wordHTML(cd)} — ${esc(cd.ukrainian)}`;
   if (dir === 'ja') return { ...base, mode: typing ? 'type' : 'choice', side: 'uk', label: typing ? 'Напишіть значення українською' : 'Виберіть значення', prompt: `<div class="ex-word">${wordHTML(cd)}</div>`, options: shuffle([cd, ...others]).map(o => ({ v: o.ukrainian, h: esc(o.ukrainian) })), answer: cd.ukrainian, correct, x };
-  return { ...base, mode: typing ? 'type' : 'choice', side: 'ja', label: typing ? 'Напишіть японською (канджі або каною)' : 'Виберіть японське слово', prompt: `<div class="ex-big-uk">${esc(cd.ukrainian)}</div>`, options: shuffle([cd, ...others]).map(o => ({ v: o.japanese, h: wordHTML(o) })), answer: cd.japanese, correct, x };
+  return { ...base, mode: typing ? 'type' : 'choice', side: 'ja', label: typing ? 'Напишіть японською (кандзі або каною)' : 'Виберіть японське слово', prompt: `<div class="ex-big-uk">${esc(cd.ukrainian)}</div>`, options: shuffle([cd, ...others]).map(o => ({ v: o.japanese, h: wordHTML(o) })), answer: cd.japanese, correct, x };
 }
 function qConj(cd, maxL) {
   if (!cd) return null;
@@ -286,7 +286,7 @@ function qKanji(k, pool) {
   const kx = `${k.kanji}: он ${k.on.join('、') || '—'}; кун ${k.kun.join('、') || '—'}; значення: ${k.meaning}.`;
   if (sub === 'mean' || !e) {
     const others = pick(pool.filter(o => o.id !== k.id && o.meaning !== k.meaning), 3);
-    return { ...base, uid: 'km' + k.id, mode: 'choice', label: 'Що означає цей канджі?', prompt: `<div class="ex-kanji" lang="ja">${esc(k.kanji)}</div>`,
+    return { ...base, uid: 'km' + k.id, mode: 'choice', label: 'Що означає цей кандзі?', prompt: `<div class="ex-kanji" lang="ja">${esc(k.kanji)}</div>`,
       options: shuffle([k, ...others]).map(o => ({ v: o.meaning, h: esc(o.meaning) })), answer: k.meaning, correct: `<span lang="ja">${esc(k.kanji)}</span> — ${esc(k.meaning)}`, x: kx, say: k.kun[0]?.replace(/[-.]/, '') || k.on[0] };
   }
   const wordsAll = pool.flatMap(o => (o.examples || []).filter(x => x.word !== e.word && /[一-鿿]/.test(x.word) && !/～/.test(x.word)));
@@ -297,11 +297,11 @@ function qKanji(k, pool) {
     if (sent) {
       const shown = sent.replace(new RegExp(`\\{${e.word}\\|([^}]+)\\}`), '<b class="ex-hl">$1</b>');
       const opts = shuffle([e, ...pick(wordsAll.filter(w => w.kana !== e.kana), 3)]);
-      return { ...base, uid: 'kc' + e.id, mode: 'choice', label: 'Виберіть, як записати виділене слово канджі', prompt: `<div class="ex-sent" lang="ja">${furi(shown)}</div>`, options: opts.map(o => ({ v: o.word, h: `<span lang="ja">${esc(o.word)}</span>` })), answer: e.word, correct: `<span lang="ja">${esc(e.word)}<span class="fg">(${esc(e.kana)})</span></span>`, x: ex };
+      return { ...base, uid: 'kc' + e.id, mode: 'choice', label: 'Виберіть, як записати виділене слово кандзі', prompt: `<div class="ex-sent" lang="ja">${furi(shown)}</div>`, options: opts.map(o => ({ v: o.word, h: `<span lang="ja">${esc(o.word)}</span>` })), answer: e.word, correct: `<span lang="ja">${esc(e.word)}<span class="fg">(${esc(e.kana)})</span></span>`, x: ex };
     }
   }
   const opts = shuffle([e, ...pick(wordsAll.filter(w => w.kana !== e.kana && w.word.length === e.word.length), 3).concat(pick(wordsAll, 3)).filter((w, i, a) => a.findIndex(z => z.word === w.word) === i).slice(0, 3)]);
-  return { ...base, uid: 'kp' + e.id, mode: 'choice', label: 'Виберіть правильний запис канджі', prompt: `<div class="ex-word" lang="ja">${esc(e.kana)}</div><div class="ex-uk">${esc(e.uk)}</div>`, options: opts.map(o => ({ v: o.word, h: `<span lang="ja">${esc(o.word)}</span>` })), answer: e.word, correct: `<span lang="ja">${esc(e.word)}<span class="fg">(${esc(e.kana)})</span></span>`, x: ex, say: e.kana };
+  return { ...base, uid: 'kp' + e.id, mode: 'choice', label: 'Виберіть правильний запис кандзі', prompt: `<div class="ex-word" lang="ja">${esc(e.kana)}</div><div class="ex-uk">${esc(e.uk)}</div>`, options: opts.map(o => ({ v: o.word, h: `<span lang="ja">${esc(o.word)}</span>` })), answer: e.word, correct: `<span lang="ja">${esc(e.word)}<span class="fg">(${esc(e.kana)})</span></span>`, x: ex, say: e.kana };
 }
 function findContext(word) {
   for (const L of shuffle(grammarLessons())) for (const p of L.points) for (const b of p.blocks) if (b.ex && b.ex.includes(`{${word}|`) && !/[×→]/.test(b.ex)) return b.ex;
@@ -364,7 +364,7 @@ function setupView(root) {
     const kb = kanjiBooks();
     const hist = load(K.history, []);
     root.innerHTML = `<div class="exam fade-in">
-      <section class="hero"><div><p class="eyebrow" lang="ja">試験</p><h1>Екзамен</h1><p class="muted">Підготовка до екзамену: частки, форми дієслів, переклад, слова, канджі.</p></div></section>
+      <section class="hero"><div><p class="eyebrow" lang="ja">試験</p><h1>Екзамен</h1><p class="muted">Підготовка до екзамену: частки, форми дієслів, переклад, слова, кандзі.</p></div></section>
       ${S && S.i < S.qs.length ? `<div class="sync-box"><div><b>Є незавершений екзамен</b> — питання ${S.i + 1} з ${S.qs.length}.</div><div class="sync-btns"><a class="btn sm primary" href="#/exam/run">Продовжити</a><button class="btn sm ghost" data-drop>Скасувати</button></div></div>` : ''}
       ${presets().length ? `<section class="panel"><h2 class="sec-title">Мої екзамени</h2><div class="ex-presets">${presets().map(p => `<div class="ex-preset"><button class="btn ghost sm" data-load="${esc(p.name)}">${esc(p.name)}</button><button class="icon-btn sm" data-del="${esc(p.name)}" aria-label="Видалити">${I.trash}</button></div>`).join('')}</div></section>` : ''}
       <form class="panel ex-setup">
@@ -375,8 +375,8 @@ function setupView(root) {
         </div>
         <label class="check"><input type="checkbox" name="mine" ${c.mine ? 'checked' : ''}><span>Додати «Мої уроки» (слова)</span></label>
 
-        <h2 class="sec-title">Канджі</h2>
-        <label class="check"><input type="checkbox" name="kanji" ${c.kanji ? 'checked' : ''}><span>Включити канджі</span></label>
+        <h2 class="sec-title">Кандзі</h2>
+        <label class="check"><input type="checkbox" name="kanji" ${c.kanji ? 'checked' : ''}><span>Включити кандзі</span></label>
         <div class="ex-kanji-opts" ${c.kanji ? '' : 'hidden'}>
           <div class="seg" data-kbook>${kb.map(b => `<button type="button" class="${c.kbook === b.id ? 'on' : ''}" data-v="${b.id}" ${b.lessons.length ? '' : 'disabled'}>${esc(b.title)}</button>`).join('')}</div>
           <div class="seg" data-kmode>${[['lessons', 'За 課'], ['nums', 'За номерами'], ['rand', 'N випадкових']].map(([v, t]) => `<button type="button" class="${c.kmode === v ? 'on' : ''}" data-v="${v}">${t}</button>`).join('')}</div>
@@ -574,7 +574,7 @@ function stats(qs, res) {
   };
   return {
     byType: by(q => q.type, q => TYPES[q.type]),
-    byLesson: by(q => (q.lesson ? 'L' + q.lesson : q.type === 'k' ? 'K' + q.ref.lno : null), q => (q.lesson ? `Урок ${q.lesson}` : `Канджі ${q.ref.lno}課`)),
+    byLesson: by(q => (q.lesson ? 'L' + q.lesson : q.type === 'k' ? 'K' + q.ref.lno : null), q => (q.lesson ? `Урок ${q.lesson}` : `Кандзі ${q.ref.lno}課`)),
   };
 }
 function saveHistory() {
@@ -629,7 +629,7 @@ function weakHTML(h) {
   h.slice(-15).forEach(x => (x.mistakes || []).forEach(e => { if (!e.weak) return; const k = e.type + '|' + e.weak; (m[k] ||= { n: 0, e }).n++; }));
   const top = Object.values(m).sort((a, b) => b.n - a.n).slice(0, 10);
   if (!top.length) return '';
-  const groupName = { p: 'частка', e: 'помилка', v: 'форма', c: 'форма', g: 'граматика', k: 'канджі', w: 'слово', l: 'аудіювання', tj: 'переклад', tu: 'порядок слів' };
+  const groupName = { p: 'частка', e: 'помилка', v: 'форма', c: 'форма', g: 'граматика', k: 'кандзі', w: 'слово', l: 'аудіювання', tj: 'переклад', tu: 'порядок слів' };
   return `<section class="panel"><h2 class="sec-title">Слабкі місця</h2><p class="muted small">Що ви плутаєте найчастіше (останні 15 спроб):</p>
     <div class="ex-weak">${top.map(({ n, e }) => `<div class="ex-weak-row"><span class="chip">${groupName[e.type] || ''}</span><b lang="ja">${esc(e.weak)}</b><span class="muted">✕ ${n}</span>${e.ref ? `<button type="button" class="ex-ref sm" data-ref='${esc(JSON.stringify(e.ref))}'>Повторити: ${esc(refShort(e.ref))}</button>` : ''}</div>`).join('')}</div></section>`;
 }
