@@ -30,24 +30,27 @@ const args = process.argv.slice(2);
 if (args[0] === '--coverage' || args[0] === '--unknown') {
   const from = +args[1] || 1, to = +args[2] || from;
   const unknown = new Map();
-  let pts = 0, hit = 0;
+  let pts = 0, hit = 0, hitAny = 0;
   for (const l of G.lessons.filter(l => l.lesson >= from && l.lesson <= to)) {
     for (const p of l.points) {
       const exs = p.blocks.filter(b => b.ex).map(b => plain(b.ex)).filter(x => !/[Ａ-Ｚ]|～/.test(x));
       if (!exs.length) continue;
-      let n = 0;
+      let n = 0, any = 0;
       const miss = [];
       for (const ex of exs) {
         const res = run(ex);
         if (res.some(r => r.constructions.some(c => c.point === p.id))) n++; else miss.push(ex);
+        // also explained by a particle use or a conjugation step that links to this point
+        if (res.some(r => r.constructions.some(c => c.point === p.id) || r.particles.some(x => x.point === p.id) || r.blocks.some(b => (b.steps || []).some(st => st.point === p.id)))) any++;
         for (const r of res) for (const b of r.blocks) if (!b.meaning && !['particle', 'punct', 'copula', 'copneg', 'aux'].includes(b.cls)) unknown.set(b.base, (unknown.get(b.base) || 0) + 1);
       }
       pts++;
       if (n) hit++;
-      if (args[0] === '--coverage') console.log(`${n ? '✓' : '·'} ${p.id.padEnd(6)} ${n}/${exs.length}  ${plain(p.title).slice(0, 50)}${n < exs.length && miss.length ? '\n         miss: ' + miss.slice(0, 2).join(' ｜ ') : ''}`);
+      if (any) hitAny++;
+      if (args[0] === '--coverage') console.log(`${n ? '✓' : any ? '○' : '·'} ${p.id.padEnd(6)} ${n}/${exs.length}${any > n ? ` (+${any - n} particle/form)` : ''}  ${plain(p.title).slice(0, 50)}${n < exs.length && miss.length ? '\n         miss: ' + miss.slice(0, 2).join(' ｜ ') : ''}`);
     }
   }
-  if (args[0] === '--coverage') console.log(`\npoints with at least one detected example: ${hit}/${pts}`);
+  if (args[0] === '--coverage') console.log(`\npoints with at least one detected example: ${hit}/${pts} by constructions, ${hitAny}/${pts} incl. particles/forms (✓ construction, ○ only particle/form, · none)`);
   else console.log([...unknown].sort((a, b) => b[1] - a[1]).map(([w, n]) => `${w} ${n}`).join('\n'));
   process.exit(0);
 }

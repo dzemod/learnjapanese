@@ -363,6 +363,8 @@ function tokenString(toks, D) {
   at.push(str.length);
   return { str, at };
 }
+/** Token string used for construction patterns (tools/analyzer-dump.mjs). */
+export function debugTokens(rawTokens, D) { return tokenString(rawTokens.map(prep).filter(t => !/^\s+$/.test(t.surface_form)), D).str; }
 const compiled = new WeakMap();
 function findConstructions(toks, D) {
   const { str, at } = tokenString(toks, D);
