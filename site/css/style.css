@@ -823,7 +823,7 @@ body[data-view="grammar"] main, body[data-view="kanji"] main { max-width: 1040px
 .kc-exrow { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; padding: 8px 10px; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--border); }
 .kc-exrow .jp { font-size: 1.15rem; }
 .kc-exrow .reading { color: var(--muted); font-size: .85rem; }
-.kc-exrow .uk { flex: 1; min-width: 140px; }
+.kc-exrow .uk { flex: 1; min-width: 140px; overflow-wrap: anywhere; hyphens: auto; }
 .kc-exrow.needs-check { border-color: rgba(217, 162, 91, .45); }
 .kc-exacts { display: flex; margin-left: auto; }
 .kc-nav { display: flex; justify-content: space-between; margin-top: 16px; }

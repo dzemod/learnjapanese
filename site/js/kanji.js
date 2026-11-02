@@ -189,11 +189,15 @@ export function editWord(lessonId, wordId, done) {
 
 // ---------- stroke order (KanjiVG) ----------
 const svgCache = new Map();
+// Pinned release: jsDelivr throttles @master (HTTP 403); GitHub raw is the fallback.
+const KVG = 'r20260714';
+const KVG_URLS = [`https://cdn.jsdelivr.net/gh/KanjiVG/kanjivg@${KVG}/kanji/`, `https://raw.githubusercontent.com/KanjiVG/kanjivg/${KVG}/kanji/`];
+const getText = url => fetch(url).then(r => { if (!r.ok) throw new Error(r.status); return r.text(); });
+const fetchSVG = hex => getText(KVG_URLS[0] + hex + '.svg').catch(() => getText(KVG_URLS[1] + hex + '.svg'));
 function kanjiVG(ch) {
   const hex = ch.codePointAt(0).toString(16).padStart(5, '0');
   if (!svgCache.has(hex)) {
-    svgCache.set(hex, fetch(`https://cdn.jsdelivr.net/gh/KanjiVG/kanjivg@master/kanji/${hex}.svg`)
-      .then(r => { if (!r.ok) throw new Error(r.status); return r.text(); })
+    svgCache.set(hex, fetchSVG(hex)
       .then(t => {
         const doc = new DOMParser().parseFromString(t, 'image/svg+xml');
         const paths = [...doc.querySelectorAll('path')].filter(p => /-s\d+$/.test(p.getAttribute('id') || '')).map(p => p.getAttribute('d'));
