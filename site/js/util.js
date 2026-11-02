@@ -317,6 +317,8 @@ export const I = {
   download: svg('<path d="M12 4v11M7 10l5 5 5-5"/><path d="M4 19h16"/>'),
   upload: svg('<path d="M12 15V4M7 9l5-5 5 5"/><path d="M4 19h16"/>'),
   back: svg('<path d="M19 12H5M11 6l-6 6 6 6"/>'),
+  copy: svg('<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 012-2h8"/>'),
+  translate: svg('<path d="M4 5h9M8.5 3v2M6 5c.6 3.2 2.6 5.8 5.5 7.2"/><path d="M11 5c-.7 3.8-3.2 6.8-6.5 8.2"/><path d="M13 21l4-9 4 9M14.4 18h5.2"/>'),
 };
 
 // ---------- Furigana markup: {漢字|かんじ} ----------
@@ -348,6 +350,8 @@ export function gram(html, all = false) {
 export const furiPlain = s => String(s ?? '').replace(FG, '$1($2)');
 /** Text for speech: readings instead of kanji. */
 export const furiSay = s => String(s ?? '').replace(FG, '$2');
+/** Text with kanji only (markup removed, no readings). */
+export const furiBase = s => String(s ?? '').replace(FG, '$1');
 
 // ---------- Gojūon (あいうえお) order ----------
 const JA_COLL = new Intl.Collator('ja');

@@ -6,6 +6,7 @@ import { modeView } from './modes.js';
 import { loadKanji, kanjiHome, kanjiLessonView, isKanjiSet } from './kanji.js';
 import { loadGrammar, grammarHome, grammarLesson } from './grammar.js';
 import { examView, returnButton } from './exam.js';
+import { translateView } from './translate.js';
 
 const app = $('#app');
 let cleanup = null;
@@ -46,7 +47,7 @@ async function route() {
   window.scrollTo(0, 0);
   const kanjiRoute = parts[0] === 'kanji' || (parts[0] === 'set' && isKanjiSet(parts[1] || ''));
   document.body.dataset.view = parts[0] === 'set' && parts[2] && !['add', 'edit'].includes(parts[2]) ? 'mode' : parts[0] || 'home';
-  document.body.dataset.tab = kanjiRoute ? 'kanji' : parts[0] === 'grammar' ? 'grammar' : parts[0] === 'exam' ? 'exam' : 'words';
+  document.body.dataset.tab = kanjiRoute ? 'kanji' : parts[0] === 'grammar' ? 'grammar' : parts[0] === 'exam' ? 'exam' : parts[0] === 'translate' ? 'translate' : 'words';
   returnButton(parts[0]);
   if (kanjiRoute || parts[0] === 'grammar') {
     app.innerHTML = '<div class="loading"><span class="sun pulse"></span></div>';
@@ -57,6 +58,7 @@ async function route() {
   if (!parts.length) cleanup = homeView(app, api);
   else if (parts[0] === 'grammar') out(parts[1] ? grammarLesson(app, +parts[1], parts[2]) : grammarHome(app));
   else if (parts[0] === 'kanji') out(parts[1] ? kanjiLessonView(app, parts[1], parts[2]) : kanjiHome(app));
+  else if (parts[0] === 'translate') out(translateView(app, parts.slice(1).join('/')));
   else if (parts[0] === 'exam') { const v = await examView(app, parts[1]); if (my === routeNo) out(v); }
   else if (parts[0] === 'set' && parts[1] && isKanjiSet(parts[1]) && (!parts[2] || ['add', 'edit'].includes(parts[2]))) {
     location.replace('#/kanji/' + encodeURIComponent(parts[1].replace(/-w$/, ''))); return;
@@ -116,6 +118,9 @@ function drawSyncBar() {
   lastPending = pend;
 }
 onSync(drawSyncBar);
+
+// Cache the Kuromoji dictionary (CDN) after the first download — see sw.js. Site files are never cached by it.
+if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
 
 (async function init() {
   await loadBase();

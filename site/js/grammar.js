@@ -3,7 +3,7 @@
 // point.blocks = textbook (IV. Граматика, 文型, 例文 — never changed by extra work); point.details = «Детальніше» (optional extra blocks).
 // Blocks: { h } subheading · { p } paragraph · { note } note · { ex, uk, src? } example · { table: [[...]] }
 // Japanese text uses furigana markup {漢字|かんじ}, shown as 漢字(かんじ).
-import { $, $$, esc, I, furi, furiT, furiPlain, furiSay, speak, norm } from './util.js';
+import { $, $$, esc, I, furi, furiT, furiPlain, furiSay, furiBase, speak, norm } from './util.js';
 
 const G = { data: null, loading: null, error: false };
 export function loadGrammar() {
@@ -24,7 +24,8 @@ function blockHTML(b) {
   if (b.ex != null) return `<div class="g-ex">
       ${b.src ? `<span class="g-src" lang="ja">${esc(b.src)}</span>` : ''}
       <div class="g-ex-body"><div class="g-ja" lang="ja">${furi(b.ex)}</div>${b.uk ? `<div class="g-uk">${furi(b.uk)}${b.check ? ' <span class="check-badge" title="Переклад зроблено не з книжки (у перекладі інше речення) — перевірте">перевірити</span>' : ''}</div>` : ''}</div>
-      <button class="icon-btn sm" data-say="${esc(furiSay(b.ex))}" aria-label="Вимова">${I.speaker}</button>
+      <div class="g-ex-btns"><button class="icon-btn sm" data-say="${esc(furiSay(b.ex))}" aria-label="Вимова">${I.speaker}</button>
+      ${/[～〜]|[Ａ-Ｚ]/.test(b.ex) ? '' : `<a class="icon-btn sm" href="#/translate/${encodeURIComponent(furiBase(b.ex))}" aria-label="Перекласти й розібрати в Перекладачі" title="Перекласти й розібрати">${I.translate}</a>`}</div>
     </div>`;
   return '';
 }

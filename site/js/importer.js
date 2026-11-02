@@ -13,7 +13,7 @@ const CDN = {
 export const MAX_BYTES = 10 * 1024 * 1024;
 
 const loaded = {};
-function loadScript(src) {
+export function loadScript(src) {
   return (loaded[src] ||= new Promise((res, rej) => {
     const s = document.createElement('script');
     s.src = src;
