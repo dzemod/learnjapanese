@@ -358,7 +358,7 @@ function tokenString(toks, D) {
   const at = [];
   for (const t of toks) {
     at.push(str.length);
-    str += `‹${t.kana.replace(/[‹›·]/g, '')}·${tokenTag(t, null, D)}·${String(t.base).replace(/[‹›·]/g, '')}·${t.form || '-'}›`;
+    str += `‹${t.kana.replace(/[‹›·]/g, '')}·${tokenTag(t, null, D)}·${String(t.conjugated_type === '特殊・タ' ? 'た' : t.base).replace(/[‹›·]/g, '')}·${t.form || '-'}›`; // past だ (飲んだ) = た
   }
   at.push(str.length);
   return { str, at };
