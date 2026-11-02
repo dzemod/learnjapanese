@@ -46,7 +46,6 @@
 - Each lesson is also two study sets for the normal modes: `<lessonId>` (kanji) and `<lessonId>-w` ("Слова уроку N"); progress keys `k300-01/k300-001`, `k300-01-w/k300-001-1` — never renumber ids.
 - Edits on the site go to `/api/save-set` with `action: "kanji-lesson"` (writes kanji.json).
 - Add lessons: write `k300-03.js` (`module.exports = { book, no, title, titleUk, range, kanji: [[no, kanji, strokes, radical, en, uk, [on], [kun], [[word, kana, en, uk], ...]], ...] }`) in a temp dir, run `node tools/add-kanji.js <dir>` (never overwrites existing lessons).
-- kanji-300 PDF: lesson 1 kanji on PDF pp. 27–34, lesson 2 pp. 37–44 (4 kanji per full page + 1 on the next page, then exercises). Book has 15 lessons (contents PDF p. 4–5).
 - Stroke order: KanjiVG SVGs from jsDelivr (CC BY-SA 3.0, attribution shown in the kanji card).
 
 ## Exam tab — `site/js/exam.js`, `site/data/exam.json`, `site/js/conjugate.js`
@@ -57,8 +56,8 @@
 - References: grammar `#/grammar/<l>/<pointId>`, kanji `#/kanji/<lessonId>/<kanjiId>`, words `#/set/<id>`; floating «Повернутися до екзамену» button (exam.js `returnButton`).
 
 ## Progress of the textbook import (update after each batch)
-- Grammar: ALL lessons 1–50 done (exam bank 1–50). Part II II/IV: L46 149,151–152 · L47 155,157–158 · L48 161,163–164 · L49 167,169–170 · L50 173,175–176; main L46 172 · L47 180 · L48 188 · L49 196 · L50 204. L41 119,121–122 · L42 125,127–128 · L43 131,133–134. L36 89,91–92 · L37 95,97–98 · L38 101,103–104 · L39 107,109–110 · L40 113,115–116 · L41 starts 117; main L38 104, L39 112, L40 120, L41 129. Part II II/IV pages: L31 59,61–62 · L32 65,67–68 · L33 71,73–74 · L34 77,79–80 · L35 83,85–86 · L36 starts 87; main L34 68, L35 76, L36 88, L37 96. Part II (minna-2.pdf): L26 29,31–32 · L27 35,37–38 · L28 41,43–44 · L29 47,49–50 · L30 53,55–56 · L31 59,61–62 (lesson start +2 = II, +4..+5 = IV); main Part II: L26 p2, L27 10, L28 18, L29 26, L30 34, L31 44, L32 52, L33 60. L22 160,162–163 · L23 166,168–169 · L24 172,174–175 · L25 178,180–181; main L22 186, L23 196, L24 204, L25 212. L17 130,132–133 · L18 136,138–139 · L19 142,144–145 · L20 148,150–151 · L21 154,156–157; main L16 134, L17 144, L18 152, L19 160, L20 170, L21 178. L12 100,102–103 · L13 106,108–109 · L14 112,114–115 · L15 118,120–121 · L16 124,126–127; main L12 98, L13 110, L14 118, L15 126. Translation book pages: L6 64,66–67 · L7 70,72–73 · L8 76,78–79 · L9 82,84–85 · L10 88,90–91 · L11 94,96–97 (pattern: lesson start, vocab, II at +2, III at +3, IV at +4..+5). Main book: L6 48, L7 56, L8 66, L9 74, L10 82, L11 90.
-- Kanji: kanji-300 COMPLETE (15 lessons, 300 kanji, 873 words). kanji-700 COMPLETE (32 lessons, 700 kanji, 1615 words; strokes of 509–700 verified with KanjiVG — 療 震 捜 have no KanjiVG file). Page map (for re-checks): lesson N title page = PDF 26+6(N−1) up to 8課, +2 after 8課, 16課 and 24課 (2-page まとめ問題); 25課 176 … 32課 218; kanji on title +1..+4.
+- Grammar: ALL lessons 1–50 done (exam bank 1–50). PDF page maps: skill `textbook-pages`.
+- Kanji: kanji-300 COMPLETE (15 lessons, 300 kanji, 873 words). kanji-700 COMPLETE (32 lessons, 700 kanji, 1615 words; strokes of 509–700 verified with KanjiVG — 療 震 捜 have no KanjiVG file). Page maps: skill `textbook-pages`.
 - Scans are read by rendering pages to PNG with the `mupdf` npm package (no Python/poppler on this PC).
 
 ## Merging a browser export
@@ -66,7 +65,6 @@
 
 ## Project
 - Plain HTML/CSS/JS, no build step: `site/index.html`, `site/css/style.css`, `site/js/*.js` (ES modules).
-  - `store.js` data/progress/sync/undo, `modes.js` study modes, `views.js` pages, `edit.js` word editing + bulk edit, `importer.js` OCR/PDF/readings (Tesseract.js, pdf.js, Kuroshiro — loaded lazily from CDNs), `grammar.js` Граматика tab (`#/grammar`, `#/grammar/<n>`), `kanji.js` Кандзі tab (`#/kanji`, `#/kanji/<lessonId>`, virtual study sets, kanji editor, stroke order).
   - Top tabs: Слова (`#/`) · Граматика · Кандзі.
 - `site/api/save-set.js` — Vercel serverless function; commits a whole edited set into `site/data/sets.json` via the GitHub API (env `GITHUB_TOKEN`, `APP_PASSWORD`; see SETUP.md). Any set can be edited (textbook sets keep `source: "textbook"`); textbook sets cannot be deleted through it.
 - Editing on the site: inline edit / add / delete on the set page, edit buttons inside every study mode, bulk edit at `#/set/<id>/edit` (reorder + edit all), undo toast, per-word history (last 5 versions, browser only). Edited sets are kept as a local copy (`jp.custom.newSets`) until the redeployed sets.json matches, so nothing is lost if saving fails.
@@ -76,20 +74,16 @@
 - Run locally: `npx serve site` (the save API only works on Vercel or with `vercel dev`).
 
 ## Review (REVIEW.md)
-- Review in progress (user request): batches words 1–10 … 41–50, grammar by 10, kanji by chapters, exam bank, interface; after each batch commit "Review: …" and update REVIEW.md (corrections table, «Потребує перевірки», statistics). Done: batch 1 (words 0–10 + global typography), batch 2 (words 11–20), batch 3 (words 21–30), batch 4 (words 31–40), batch 5 (words 41–50). batch 6 (grammar 1–50: furigana auto-check tools/review-furigana.js, IM→ІМ). batch 7 (kanji 1–4課), batch 8 (exam bank: safe distractors/errors, verb reading guard). batch 9 (interface). REVIEW COMPLETE for existing content — re-review new kanji lessons after import. Next: resume kanji import (k300 5課 PDF 69–76).
 - After rebuilding grammar/exam always run `node tools/typo-uk.js` (quotes «», apostrophe ’, dash —, …) — it touches Ukrainian string values only, never Japanese fields (ex, ja, pre, post…).
 - Transcription: kana only for readings; Cyrillic names/terms by the Ukrainian (Kovalenko) system (し сі, ち ті, じ дзі, つ цу, しゃ ся, ちゃ тя, じゃ дзя).
 
 ## CURRENT TASKS (handoff, 2026-11-02) — continue in this order, commit + push after each step
-Done & pushed: kanji import COMPLETE (300 + 700); speech fix; textbook grammar guard; QA batch 1 (fonts, abbreviations, text); QA words & grammar; «кандзі» everywhere; 135 grammar translations checked (4 fixed, all «перевірити» marks removed).
-
 1. **Finish the site QA** (user request: whole site, 1920 + 375 px, fix everything, re-run until clean, batches committed as "QA: …").
    - Setup: `npm i --no-save playwright-core` (or QA_MODULES=<dir with node_modules>), Chrome at C:/Program Files/Google/Chrome/Application/chrome.exe.
    - Words + Grammar: clean (2084 steps). Exam + other pages: clean (1420 steps; the only hit «— десять» in .ex-correct is a checker false positive — fonts are reported only for own text there).
    - TODO: run `QA_OUT=kanji node tools/qa-site.mjs kanji` (all 47 kanji lessons, 1000 kanji cards, modes), review `qa/kanji/report.md` + screenshots, fix real problems, re-run, commit "QA: kanji".
    - Also run `node tools/qa-text.js`, `node tools/qa-speech.mjs`, `node tools/check-grammar.js` — all must pass.
    - Finish **QA.md** (draft is committed): fill the Kanji/Exam rows of «Що перевірено» with step counts, add any new problems found, keep «Потребує вашого рішення». Commit "QA: report" and push.
-2. ~~«Детальніше» for grammar~~ — DONE & pushed (all 257 points, commits "Grammar details: L1–10 … L41–50").
 3. **Перекладач** (user request 2026-11-02, started before QA): STEP 1 DONE & pushed — `site/js/translate.js` (#/translate[/text]), `analyzer.js` (Kuromoji blocks, conjugation steps, particle uses, structure, politeness, construction patterns `<TAG:form=base~kana>`), `wordindex.js` (my sets + kanji words), `data/analyzer.json` built by `node tools/build-analyzer.mjs` from `tools/analyzer/base.js` + `L*.js`; JMdict fallback `data/jmdict-mini.json` (`tools/build-jmdict-mini.js`); `sw.js` caches the Kuromoji CDN dict; grammar examples have a «Перекласти» button. Test: `node tools/test-analyzer.mjs "文" | --coverage 1 10`. NEXT: step 2 = constructions `tools/analyzer/L01-10.js` … `L41-50.js` (commit after each), step 3 = MyMemory translation (ja↔uk, daily-limit message), uk→ja + matching textbook examples, history, copy.
 4. **New tabs «Словник» and «Перекладач»** — start ONLY after 1 and 2 are pushed. Full spec = the user's message (JMdict/KANJIDIC2/RADKFILE via jmdict-simplified, lazy compressed chunks + IndexedDB, search kanji/kana/romaji/English/Ukrainian, word & kanji pages, radical search, KanjiVG, favorites/recent; Перекладач: Kuromoji analysis with Ukrainian explanations of every word/form/particle/construction from data/analyzer.json (rule-based, lessons 1–50, links to grammar points «Minna no Nihongo, Урок N, пункт M»), MyMemory draft translation (keyless, marked «чернетка, може бути неточною», daily-limit message), uk→ja + matching textbook examples, history, «Додати речення до мого уроку»). 100% free, no keys/AI. Speech only on click. Steps: 1) Dictionary 2) Sentence analysis 3) Translation — commit + push after each.
 
