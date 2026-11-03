@@ -1020,3 +1020,28 @@ body[data-view="translate"] main { max-width: 900px; }
 .tr-literal { margin: 0; padding: 10px 12px; border-radius: 10px; background: var(--panel-2); border: 1px dashed var(--border-2); }
 .tr-credits { margin-top: 18px; }
 .tr-add select.input { min-height: 46px; }
+/* Перекладач: draft translation, my words, textbook examples, history */
+.tr-mt, .tr-words, .tr-exs { padding: 16px; }
+.tr-mt-text { margin: 4px 0 10px; font-size: 1.15rem; line-height: 1.55; overflow-wrap: anywhere; }
+.tr-mt-text:lang(ja) { font-family: var(--jp); font-size: 1.3rem; }
+.tr-mt-btns, .tr-ex-btns { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.tr-mt .muted.small { margin: 10px 0 0; }
+.tr-ana-title { margin: 0 0 8px; color: var(--amber); }
+.tr-exlist, .tr-wlist { display: grid; gap: 8px; }
+.tr-ex { padding: 10px 12px; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--border); }
+.tr-ex-jp { font-family: var(--jp); font-size: 1.08rem; line-height: 1.6; overflow-wrap: anywhere; }
+.tr-ex-uk { margin: 4px 0 6px; }
+.tr-ex-meta { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; }
+.tr-wrow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) auto; align-items: center; gap: 4px 12px; padding: 8px 12px; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--border); }
+.tr-wjp { font-family: var(--jp); font-size: 1.05rem; overflow-wrap: anywhere; }
+.tr-wuk { overflow-wrap: anywhere; }
+.tr-wsrc { grid-column: 1 / 3; color: var(--muted); }
+.tr-wrow .icon-btn { grid-column: 3; grid-row: 1 / 3; }
+.tr-hist { margin-top: 12px; }
+.tr-hist summary { cursor: pointer; color: var(--muted); font-size: .88rem; }
+.tr-hist-list { display: grid; gap: 4px; margin-top: 8px; }
+.tr-hist-item { display: flex; align-items: baseline; gap: 8px; text-align: left; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel-2); color: inherit; font: inherit; font-size: .92rem; cursor: pointer; overflow-wrap: anywhere; min-width: 0; }
+.tr-hist-item:hover { border-color: var(--red); }
+.tr-hist-item [lang="ja"] { font-family: var(--jp); }
+.tr-hist-lang { flex: none; font-size: .7rem; font-weight: 700; color: var(--muted); min-width: 26px; }
+.tr-hist-clear { justify-self: start; margin-top: 4px; }

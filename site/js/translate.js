@@ -1,8 +1,12 @@
 // Перекладач tab (#/translate, #/translate/<text>): analysis of a Japanese sentence with Ukrainian
-// explanations (data/analyzer.json) and links to the grammar points of Minna no Nihongo.
-// Tokenizer: Kuromoji (free, open-source, runs in the browser; dictionary from a CDN, cached by sw.js).
+// explanations (data/analyzer.json) and links to the grammar points of Minna no Nihongo; Ukrainian → Japanese
+// and Japanese → Ukrainian draft translation (MyMemory, mt.js); matching textbook examples and my words
+// (examples.js); history of queries (localStorage jp.translate.history).
+// Tokenizer: Kuromoji in a Web Worker (tokenizer.js; dictionary from a CDN, cached).
 // Meanings: my sets + kanji books first, then a small JMdict subset (data/jmdict-mini.json, English).
-import { $, $$, esc, I, furi, furiT, speak, toast, modal, JA, tightenJa, hasKanji } from './util.js';
+import { $, $$, esc, I, furi, furiT, furiBase, furiSay, speak, toast, modal, JA, tightenJa, hasKanji } from './util.js';
+import { machineTranslate, MtLimitError, mtResetLimit } from './mt.js';
+import { buildExampleIndex, matchByUk, matchByJa, matchWords } from './examples.js';
 import { getSets, isMine, createSet, addCards } from './store.js';
 import { loadKanji, books as kanjiBooks } from './kanji.js';
 import { loadGrammar, grammarLessons } from './grammar.js';
@@ -175,29 +179,87 @@ function sentenceHTML(r, si, D) {
   </section>`;
 }
 
+// ---------- translation, examples, history ----------
+const HIST_KEY = 'jp.translate.history', HIST_MAX = 30;
+const histGet = () => { try { return JSON.parse(localStorage.getItem(HIST_KEY) || '[]'); } catch { return []; } };
+const histSet = list => { try { localStorage.setItem(HIST_KEY, JSON.stringify(list.slice(0, HIST_MAX))); } catch { /* ignore */ } };
+const histAdd = (t, l) => histSet([{ t, l, d: Date.now() }, ...histGet().filter(h => h.t !== t)]);
+let EXI = null;
+const exIndex = () => (EXI ||= buildExampleIndex(grammarLessons()));
+const plainJa = s => furiBase(s).replace(/\s+/g, '');
+
+function mtHTML(st, from, to) {
+  const head = `<div class="tr-sent-head"><h2 class="sec-title">${to === 'ja' ? 'Переклад японською' : 'Переклад українською'}</h2><span class="check-badge">чернетка, може бути неточною</span></div>`;
+  if (st.loading) return `${head}<p class="muted small"><span class="spinner"></span> Перекладаю…</p>`;
+  if (st.limit) return `${head}<p class="small">Безкоштовний ліміт перекладів MyMemory на сьогодні вичерпано (≈ 5000 слів на день). Спробуйте завтра — розбір речення і приклади з підручника працюють і без перекладу.</p><button type="button" class="btn ghost sm" data-mtretry>Спробувати ще раз</button>`;
+  if (st.error) return `${head}<p class="small">Не вдалося отримати переклад — перевірте інтернет-з’єднання.</p><button type="button" class="btn ghost sm" data-mtretry>Спробувати ще раз</button>`;
+  const t = st.text || '';
+  return `${head}<p class="tr-mt-text" lang="${to}">${esc(t) || '—'}</p>
+    <div class="tr-mt-btns">
+      ${to === 'ja' && t ? `<button type="button" class="icon-btn" data-say="${esc(t)}" aria-label="Прослухати переклад">${I.speaker}</button>` : ''}
+      ${t ? `<button type="button" class="btn ghost sm" data-copy="${esc(t)}">${I.copy}<span>Копіювати переклад</span></button>
+      <button type="button" class="btn ghost sm" data-copy="${esc(st.src + '\n' + t)}">${I.copy}<span>Оригінал + переклад</span></button>` : ''}
+    </div>
+    <p class="muted small">Машинний переклад MyMemory (безкоштовно). Перевіряйте його за розбором і прикладами з підручника.</p>`;
+}
+
+function examplesHTML(list, title) {
+  if (!list.length) return '';
+  return `<h2 class="sec-title">${esc(title)}</h2><div class="tr-exlist">${list.map(e => `<div class="tr-ex">
+      <div class="tr-ex-jp" lang="ja">${furi(e.ex)}</div>
+      <div class="tr-ex-uk">${esc(e.uk)}${e.check ? ' <span class="check-badge" title="Переклад зроблено самостійно — у книжці перекладів інше речення">перевірити</span>' : ''}</div>
+      <div class="tr-ex-meta">${refLink(e.pointId)}
+        <span class="tr-ex-btns"><button type="button" class="icon-btn" data-say="${esc(furiSay(e.ex))}" aria-label="Прослухати приклад">${I.speaker}</button>
+        <button type="button" class="icon-btn" data-copy="${esc(plainJa(e.ex) + '\n' + e.uk)}" aria-label="Копіювати приклад">${I.copy}</button>
+        <button type="button" class="btn ghost sm" data-analyze="${esc(plainJa(e.ex))}">Розібрати</button></span></div>
+    </div>`).join('')}</div>`;
+}
+
+function wordsHTML(list) {
+  if (!list.length) return '';
+  return `<h2 class="sec-title">Слова з моїх уроків</h2><div class="tr-wlist">${list.map(({ card: c, set: s }) => `<div class="tr-wrow">
+      <span class="tr-wjp" lang="ja">${esc(c.japanese)}${c.reading && c.reading !== c.japanese ? `<span class="fg">(${esc(c.reading)})</span>` : ''}</span>
+      <span class="tr-wuk">${esc(c.ukrainian)}</span>
+      <a class="tr-wsrc small" href="#/set/${encodeURIComponent(s.id)}">${esc(s.title)}</a>
+      <button type="button" class="icon-btn" data-say="${esc(c.reading || c.japanese)}" aria-label="Вимова">${I.speaker}</button>
+    </div>`).join('')}</div>`;
+}
+
 // ---------- view ----------
 export function translateView(root, initial) {
-  let results = [];
+  let results = [], curLang = '';
   root.innerHTML = `<div class="translate fade-in">
     <section class="hero"><div><p class="eyebrow" lang="ja">翻訳</p><h1>Перекладач</h1>
-      <p class="muted">Розбір японського речення: кожне слово, форма, частка й конструкція — з посиланнями на уроки.</p></div></section>
+      <p class="muted">Японське речення — розбір кожного слова, форми, частки й конструкції з посиланнями на уроки та чернетка перекладу. Українське речення — чернетка перекладу японською, слова з моїх уроків і схожі приклади з підручника.</p></div></section>
     <div class="panel tr-input">
-      <textarea class="input big" rows="3" placeholder="Введіть або вставте японське речення…" aria-label="Текст для аналізу"></textarea>
+      <textarea class="input big" rows="3" placeholder="Введіть японське або українське речення…" aria-label="Текст для перекладу"></textarea>
       <div class="tr-btns">
-        <button type="button" class="btn primary" data-go>${I.search}<span>Розібрати</span></button>
+        <button type="button" class="btn primary" data-go>${I.search}<span>Перекласти</span></button>
         <button type="button" class="btn ghost" data-example>Приклад</button>
         <button type="button" class="btn ghost" data-clear>Очистити</button>
       </div>
       <div class="progress tr-load" hidden><div class="bar"><i></i></div><span class="progress-label small muted"></span></div>
       <p class="tr-status muted small" role="status"></p>
+      <details class="tr-hist" hidden><summary>Історія</summary><div class="tr-hist-list"></div></details>
     </div>
-    <div class="tr-legend small"><span class="wb-dot wb-n"></span>іменник <span class="wb-dot wb-v"></span>дієслово <span class="wb-dot wb-a"></span>прикметник <span class="wb-dot wb-p"></span>частка <span class="wb-dot wb-c"></span>зв’язка <span class="wb-dot wb-d"></span>інше</div>
-    <div class="tr-out"></div>
-    <p class="tr-credits muted small">Розбір: Kuromoji (IPADIC) у браузері · пояснення: правила за підручником Minna no Nihongo · значення: мої слова, канджі; інакше JMdict © EDRDG (CC BY-SA 4.0).</p>
+    <div class="tr-out">
+      <section class="panel tr-mt" hidden></section>
+      <section class="panel tr-words" hidden></section>
+      <div class="tr-ana-wrap" hidden>
+        <p class="tr-ana-title small" hidden>Розбір чернетки перекладу — перевірте, чи це те, що ви хотіли сказати:</p>
+        <div class="tr-legend small"><span class="wb-dot wb-n"></span>іменник <span class="wb-dot wb-v"></span>дієслово <span class="wb-dot wb-a"></span>прикметник <span class="wb-dot wb-p"></span>частка <span class="wb-dot wb-c"></span>зв’язка <span class="wb-dot wb-d"></span>інше</div>
+        <div class="tr-ana"></div>
+      </div>
+      <section class="panel tr-exs" hidden></section>
+    </div>
+    <p class="tr-credits muted small">Розбір: Kuromoji (IPADIC) у браузері · пояснення: правила за підручником Minna no Nihongo · значення: мої слова, канджі; інакше JMdict © EDRDG (CC BY-SA 4.0) · чернетка перекладу: MyMemory (текст надсилається на api.mymemory.translated.net).</p>
   </div>`;
   const ta = $('textarea', root), out = $('.tr-out', root), status = $('.tr-status', root);
+  const mtBox = $('.tr-mt', root), wordsBox = $('.tr-words', root), anaWrap = $('.tr-ana-wrap', root), ana = $('.tr-ana', root), exBox = $('.tr-exs', root), anaTitle = $('.tr-ana-title', root);
   const setStatus = (msg, busy = false) => { status.innerHTML = busy ? `<span class="spinner"></span> ${esc(msg)}` : esc(msg); };
   let alive = true, runNo = 0;
+  const current = my => alive && my === runNo;
+
   // Dictionary progress (the worker loads it in the background; the page stays responsive)
   const load = $('.tr-load', root), loadBar = $('.bar i', load), loadLbl = $('.progress-label', load);
   const drawLoad = s => {
@@ -214,42 +276,130 @@ export function translateView(root, initial) {
   drawLoad(tokState);
   ensureTokenizer().catch(() => {}); // start loading as soon as the tab opens
 
-  async function run() {
-    const text = cleanInput(ta.value);
-    if (!text) { out.innerHTML = ''; setStatus(''); return; }
-    const lang = langOf(text);
-    if (lang !== 'ja') { setStatus(lang === 'uk' ? 'Переклад з української буде доступний незабаром. Поки що введіть японське речення.' : 'Введіть японське речення.'); return; }
-    const my = ++runNo;
-    if (location.hash !== '#/translate/' + encodeURIComponent(text)) history.replaceState(null, '', '#/translate/' + encodeURIComponent(text));
+  // ----- history (this device only) -----
+  const hist = $('.tr-hist', root), histList = $('.tr-hist-list', root);
+  function drawHist() {
+    const list = histGet();
+    hist.hidden = !list.length;
+    $('summary', hist).textContent = `Історія (${list.length})`;
+    histList.innerHTML = list.map((h, i) => `<button type="button" class="tr-hist-item" data-h="${i}"><span class="tr-hist-lang">${h.l === 'ja' ? 'яп' : 'укр'}</span><span lang="${h.l}">${esc(h.t.length > 80 ? h.t.slice(0, 80) + '…' : h.t)}</span></button>`).join('')
+      + '<button type="button" class="btn ghost sm tr-hist-clear" data-hclear>Очистити історію</button>';
+  }
+  histList.onclick = e => {
+    if (e.target.closest('[data-hclear]')) { histSet([]); drawHist(); return; }
+    const b = e.target.closest('[data-h]');
+    if (b) { ta.value = histGet()[+b.dataset.h]?.t || ''; hist.open = false; run(); }
+  };
+  drawHist();
+
+  // ----- machine translation -----
+  async function translateBox(text, from, to, my) {
+    const st = { src: text, loading: true };
+    const draw = () => { if (current(my)) { mtBox.hidden = false; mtBox.innerHTML = mtHTML(st, from, to); } };
+    draw();
+    try { st.text = (await machineTranslate(text, from, to)).text; }
+    catch (e) { if (e instanceof MtLimitError) st.limit = true; else st.error = true; }
+    st.loading = false;
+    draw();
+    return st.text || '';
+  }
+
+  // ----- Japanese analysis -----
+  async function analyzeJa(text, my) {
     setStatus(tokState.phase === 'ready' ? 'Розбираю…' : 'Розбір почнеться, щойно словник буде готовий — сторінкою можна користуватися.', true);
-    try {
-      const [tokens, D, idx] = await Promise.all([tokenize(text), getRules(), getIndex(), loadGrammar()]);
-      if (!alive || my !== runNo) return;
-      results = analyzeText(tokens, D, (b, k, o) => lookupWord(idx, b, k, o));
-      render(D, idx);
-      setStatus('');
-      // words missing from my data → JMdict (English), loaded only when needed
-      const missing = results.flatMap(r => r.blocks).filter(b => !b.meaning && !['particle', 'punct', 'copula', 'copneg', 'aux', 'num'].includes(b.cls));
-      if (missing.length) {
-        const jm = await getJmdict().catch(() => null);
-        if (!jm || !alive || my !== runNo) return;
+    const [tokens, D, idx] = await Promise.all([tokenize(text), getRules(), getIndex(), loadGrammar()]);
+    if (!current(my)) return null;
+    results = analyzeText(tokens, D, (b, k, o) => lookupWord(idx, b, k, o));
+    anaWrap.hidden = false;
+    render(D, idx);
+    setStatus('');
+    // words missing from my data → JMdict (English), loaded only when needed
+    const missing = results.flatMap(r => r.blocks).filter(b => !b.meaning && !['particle', 'punct', 'copula', 'copneg', 'aux', 'num'].includes(b.cls));
+    if (missing.length) {
+      getJmdict().then(jm => {
+        if (!jm || !current(my)) return;
         let found = 0;
         for (const b of missing) {
           const e = jm.map.get(b.base) || (!hasKanji(b.base) && jm.map.get('#' + toHira(b.base))) || jm.map.get(b.surface);
           if (e) { b.jm = e; found++; }
         }
         if (found) render(D, idx, true);
+      }).catch(() => {});
+    }
+    return results;
+  }
+
+  function showExamples(list) {
+    exBox.hidden = !list.length;
+    exBox.innerHTML = examplesHTML(list, 'Схожі приклади з підручника');
+  }
+  function reset() {
+    for (const b of [mtBox, wordsBox, anaWrap, exBox]) b.hidden = true;
+    ana.innerHTML = '';
+    anaTitle.hidden = true;
+    results = [];
+  }
+
+  async function run() {
+    const text = cleanInput(ta.value);
+    const my = ++runNo;
+    reset();
+    if (!text) { setStatus(''); return; }
+    const lang = langOf(text);
+    curLang = lang;
+    if (!lang) { setStatus('Введіть японське або українське речення.'); return; }
+    if (location.hash !== '#/translate/' + encodeURIComponent(text)) history.replaceState(null, '', '#/translate/' + encodeURIComponent(text));
+    histAdd(text, lang);
+    drawHist();
+    try {
+      if (lang === 'uk') {
+        await loadGrammar();
+        if (!current(my)) return;
+        const words = matchWords(getSets(), text, 8);
+        wordsBox.hidden = !words.length;
+        wordsBox.innerHTML = wordsHTML(words);
+        showExamples(matchByUk(exIndex(), text));
+        setStatus('');
+        const ja = cleanInput(await translateBox(text, 'uk', 'ja', my));
+        if (ja && current(my) && langOf(ja) === 'ja') {
+          anaTitle.hidden = false;
+          await analyzeJa(ja, my);
+        }
+        return;
       }
+      const mtP = translateBox(text, 'ja', 'uk', my);
+      const res = await analyzeJa(text, my);
+      if (res) {
+        const words = res.flatMap(r => r.blocks).filter(b => ['noun', 'verb', 'adj', 'na', 'adv', 'name', 'time'].includes(b.cls) && b.base)
+          .map(b => (b.cls === 'verb' || b.cls === 'adj' ? (hasKanji(b.base) ? b.base.replace(/[ぁ-ゖ]+$/, '') : '') : b.base))
+          .filter(w => w && (hasKanji(w) || w.length >= 3));
+        const pts = res.flatMap(r => r.constructions.map(c => c.point));
+        const self = text.replace(/\s+/g, '');
+        showExamples(matchByJa(exIndex(), words, pts, 7).filter(e => e.plain !== self).slice(0, 6));
+      }
+      await mtP;
     } catch (e) {
       console.error(e);
-      if (alive && my === runNo) setStatus('Не вдалося завантажити словник для розбору. Перевірте інтернет-з’єднання і спробуйте ще раз.');
+      if (current(my)) setStatus('Не вдалося завантажити словник для розбору. Перевірте інтернет-з’єднання і спробуйте ще раз.');
     }
   }
 
+  // buttons outside the analysis (translation box, words, examples)
+  out.addEventListener('click', e => {
+    if (e.target.closest('.tr-ana')) return;
+    const say = e.target.closest('[data-say]');
+    if (say) { speak(say.dataset.say); return; }
+    const cp = e.target.closest('[data-copy]');
+    if (cp) { copy(cp.dataset.copy); return; }
+    const an = e.target.closest('[data-analyze]');
+    if (an) { ta.value = an.dataset.analyze; run(); window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
+    if (e.target.closest('[data-mtretry]')) { mtResetLimit(); run(); }
+  });
+
   function render(D, idx, keepSel = false) {
-    const sel = keepSel ? $$('.wb.on', out).map(b => [b.closest('.tr-sent').dataset.s, b.dataset.b]) : [];
-    out.innerHTML = results.map((r, i) => sentenceHTML(r, i, D)).join('');
-    out.onclick = e => {
+    const sel = keepSel ? $$('.wb.on', ana).map(b => [b.closest('.tr-sent').dataset.s, b.dataset.b]) : [];
+    ana.innerHTML = results.map((r, i) => sentenceHTML(r, i, D)).join('');
+    ana.onclick = e => {
       const say = e.target.closest('[data-say]');
       if (say) { speak(say.dataset.say); return; }
       const cp = e.target.closest('[data-copy]');
@@ -258,7 +408,13 @@ export function translateView(root, initial) {
       if (!sec) return;
       const r = results[+sec.dataset.s];
       const as = e.target.closest('[data-addsent]');
-      if (as) { addToLessonModal({ kanji: hasKanji(r.text) ? r.text : '', kana: r.kana, ukrainian: '', title: 'Додати речення до мого уроку' }); return; }
+      if (as) {
+        // Ukrainian: my own sentence (uk → ja) or the draft translation of a one-sentence text (ja → uk)
+        const draft = $('.tr-mt-text', mtBox)?.textContent || '';
+        const uk = curLang === 'uk' ? cleanInput(ta.value) : results.length === 1 && draft !== '—' ? draft : '';
+        addToLessonModal({ kanji: hasKanji(r.text) ? r.text : '', kana: r.kana, ukrainian: uk, title: 'Додати речення до мого уроку' });
+        return;
+      }
       const aw = e.target.closest('[data-addword]');
       if (aw) {
         const b = r.blocks[+$('.wb.on', sec)?.dataset.b];
@@ -276,11 +432,11 @@ export function translateView(root, initial) {
         $('.tr-detail', sec).innerHTML = detailHTML(on ? null : r.blocks[+wb.dataset.b], D, idx);
       }
     };
-    for (const [s, b] of sel) $(`.tr-sent[data-s="${s}"] .wb[data-b="${b}"]`, out)?.click();
+    for (const [s, b] of sel) $(`.tr-sent[data-s="${s}"] .wb[data-b="${b}"]`, ana)?.click();
   }
 
   $('[data-go]', root).onclick = run;
-  $('[data-clear]', root).onclick = () => { ta.value = ''; out.innerHTML = ''; setStatus(''); history.replaceState(null, '', '#/translate'); ta.focus(); };
+  $('[data-clear]', root).onclick = () => { ta.value = ''; runNo++; reset(); setStatus(''); history.replaceState(null, '', '#/translate'); ta.focus(); };
   $('[data-example]', root).onclick = async () => {
     await loadGrammar();
     const exs = grammarLessons().flatMap(l => l.points.flatMap(p => p.blocks.filter(b => b.ex && !/～|[Ａ-Ｚ]/.test(b.ex)).map(b => b.ex)));
