@@ -948,6 +948,10 @@ body[data-view="translate"] main { max-width: 900px; }
 .tr-btns .btn.primary { flex: 1 1 160px; }
 .tr-btns .btn.ghost { flex: 1 1 100px; }
 .tr-status:empty { display: none; }
+.tr-load { margin-top: 10px; }
+.tr-load.indet .bar i { width: 40% !important; animation: indet 1.1s ease-in-out infinite; }
+@keyframes indet { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+@media (prefers-reduced-motion: reduce) { .tr-load.indet .bar i { animation: none; width: 100% !important; opacity: .6; } }
 .tr-status { margin: 10px 0 0; }
 .tr-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; color: var(--muted); margin: -4px 0 6px; }
 .wb-dot { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: -6px; vertical-align: -1px; }

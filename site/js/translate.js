@@ -7,21 +7,12 @@ import { getSets, isMine, createSet, addCards } from './store.js';
 import { loadKanji, books as kanjiBooks } from './kanji.js';
 import { loadGrammar, grammarLessons } from './grammar.js';
 import { afterSave } from './edit.js';
-import { loadScript } from './importer.js';
+import { ensureTokenizer, tokenize, onTokProgress, tokState, tokProgressText } from './tokenizer.js';
 import { analyzeText, literal, pointRef, toHira } from './analyzer.js';
 import { buildIndex, lookupWord, kanjiParts } from './wordindex.js';
 
-const KUROMOJI = 'https://cdn.jsdelivr.net/npm/kuromoji@0.1.2/build/kuromoji.js';
-const DICT = 'https://cdn.jsdelivr.net/npm/kuromoji@0.1.2/dict/';
-const T = { tokenizer: null, tokP: null, D: null, dP: null, jm: null, jmP: null, idx: null, idxKey: '' };
+const T = { D: null, dP: null, jm: null, jmP: null, idx: null, idxKey: '' };
 
-function getTokenizer() {
-  if (T.tokenizer) return Promise.resolve(T.tokenizer);
-  return (T.tokP ||= loadScript(KUROMOJI)
-    .then(() => new Promise((res, rej) => window.kuromoji.builder({ dicPath: DICT }).build((e, t) => (e ? rej(e) : res(t)))))
-    .then(t => (T.tokenizer = t))
-    .catch(e => { T.tokP = null; throw e; }));
-}
 function getRules() {
   return (T.dP ||= fetch('data/analyzer.json', { cache: 'no-cache' }).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).then(d => (T.D = d)).catch(e => { T.dP = null; throw e; }));
 }
@@ -197,6 +188,7 @@ export function translateView(root, initial) {
         <button type="button" class="btn ghost" data-example>Приклад</button>
         <button type="button" class="btn ghost" data-clear>Очистити</button>
       </div>
+      <div class="progress tr-load" hidden><div class="bar"><i></i></div><span class="progress-label small muted"></span></div>
       <p class="tr-status muted small" role="status"></p>
     </div>
     <div class="tr-legend small"><span class="wb-dot wb-n"></span>іменник <span class="wb-dot wb-v"></span>дієслово <span class="wb-dot wb-a"></span>прикметник <span class="wb-dot wb-p"></span>частка <span class="wb-dot wb-c"></span>зв’язка <span class="wb-dot wb-d"></span>інше</div>
@@ -206,6 +198,21 @@ export function translateView(root, initial) {
   const ta = $('textarea', root), out = $('.tr-out', root), status = $('.tr-status', root);
   const setStatus = (msg, busy = false) => { status.innerHTML = busy ? `<span class="spinner"></span> ${esc(msg)}` : esc(msg); };
   let alive = true, runNo = 0;
+  // Dictionary progress (the worker loads it in the background; the page stays responsive)
+  const load = $('.tr-load', root), loadBar = $('.bar i', load), loadLbl = $('.progress-label', load);
+  const drawLoad = s => {
+    if (!alive) return;
+    const busy = s.phase === 'download' || s.phase === 'build';
+    load.hidden = !busy;
+    if (!busy) return;
+    const p = tokProgressText(s);
+    loadBar.style.width = Math.round(p.frac * 100) + '%';
+    load.classList.toggle('indet', s.phase === 'build');
+    loadLbl.textContent = p.text;
+  };
+  const offLoad = onTokProgress(drawLoad);
+  drawLoad(tokState);
+  ensureTokenizer().catch(() => {}); // start loading as soon as the tab opens
 
   async function run() {
     const text = cleanInput(ta.value);
@@ -214,11 +221,11 @@ export function translateView(root, initial) {
     if (lang !== 'ja') { setStatus(lang === 'uk' ? 'Переклад з української буде доступний незабаром. Поки що введіть японське речення.' : 'Введіть японське речення.'); return; }
     const my = ++runNo;
     if (location.hash !== '#/translate/' + encodeURIComponent(text)) history.replaceState(null, '', '#/translate/' + encodeURIComponent(text));
-    setStatus(T.tokenizer ? 'Розбираю…' : 'Завантажую словник для розбору (≈ 12 МБ, лише перший раз)…', true);
+    setStatus(tokState.phase === 'ready' ? 'Розбираю…' : 'Розбір почнеться, щойно словник буде готовий — сторінкою можна користуватися.', true);
     try {
-      const [tk, D, idx] = await Promise.all([getTokenizer(), getRules(), getIndex(), loadGrammar()]);
+      const [tokens, D, idx] = await Promise.all([tokenize(text), getRules(), getIndex(), loadGrammar()]);
       if (!alive || my !== runNo) return;
-      results = analyzeText(tk.tokenize(text), D, (b, k, o) => lookupWord(idx, b, k, o));
+      results = analyzeText(tokens, D, (b, k, o) => lookupWord(idx, b, k, o));
       render(D, idx);
       setStatus('');
       // words missing from my data → JMdict (English), loaded only when needed
@@ -284,5 +291,5 @@ export function translateView(root, initial) {
   ta.addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); run(); } });
   if (initial) { ta.value = cleanInput(initial); run(); }
   else setTimeout(() => ta.focus({ preventScroll: true }), 50);
-  return () => { alive = false; };
+  return () => { alive = false; offLoad(); };
 }

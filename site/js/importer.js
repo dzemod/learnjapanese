@@ -1,14 +1,13 @@
-// In-browser import: OCR (Tesseract.js), PDF (pdf.js), automatic readings (Kuroshiro + Kuromoji).
+// In-browser import: OCR (Tesseract.js), PDF (pdf.js), automatic readings (Kuroshiro + Kuromoji in a Web Worker).
 // All libraries are free/open-source and loaded lazily from public CDNs — nothing is sent to any server.
 import { tightenJa, hasKanji } from './util.js';
+import { kuroshiroAnalyzer, onTokProgress, tokProgressText } from './tokenizer.js';
 
 const CDN = {
   tesseract: 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js',
   pdf: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js',
   pdfWorker: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js',
   kuroshiro: 'https://cdn.jsdelivr.net/npm/kuroshiro@1.2.0/dist/kuroshiro.min.js',
-  analyzer: 'https://cdn.jsdelivr.net/npm/kuroshiro-analyzer-kuromoji@1.1.0/dist/kuroshiro-analyzer-kuromoji.min.js',
-  dict: 'https://cdn.jsdelivr.net/npm/kuromoji@0.1.2/dict/',
 };
 export const MAX_BYTES = 10 * 1024 * 1024;
 
@@ -173,11 +172,9 @@ async function getKuroshiro() {
   if (!kuroP) {
     kuroP = (async () => {
       await loadScript(CDN.kuroshiro);
-      await loadScript(CDN.analyzer);
       const K = window.Kuroshiro.default || window.Kuroshiro;
-      const A = window.KuromojiAnalyzer.default || window.KuromojiAnalyzer;
       const k = new K();
-      await k.init(new A({ dictPath: CDN.dict }));
+      await k.init(kuroshiroAnalyzer()); // Kuromoji runs in a Web Worker (js/tokenizer.js)
       return k;
     })().catch(e => { kuroP = null; throw e; });
   }
@@ -188,8 +185,10 @@ async function getKuroshiro() {
 export async function autoReadings(cards, onProgress) {
   const todo = cards.filter(c => hasKanji(c.japanese) && !c.reading);
   if (!todo.length) return 0;
-  onProgress?.(0, 'Завантаження словника для читань (≈ 12 МБ, один раз)…');
-  const k = await getKuroshiro();
+  onProgress?.(0, 'Завантаження словника для читань (≈ 18 МБ, один раз)…');
+  const off = onTokProgress(st => { if (st.phase === 'download' || st.phase === 'build') { const p = tokProgressText(st); onProgress?.(p.frac, p.text); } });
+  let k;
+  try { k = await getKuroshiro(); } finally { off(); }
   let i = 0;
   for (const c of todo) {
     try {
