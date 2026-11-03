@@ -26,6 +26,22 @@ export function check(it, answer) {
 }
 
 const args = process.argv.slice(2);
+if (args[0] === '--all') {
+  // every item must accept its own model answer written with kanji and written only in kana
+  let n = 0, bad = 0;
+  for (const it of items.values()) {
+    const plain = it.ja.replace(/\{([^{}|]+)\|[^{}]+\}/g, '$1');
+    const kana = it.k.filter(t => t[2] !== 's').map(t => t[1]).join('');
+    for (const ans of [plain, kana]) {
+      n++;
+      const r = check(it, ans);
+      if (r.verdict !== 'ok') { bad++; console.log(`✗ ${it.id} «${ans}» → ${r.verdict} ${Math.round(r.score * 100)}%`, JSON.stringify(r.issues)); }
+    }
+    for (const t of it.k) if (t[2] !== 's' && !/^[ぁ-ゖァ-ヺー0-9A-Za-zＡ-Ｚａ-ｚ０-９・.,]+$/.test(t[1])) { bad++; console.log(`✗ ${it.id} token reading «${t[0]}» → «${t[1]}»`); }
+  }
+  console.log(bad ? `${bad} PROBLEMS in ${items.size} items` : `ALL ${items.size} items accept their model answer (${n} checks)`);
+  process.exit(bad ? 1 : 0);
+}
 if (args.length === 2) {
   const r = check(items.get(args[0]), args[1]);
   console.log(JSON.stringify({ score: r.score, verdict: r.verdict, issues: r.issues, toks: r.toks.map(t => `${t.s}:${t.st}`).join(' '), user: r.user }, null, 1));

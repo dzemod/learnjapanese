@@ -18,11 +18,31 @@ const words = k => (k || []).filter(t => t[2] !== 's' && normJa(t[0]));
 
 /** Replace model kanji words by their readings. Returns { text, kanjiLeft }. */
 export function preKana(input, models) {
-  let s = String(input || '').normalize('NFKC');
-  const subs = [];
-  for (const k of models) for (const t of words(k)) if (KANJI_RE.test(t[0]) || /[0-9]/.test(t[0])) subs.push([t[0].normalize('NFKC'), t[1]]);
-  subs.sort((a, b) => b[0].length - a[0].length);
-  for (const [from, to] of subs) s = s.split(from).join(to);
+  const src = String(input || '').normalize('NFKC');
+  // surface → readings in the order they occur in the model (人: にん, じん, ひと in one sentence)
+  const read = new Map();
+  models.forEach((k, mi) => {
+    const seen = new Map();
+    for (const t of words(k)) {
+      if (!(KANJI_RE.test(t[0]) || /[0-9]/.test(t[0]))) continue;
+      const f = t[0].normalize('NFKC'), n = seen.get(f) || 0;
+      seen.set(f, n + 1);
+      const list = read.get(f) || [];
+      if (mi === 0 || list[n] == null) list[n] = list[n] ?? t[1];
+      read.set(f, list);
+    }
+  });
+  const keys = [...read.keys()].sort((a, b) => b.length - a.length);
+  const used = new Map();
+  let s = '';
+  for (let i = 0; i < src.length;) {
+    const f = keys.find(x => src.startsWith(x, i));
+    if (!f) { s += src[i++]; continue; }
+    const n = used.get(f) || 0, list = read.get(f).filter(x => x != null);
+    used.set(f, n + 1);
+    s += list[Math.min(n, list.length - 1)];
+    i += f.length;
+  }
   s = normJa(s);
   return { text: s, kanjiLeft: KANJI_RE.test(s) };
 }
