@@ -1045,3 +1045,30 @@ body[data-view="translate"] main { max-width: 900px; }
 .tr-hist-item [lang="ja"] { font-family: var(--jp); }
 .tr-hist-lang { flex: none; font-size: .7rem; font-weight: 700; color: var(--muted); min-width: 26px; }
 .tr-hist-clear { justify-self: start; margin-top: 4px; }
+/* Екзамен: «Переклад речень» (українська → японська, вільна відповідь) */
+.ex-tgroup { font-size: .82rem; font-weight: 700; color: var(--muted); margin: 12px 0 6px; }
+.ex-tgroup:first-child { margin-top: 0; }
+.ex-sentform textarea { width: 100%; font-family: var(--jp); font-size: 1.2rem; min-height: 64px; resize: vertical; }
+.ex-romaji { margin: 0 0 8px; font-size: .88rem; }
+.ex-hints { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 10px 0 0; }
+.ex-hint-out:empty { display: none; }
+.ex-hint-out { display: grid; gap: 6px; margin-top: 8px; }
+.ex-hint { padding: 8px 12px; border-radius: 10px; background: var(--panel-2); border: 1px dashed var(--border-2); font-size: .92rem; line-height: 1.7; overflow-wrap: anywhere; }
+.ex-hint .chip { font-family: var(--jp); }
+.feedback.almost { color: var(--amber); }
+.ex-given-ja { margin: 6px 0; overflow-wrap: anywhere; }
+.ex-given-ja [lang="ja"] { font-family: var(--jp); font-size: 1.05rem; }
+.sc-row { margin: 8px 0; }
+.sc-line { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px; font-family: var(--jp); font-size: 1.05rem; }
+.sc-t, .sc-u { padding: 1px 6px; border-radius: 6px; border: 1px solid transparent; }
+.sc-ok { background: rgba(95, 191, 138, .14); border-color: rgba(95, 191, 138, .45); }
+.sc-part, .sc-order { background: rgba(217, 162, 91, .14); border-color: rgba(217, 162, 91, .6); }
+.sc-order { border-style: dashed; }
+.sc-miss, .sc-bad { background: var(--red-bg); border-color: var(--red-d); text-decoration: line-through; text-decoration-color: rgba(255, 107, 129, .7); }
+.sc-u.sc-bad { text-decoration: none; }
+.sc-legend { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 0; color: var(--muted); }
+.sc-legend .sc-t { font-family: var(--ui); font-size: .75rem; }
+.sc-issues { margin: 10px 0; padding-left: 20px; display: grid; gap: 6px; font-size: .94rem; }
+.sc-issues [lang="ja"] { font-family: var(--jp); }
+.ex-correct .icon-btn { vertical-align: middle; margin-left: 4px; }
+.ex-own { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }

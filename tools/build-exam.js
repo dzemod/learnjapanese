@@ -275,7 +275,9 @@ function masuOf(dict, g) {
       const others = arr.filter(o => o.uk !== it.uk).map(o => o.uk);
       it.d = [1, 3, 5].map(s => others[(i * 7 + s) % Math.max(1, others.length)]).filter((v, j, a) => v && a.indexOf(v) === j).slice(0, 3);
     });
-    bank.lessons = bank.lessons.filter(x => x.lesson !== L.lesson).concat({ lesson: L.lesson, items }).sort((a, b) => a.lesson - b.lesson);
+    // «Переклад речень» (t: ts) is built by tools/build-exam-ts.mjs — keep it
+    const keepTs = (bank.lessons.find(x => x.lesson === L.lesson)?.items || []).filter(i => i.t === 'ts');
+    bank.lessons = bank.lessons.filter(x => x.lesson !== L.lesson).concat({ lesson: L.lesson, items: items.concat(keepTs) }).sort((a, b) => a.lesson - b.lesson);
     report.push(`L${L.lesson}: ${items.filter(i => i.t === 'p').length}p ${items.filter(i => i.t === 'v').length}v ${nt}t ${items.filter(i => i.t === 'e').length}e${bad ? ` (${bad} verb skipped)` : ''}`);
   }
   const J = JSON.stringify;
