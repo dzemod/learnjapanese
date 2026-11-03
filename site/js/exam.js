@@ -674,7 +674,12 @@ function runView(root, api) {
       b.disabled = true;
       $('.ex-hint-out', el).innerHTML = list.map(x => hintHTML(q, x)).join('');
     }));
-    const go = () => { const v = inp.value.trim(); if (v) checkSent(q, v); };
+    const go = () => {
+      let v = inp.value.trim();
+      // romaji mode: wanakana leaves a final «n» (and unfinished syllables) in Latin until the next key → convert all
+      if (box.checked && window.wanakana && /[a-z]/i.test(v)) { v = window.wanakana.toKana(v.toLowerCase()); inp.value = v; }
+      if (v) checkSent(q, v);
+    };
     $('form', el).onsubmit = e => { e.preventDefault(); go(); };
     inp.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); e.stopPropagation(); go(); } });
     $('[data-dk]', el).onclick = () => {

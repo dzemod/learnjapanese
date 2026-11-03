@@ -18,7 +18,8 @@ const words = k => (k || []).filter(t => t[2] !== 's' && normJa(t[0]));
 
 /** Replace model kanji words by their readings. Returns { text, kanjiLeft }. */
 export function preKana(input, models) {
-  const src = String(input || '').normalize('NFKC');
+  // spaces would split words like 間に合います / もう少し → removed before matching
+  const src = String(input || '').normalize('NFKC').replace(/[\s　]+/g, '');
   // surface → readings in the order they occur in the model (人: にん, じん, ひと in one sentence)
   const read = new Map();
   models.forEach((k, mi) => {

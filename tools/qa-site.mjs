@@ -3,7 +3,12 @@
 // horizontal scroll, overlapping text, empty blocks, broken images, console errors.
 //
 //   npm i --no-save playwright-core        (or QA_MODULES=<dir with node_modules>)
-//   node tools/qa-site.mjs [words,grammar,kanji,exam,other] [--no-shots] [--limit N]
+//   node tools/qa-site.mjs [words,grammar,kanji,exam,ts,translate,other] [--no-shots] [--limit N]
+//   ts = exam «Переклад речень» (realistic answers + verdict checks, all 1254 items self-checked in the browser);
+//   translate = Перекладач (ja and uk sentences, word details, examples, history, dialogs; needs internet for MyMemory).
+//   QA_VIEW=d|m — only desktop (1920) or only mobile (375); default both in parallel (needs more memory).
+//   The page is reopened every QA_RECYCLE steps (default 150) and the report is saved as the run goes,
+//   so a long run uses little memory and an interrupted run still leaves a partial report.
 //
 // Screenshots + report go to qa/ (gitignored): qa/report.json, qa/report.md, qa/shots/{d,m}/*.png
 // Chrome: QA_CHROME=<path to chrome.exe> (default: Program Files Google Chrome).
@@ -20,7 +25,7 @@ const require = createRequire(process.env.QA_MODULES ? path.join(process.env.QA_
 const { chromium } = require('playwright-core');
 
 const args = process.argv.slice(2);
-const groups = (args.find(a => !a.startsWith('--') && !/^\d+$/.test(a)) || 'words,grammar,kanji,exam,other').split(',');
+const groups = (args.find(a => !a.startsWith('--') && !/^\d+$/.test(a)) || 'words,grammar,kanji,exam,ts,translate,other').split(',');
 const SHOTS = !args.includes('--no-shots');
 const LIMIT = args.includes('--limit') ? +args[args.indexOf('--limit') + 1] : Infinity;
 const PORT = +process.env.QA_PORT || 5190;
@@ -44,7 +49,7 @@ const MODES = ['flashcards', 'learn', 'write', 'test', 'match', 'listen'];
 const EXAM_TYPES = ['p', 'v', 'c', 'tj', 'tu', 'w', 'k', 'g', 'l', 'e'];
 
 // A step = { name, hash, act?: [actions] }. Actions run after navigation, each followed by a check.
-const plan = { words: [], grammar: [], kanji: [], exam: [], other: [] };
+const plan = { words: [], grammar: [], kanji: [], exam: [], ts: [], translate: [], other: [] };
 plan.words.push({ name: 'home', hash: '#/' }, { name: 'home-gojuon', hash: '#/', act: ['click:[data-order="gojuon"], [data-v="gojuon"]'] });
 for (const s of sets) {
   plan.words.push({ name: `set-${s.id}`, hash: `#/set/${s.id}`, act: ['click:[data-pedit]'] });
@@ -68,6 +73,23 @@ for (const t of EXAM_TYPES) plan.exam.push({ name: `exam-${t}`, exam: t });
 plan.exam.push({ name: 'exam-mine', exam: 'w', mine: true });
 plan.exam.push({ name: 'exam-mock', exam: 'mock' });
 plan.other.push({ name: 'home-after', hash: '#/' }, { name: 'bad-route', hash: '#/nope' });
+// «Переклад речень»: browser self-check of every item, one exam per 10 lessons, the full mock, saved mistakes
+plan.ts.push({ name: 'ts-selfcheck', selfcheck: true });
+for (const [a, b] of [[1, 10], [11, 20], [21, 30], [31, 40], [41, 50]]) plan.ts.push({ name: `ts-L${a}-${b}`, exam: 'ts', from: a, to: b });
+plan.ts.push({ name: 'ts-setup', hash: '#/exam' }, { name: 'ts-saved', hash: '#/exam', act: ['click:[data-saved]', 'wait:.ex-sentform'] });
+// Перекладач
+const TR = [
+  ['ja-short', '私は毎日日本語を勉強しています。'], ['ja-kana', 'きのう ともだちと えいがを みました。'], ['ja-long', '日本へ来てから、もう3年になりますが、まだ漢字を読むのが難しいと思います。'],
+  ['ja-multi', 'この本は面白いです。でも、ちょっと高いですね。駅の前の本屋で買いました。'], ['ja-keigo', '先生はもうお帰りになりました。'], ['ja-passive', '弟に私のケーキを食べられました。'],
+  ['uk-short', 'Я хочу поїхати до Японії взимку.'], ['uk-long', 'Вчора я ходив до бібліотеки, взяв дві книжки і потім зустрівся з другом біля станції.'], ['uk-question', 'Скільки коштує цей годинник?'],
+];
+plan.translate.push({ name: 'tr-empty', hash: '#/translate' });
+for (const [n, t] of TR) plan.translate.push({ name: `tr-${n}`, hash: '#/translate/' + encodeURIComponent(t), act: ['wait:.tr-sent .wb', 'wait:.tr-mt .tr-mt-text, .tr-mt [data-mtretry]', 'click:.tr-sent .wb[data-b="0"]', 'click:.tr-sent .wb[data-b="2"]', 'click:.tr-exs details, .tr-hist summary'] });
+plan.translate.push({ name: 'tr-addword', hash: '#/translate/' + encodeURIComponent(TR[0][1]), act: ['wait:.tr-sent .wb', 'click:.tr-sent .wb[data-b="0"]', 'click:[data-addword]', 'back'] });
+plan.translate.push({ name: 'tr-addsent', hash: '#/translate/' + encodeURIComponent(TR[0][1]), act: ['wait:.tr-sent .wb', 'click:[data-addsent]', 'back'] });
+plan.translate.push({ name: 'tr-example', hash: '#/translate/' + encodeURIComponent(TR[6][1]), act: ['wait:.tr-exs .tr-ex', 'click:.tr-exs [data-analyze]', 'wait:.tr-sent .wb'] });
+plan.translate.push({ name: 'tr-history', hash: '#/translate', act: ['click:.tr-hist summary', 'click:.tr-hist-item', 'wait:.tr-sent .wb', 'click:[data-clear]'] });
+plan.translate.push({ name: 'tr-grammar-button', hash: '#/grammar/14/14-1', act: ['click:a[href^="#/translate/"]', 'wait:.tr-sent .wb'] });
 
 function modeActs(m) {
   if (m === 'flashcards') return ['key:Space', 'key:ArrowRight'];
@@ -287,6 +309,7 @@ async function act(P, a) {
   if (kind === 'key') return page.keyboard.press(rest);
   if (kind === 'click') { const el = await page.$(rest); if (el) await el.click({ timeout: 3000 }).catch(() => {}); return !!el; }
   if (kind === 'type') { const [sel, val] = rest.split('='); const el = await page.$(sel); if (el) await el.fill(val).catch(() => {}); return !!el; }
+  if (kind === 'wait') { const ok = await page.waitForSelector(rest, { timeout: 90000 }).then(() => true, () => false); if (!ok) report.issues.push({ v: P.kind, step: 'wait', t: 'wait-timeout', d: rest, hash: await page.evaluate(() => location.hash) }); return ok; }
 }
 
 async function go(P, hash) {
@@ -294,7 +317,7 @@ async function go(P, hash) {
 }
 
 async function runExam(P, step, group) {
-  const conf = { name: '', part: 'all', from: 1, to: 50, mine: !!step.mine, kanji: step.exam === 'k' || step.exam === 'mock', kbook: 'k700', kmode: 'lessons', kfrom: 1, kto: 28, krand: 30,
+  const conf = { name: '', part: 'all', from: step.from || 1, to: step.to || 50, tsAdded: true, mine: !!step.mine, kanji: step.exam === 'k' || step.exam === 'mock', kbook: 'k700', kmode: 'lessons', kfrom: 1, kto: 28, krand: 30,
     types: step.exam === 'mock' ? EXAM_TYPES : [step.exam], count: 50, mock: step.exam === 'mock', timer: step.exam === 'mock' ? 90 : 0 };
   await P.page.evaluate(c => { localStorage.setItem('jp.examPresets.last', JSON.stringify(c)); sessionStorage.removeItem('jp.examSession'); }, conf);
   await go(P, '#/exam/');
@@ -307,6 +330,7 @@ async function runExam(P, step, group) {
     if (!(await P.page.evaluate(() => location.hash.startsWith('#/exam/run')))) break;
     await check(P, `${step.name}-q${q + 1}`, group, false);
     const page = P.page;
+    if (await page.$('.ex-sentform')) { await answerTs(P, step, group, q); continue; }
     if (await page.$('.ex-answer .choice')) await page.click('.ex-answer .choice');
     else if (await page.$('.ex-answer .answer-input')) { await page.fill('.ex-answer .answer-input', 'x'); await page.press('.ex-answer .answer-input', 'Enter'); }
     else if (await page.$('[data-t]')) { for (let i = 0; i < 30 && (await page.$('[data-t]')); i++) await page.click('[data-t]'); await page.click('[data-check]').catch(() => {}); }
@@ -326,12 +350,75 @@ async function runExam(P, step, group) {
   await check(P, `${step.name}-result`, group);
 }
 
+// «Переклад речень»: 8 answer strategies in turn; verdicts that must be «Правильно» are verified
+async function answerTs(P, step, group, q) {
+  const page = P.page;
+  const it = await page.evaluate(() => { const S = JSON.parse(sessionStorage.getItem('jp.examSession')); return S.qs[S.i]; });
+  const toks = it.it.k.filter(t => t[2] !== 's');
+  const kana = toks.map(t => t[1]).join('');
+  const mode = q % 8;
+  const inp = '.ex-sentform textarea';
+  let answer = '', expectOk = false, label = '';
+  if (mode === 0) { answer = kana; expectOk = true; label = 'kana'; }
+  else if (mode === 1) { answer = it.answer; expectOk = true; label = 'kanji'; }
+  else if (mode === 2) { const i = toks.findIndex(t => t[2] === 'p' && ['を', 'が', 'で', 'に', 'は'].includes(t[0])); answer = toks.map((t, j) => (j === i ? (t[0] === 'を' ? 'が' : 'を') : t[1])).join(''); label = 'wrong-particle'; }
+  else if (mode === 3) { answer = kana.slice(0, Math.ceil(kana.length / 2)); label = 'half'; }
+  else if (mode === 5) { for (const h of ['w', 'g', 'f']) await page.click(`[data-hint="${h}"]`).catch(() => {}); await check(P, `${step.name}-q${q + 1}-hints`, group, false); answer = kana; expectOk = true; label = 'hints'; }
+  else if (mode === 7) { answer = kana.replace(/ます$|です$|た$/, 'ませんでした'); if (answer === kana) answer = kana.slice(0, -1) + 'ませんでした' + kana.slice(-1); label = 'wrong-form'; }
+  if (mode === 4) {
+    label = 'romaji';
+    if (!(await page.isChecked('[data-romaji]'))) await page.click('[data-romaji]');
+    await page.waitForFunction(() => window.wanakana, null, { timeout: 20000 }).catch(() => {});
+    // ん as «nn» (as a learner types it before な/に…; a single n would join the next vowel)
+    const rom = await page.evaluate(k => window.wanakana?.toRomaji(k, { customRomajiMapping: { ん: 'nn' } }) || '', kana);
+    await page.click(inp);
+    await page.keyboard.type(rom, { delay: 5 });
+    await page.click('[data-romaji]');
+    await page.keyboard.press('Enter');
+    expectOk = true;
+  } else if (mode === 6) { label = 'dont-know'; await page.click('[data-dk]'); }
+  else { await page.fill(inp, answer); await page.press(inp, 'Enter'); }
+  const ok = await page.waitForSelector('[data-next]', { timeout: 90000 }).then(() => true, () => false);
+  if (!ok) { report.issues.push({ v: P.kind, step: step.name, group, t: 'ts-stuck', d: `${it.uid} ${label}` }); await page.click('[data-dk]').catch(() => {}); await sleep(300); }
+  const verdict = await page.$eval('.ex-feedback .feedback', e => e.textContent).catch(() => '');
+  if (expectOk && !/^Правильно/.test(verdict)) report.issues.push({ v: P.kind, step: step.name, group, t: 'ts-verdict', d: `${it.uid} ${label}: «${mode === 4 ? 'romaji' : answer}» → ${verdict}`, x: it.answer });
+  if (!expectOk && mode !== 2 && /^Правильно/.test(verdict)) report.issues.push({ v: P.kind, step: step.name, group, t: 'ts-wrong-accepted', d: `${it.uid} ${label}: «${answer}» → ${verdict}`, x: it.answer });
+  if (mode === 6) await page.click('[data-right]').catch(() => {});
+  if (mode === 7) await page.click('[data-flag]').catch(() => {});
+  await check(P, `${step.name}-q${q + 1}-${label}`, group, false);
+  await page.click('[data-next]').catch(() => {});
+  await sleep(100);
+}
+// every item accepts its own model answer in the browser too (same module as the site)
+async function tsSelfcheck(P, group) {
+  await go(P, '#/exam'); await settle(P.page);
+  const bad = await P.page.evaluate(async () => {
+    const m = await import('./js/sentcheck.js');
+    const bank = await fetch('data/exam.json').then(r => r.json());
+    const out = []; let n = 0;
+    for (const it of bank.lessons.flatMap(l => l.items).filter(i => i.t === 'ts')) {
+      const models = [it.k, ...(it.alt || [])];
+      for (const ans of [it.ja.replace(/\{([^{}|]+)\|[^{}]+\}/g, '$1'), it.k.filter(t => t[2] !== 's').map(t => t[1]).join('')]) {
+        n++;
+        const pre = m.preKana(ans, models);
+        const r = m.checkSentence(pre.text, models);
+        if (r.verdict !== 'ok') out.push(`${it.id}: «${ans}» → ${r.verdict}`);
+      }
+    }
+    return { n, out };
+  });
+  report.steps++;
+  console.log(P.kind, 'ts self-check:', bad.n, 'answers,', bad.out.length, 'problems');
+  for (const d of bad.out) report.issues.push({ v: P.kind, step: 'ts-selfcheck', group, t: 'ts-selfcheck', d });
+}
+
 async function runAll(P) {
   for (const g of groups) {
     let n = 0;
     for (const step of plan[g] || []) {
       if (++n > LIMIT) break;
       try {
+        if (step.selfcheck) { await tsSelfcheck(P, g); continue; }
         if (step.exam) { await runExam(P, step, g); continue; }
         await go(P, step.hash);
         const big = !/^(kcard|mode|kmode)-/.test(step.name);
@@ -343,18 +430,30 @@ async function runAll(P) {
           await check(P, `${step.name}~${i + 1}`, g, false);
         }
       } catch (e) { report.issues.push({ v: P.kind, step: step.name, group: g, t: 'runner', d: e.message.slice(0, 200) }); }
-      if (n % 50 === 0) console.log(P.kind, g, n, '/', plan[g].length, 'issues', report.issues.length);
+      if (n % 50 === 0) { console.log(P.kind, g, n, '/', plan[g].length, 'issues', report.issues.length); writeReport(false); }
+      if (++P.used >= RECYCLE) await recycle(P);
     }
   }
 }
 
-const [D, M] = [await makePage('d'), await makePage('m')];
-await Promise.all([runAll(D), runAll(M)]);
+const RECYCLE = +process.env.QA_RECYCLE || 150;
+async function recycle(P) {
+  await P.page.context().close().catch(() => {});
+  Object.assign(P, await makePage(P.kind), { used: 0 });
+}
+{
+const views = process.env.QA_VIEW ? process.env.QA_VIEW.split(',') : ['d', 'm'];
+if (process.env.QA_VIEW) { for (const v of views) { const P = Object.assign(await makePage(v), { used: 0 }); await runAll(P); await P.page.context().close().catch(() => {}); } }
+else { const [D, M] = [Object.assign(await makePage('d'), { used: 0 }), Object.assign(await makePage('m'), { used: 0 })]; await Promise.all([runAll(D), runAll(M)]); }
 await browser.close();
 srv.close();
 
+writeReport(true);
+}
 // ---------- report ----------
-report.finished = new Date().toISOString();
+function writeReport(final) {
+report.finished = final ? new Date().toISOString() : `(partial, ${new Date().toISOString()})`;
+fs.mkdirSync(OUT, { recursive: true });
 fs.writeFileSync(path.join(OUT, 'report.json'), JSON.stringify(report, null, 1));
 const byType = {};
 for (const i of report.issues) (byType[i.t] ||= []).push(i);
@@ -366,4 +465,5 @@ for (const [t, list] of Object.entries(byType)) {
   for (const i of [...uniq.values()].slice(0, 300)) md += `- [${i.v}] ${i.step} ×${i.n} — ${i.el || ''} ${i.d || ''} ${i.x ? '«' + i.x + '»' : ''}\n`;
 }
 fs.writeFileSync(path.join(OUT, 'report.md'), md);
-console.log(md.slice(0, 4000));
+if (final) console.log(md.slice(0, 4000));
+}

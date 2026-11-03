@@ -34,7 +34,9 @@ if (args[0] === '--all') {
     const kana = it.k.filter(t => t[2] !== 's').map(t => t[1]).join('');
     for (const ans of [plain, kana]) {
       n++;
-      const r = check(it, ans);
+      // strict: without Kuromoji (as in the browser when the dictionary is not loaded) — model words alone must match
+      const models = [it.k, ...(it.alt || [])];
+      const r = checkSentence(preKana(ans, models).text, models);
       if (r.verdict !== 'ok') { bad++; console.log(`✗ ${it.id} «${ans}» → ${r.verdict} ${Math.round(r.score * 100)}%`, JSON.stringify(r.issues)); }
     }
     for (const t of it.k) if (t[2] !== 's' && !/^[ぁ-ゖァ-ヺー0-9A-Za-zＡ-Ｚａ-ｚ０-９・.,]+$/.test(t[1])) { bad++; console.log(`✗ ${it.id} token reading «${t[0]}» → «${t[1]}»`); }
