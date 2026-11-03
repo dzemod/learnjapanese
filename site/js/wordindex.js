@@ -43,7 +43,7 @@ export function buildIndex(sets, kanjiBooks = []) {
     for (const w of k.examples || []) {
       const jp = cleanKey(w.word), rd = hira(cleanKey(w.kana));
       if (!jp || !w.uk) continue;
-      const e = { uk: w.uk, japanese: jp, reading: KANJI.test(jp) ? rd : '', setId: l.id + '-w', cardId: w.id, setTitle: `${b.id === 'k300' ? 'Кандзі 300' : 'Кандзі 700'}, урок ${l.no}`, source: 'kanji', href: `#/kanji/${l.id}/${k.id}`, rank: order++ + 1e6 };
+      const e = { uk: w.uk, japanese: jp, reading: KANJI.test(jp) ? rd : '', setId: l.id + '-w', cardId: w.id, setTitle: `${b.id === 'k300' ? 'Канджі 300' : 'Канджі 700'}, урок ${l.no}`, source: 'kanji', href: `#/kanji/${l.id}/${k.id}`, rank: order++ + 1e6 };
       add(jp, e);
       if (rd && rd !== jp) add(rd, { ...e, viaKana: true });
     }

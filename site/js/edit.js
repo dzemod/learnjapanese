@@ -36,7 +36,7 @@ function formHTML(card, setId, isNew) {
   return `<form class="word-form" autocomplete="off" novalidate>
     ${card?.check ? `<div class="check-note"><span class="check-badge">перевірити</span> Слово розпізнано автоматично — перевірте його.</div>` : ''}
     <div class="wf-grid">
-      <label class="field"><span class="field-label">Кандзі <span class="muted">(порожньо, якщо немає)</span></span>
+      <label class="field"><span class="field-label">Канджі <span class="muted">(порожньо, якщо немає)</span></span>
         <input class="input jp big" lang="ja" name="kanji" value="${esc(f.kanji)}" placeholder="見ます" enterkeyhint="next"></label>
       <label class="field"><span class="field-label">Кана (читання)</span>
         <input class="input jp big" lang="ja" name="kana" value="${esc(f.kana)}" placeholder="みます" enterkeyhint="next"></label>
@@ -90,7 +90,7 @@ export function mountWordForm(el, { setId, card = null, onDone, onCancel, focus 
   form.onsubmit = e => {
     e.preventDefault();
     const data = fromForm({ kanji: form.kanji.value, kana: form.kana.value, ukrainian: form.ukrainian.value, hint: form.hint.value, verbGroup: vg });
-    if (!data.japanese) return err('Введіть японське слово (кандзі або кану).');
+    if (!data.japanese) return err('Введіть японське слово (канджі або кану).');
     if (!data.ukrainian) return err('Введіть переклад українською.');
     if (hasKanji(form.kana.value)) return err('У полі «Кана» мають бути лише хірагана/катакана.');
     if (isNew) {
@@ -174,7 +174,7 @@ export function bulkEditView(root, setId) {
         <button type="button" class="icon-btn sm" data-down ${i < rows.length - 1 ? '' : 'disabled'} aria-label="Вниз">↓</button>
       </div>
       <div class="brow-fields">
-        <input class="input jp" lang="ja" data-f="kanji" value="${esc(r.kanji)}" placeholder="漢字" aria-label="Кандзі">
+        <input class="input jp" lang="ja" data-f="kanji" value="${esc(r.kanji)}" placeholder="漢字" aria-label="Канджі">
         <input class="input jp" lang="ja" data-f="kana" value="${esc(r.kana)}" placeholder="かな" aria-label="Кана">
         <input class="input uk" data-f="ukrainian" value="${esc(r.ukrainian)}" placeholder="переклад" aria-label="Українською">
         <input class="input jp" lang="ja" data-f="hint" value="${esc(r.hint)}" placeholder="підказка" aria-label="Підказка">

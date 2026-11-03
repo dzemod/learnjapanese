@@ -65,7 +65,7 @@
 
 ## Project
 - Plain HTML/CSS/JS, no build step: `site/index.html`, `site/css/style.css`, `site/js/*.js` (ES modules).
-  - Top tabs: Слова (`#/`) · Граматика · Кандзі.
+  - Top tabs: Слова (`#/`) · Граматика · Канджі.
 - `site/api/save-set.js` — Vercel serverless function; commits a whole edited set into `site/data/sets.json` via the GitHub API (env `GITHUB_TOKEN`, `APP_PASSWORD`; see SETUP.md). Any set can be edited (textbook sets keep `source: "textbook"`); textbook sets cannot be deleted through it.
 - Editing on the site: inline edit / add / delete on the set page, edit buttons inside every study mode, bulk edit at `#/set/<id>/edit` (reorder + edit all), undo toast, per-word history (last 5 versions, browser only). Edited sets are kept as a local copy (`jp.custom.newSets`) until the redeployed sets.json matches, so nothing is lost if saving fails.
 - Card ids must never change when editing — learning progress is keyed by `setId/cardId`.
@@ -75,7 +75,7 @@
 
 ## Review (REVIEW.md)
 - After rebuilding grammar/exam always run `node tools/typo-uk.js` (quotes «», apostrophe ’, dash —, …) — it touches Ukrainian string values only, never Japanese fields (ex, ja, pre, post…).
-- Transcription: kana only for readings; Cyrillic names/terms by the Ukrainian (Kovalenko) system (し сі, ち ті, じ дзі, つ цу, しゃ ся, ちゃ тя, じゃ дзя).
+- Transcription: readings of Japanese words ONLY in kana (never Cyrillic). Cyrillic Japanese names/terms — Hepburn-based Ukrainian transcription (NOT Kovalenko/Polivanov): し ші, ち чі, じ джі, しゃ/しゅ/しょ ша/шу/шо, ちゃ/ちゅ/ちょ ча/чу/чо, じゃ/じゅ/じょ джа/джу/джо, ず/ざ/ぜ/ぞ зу/за/зе/зо, つ цу, ふ фу, え е, よ йо, ゆ ю, ん н (м before б, п, м), long vowels written once. Examples: канджі, Тадаші, Ічіро, Ямада Ічіро, суші, Шінджуку, Фуджі, Сузукі. Established Ukrainian words stay (дзюдо). Convert with `node tools/transcribe-hepburn.js [--write]` (explicit word list, whole words), check with `node tools/qa-translit.js` (part of QA, must pass).
 
 ## CURRENT TASKS (handoff, 2026-11-03) — order set by the user, commit + push after each step
 1. **Перекладач freezing** — DONE: Kuromoji runs in a Web Worker (`site/js/kuromoji-worker.js`, API `site/js/tokenizer.js`: `ensureTokenizer`, `tokenize`, `onTokProgress`, `kuroshiroAnalyzer` for importer readings). The worker downloads the 12 dict files (≈ 18 MB) with byte progress into Cache API `kotoba-cdn-v1` (shared with sw.js) and answers Kuromoji’s XHR from memory; progress bar `.tr-load` in the tab; loading starts when the tab opens. Never call Kuromoji on the main thread.
@@ -83,7 +83,7 @@
    - Setup: `npm i --no-save playwright-core` (or QA_MODULES=<dir with node_modules>), Chrome at C:/Program Files/Google/Chrome/Application/chrome.exe.
    - Words + Grammar: clean (2084 steps). Exam + other pages: clean (1420 steps; the only hit «— десять» in .ex-correct is a checker false positive — fonts are reported only for own text there).
    - TODO: run `QA_OUT=kanji node tools/qa-site.mjs kanji` (all 47 kanji lessons, 1000 kanji cards, modes), review `qa/kanji/report.md` + screenshots, fix real problems, re-run, commit "QA: kanji".
-   - Also run `node tools/qa-text.js`, `node tools/qa-speech.mjs`, `node tools/check-grammar.js` — all must pass.
+   - Also run `node tools/qa-text.js`, `node tools/qa-translit.js`, `node tools/qa-speech.mjs`, `node tools/check-grammar.js` — all must pass.
    - Finish **QA.md** (draft is committed): fill the Kanji/Exam rows of «Що перевірено» with step counts, add any new problems found, keep «Потребує вашого рішення». Commit "QA: report" and push.
 3. **Перекладач step 3** (MyMemory ja↔uk draft translation with daily-limit message, uk→ja + matching textbook examples, history, copy).
 4. **TASK 3 from promts/all.txt** (exam full translation) — NOTE: promts/all.txt was EMPTY (0 bytes) on 2026-11-03; ask the user for the text.

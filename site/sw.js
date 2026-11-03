@@ -1,5 +1,5 @@
 // Service worker: caches ONLY the free Kuromoji tokenizer + dictionary files from the CDN
-// (≈ 12 МБ, used by Перекладач and automatic readings) so they are downloaded once.
+// (≈ 18 МБ, used by Перекладач and automatic readings) so they are downloaded once.
 // Site pages and data are never intercepted — they always come fresh from the network.
 const CACHE = 'kotoba-cdn-v1';
 const CACHED = /^https:\/\/cdn\.jsdelivr\.net\/npm\/(kuromoji@0\.1\.2|kuroshiro@1\.2\.0|kuroshiro-analyzer-kuromoji@1\.1\.0)\//;

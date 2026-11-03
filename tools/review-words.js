@@ -15,10 +15,10 @@ for (const s of d.sets) {
   if (!m || +m[1] < from || +m[1] > to) continue;
   for (const c of s.cards) {
     const k = c.kanji || '', a = c.kana || '';
-    if (/[一]/.test(a)) add(c, 'ja', 'kana містить кандзі 一 (мабуть ー)');
-    if (KAN.test(a)) add(c, 'ja', 'kana містить кандзі');
+    if (/[一]/.test(a)) add(c, 'ja', 'kana містить канджі 一 (мабуть ー)');
+    if (KAN.test(a)) add(c, 'ja', 'kana містить канджі');
     if (/[A-Za-zА-Яа-яІіЇїЄєҐґ]/.test(a)) add(c, 'ja', 'kana містить латиницю/кирилицю');
-    if (/ー/.test(k) && /[㐀-鿿]ー|ー[㐀-鿿]/.test(k)) add(c, 'ja', 'ー поруч із кандзі (мабуть 一)');
+    if (/ー/.test(k) && /[㐀-鿿]ー|ー[㐀-鿿]/.test(k)) add(c, 'ja', 'ー поруч із канджі (мабуть 一)');
     if (HIRA.test(a) && KATA.test(a) && !/[〜～]/.test(a)) {
       // a word mixing scripts: flag single katakana inside hiragana word (OCR) – allow loanword + hiragana particle combos
       const runs = a.match(/[ァ-ヺ]+/g) || [];

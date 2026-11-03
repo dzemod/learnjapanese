@@ -72,7 +72,7 @@ export function addToLessonModal({ kanji = '', kana = '', ukrainian = '', verbGr
         ${mine.map(s => `<option value="${esc(s.id)}" ${s.id === last ? 'selected' : ''}>${esc(s.title)} (${s.cards.length})</option>`).join('')}
         <option value="" ${!mine.length ? 'selected' : ''}>+ Новий урок…</option></select></label>
       <label class="field" data-new hidden><span>Назва нового уроку</span><input class="input" name="title" placeholder="Наприклад: Перекладач"></label>
-      <label class="field"><span>Кандзі (якщо є)</span><input class="input jp" name="kanji" lang="ja" value="${esc(kanji)}"></label>
+      <label class="field"><span>Канджі (якщо є)</span><input class="input jp" name="kanji" lang="ja" value="${esc(kanji)}"></label>
       <label class="field"><span>Кана (читання)</span><input class="input jp" name="kana" lang="ja" value="${esc(kana)}"></label>
       <label class="field"><span>Переклад українською</span><textarea class="input" name="uk" rows="2">${esc(ukrainian)}</textarea></label>
       <p class="wf-error" hidden></p>
@@ -123,7 +123,7 @@ function meaningHTML(b, idx) {
     h += '<p class="muted small">Цього слова немає в моїх словах.</p>';
   }
   const parts = kanjiParts(idx, b.base).filter(p => p.meaning);
-  if (parts.length) h += `<p class="tr-kparts">${parts.map(p => `<a href="#/kanji/${esc(p.lessonId)}/${esc(p.id)}" title="Відкрити картку кандзі"><span lang="ja">${esc(p.ch)}</span> ${esc(p.meaning)}</a>`).join('')}</p>`;
+  if (parts.length) h += `<p class="tr-kparts">${parts.map(p => `<a href="#/kanji/${esc(p.lessonId)}/${esc(p.id)}" title="Відкрити картку канджі"><span lang="ja">${esc(p.ch)}</span> ${esc(p.meaning)}</a>`).join('')}</p>`;
   return h;
 }
 
@@ -193,7 +193,7 @@ export function translateView(root, initial) {
     </div>
     <div class="tr-legend small"><span class="wb-dot wb-n"></span>іменник <span class="wb-dot wb-v"></span>дієслово <span class="wb-dot wb-a"></span>прикметник <span class="wb-dot wb-p"></span>частка <span class="wb-dot wb-c"></span>зв’язка <span class="wb-dot wb-d"></span>інше</div>
     <div class="tr-out"></div>
-    <p class="tr-credits muted small">Розбір: Kuromoji (IPADIC) у браузері · пояснення: правила за підручником Minna no Nihongo · значення: мої слова, кандзі; інакше JMdict © EDRDG (CC BY-SA 4.0).</p>
+    <p class="tr-credits muted small">Розбір: Kuromoji (IPADIC) у браузері · пояснення: правила за підручником Minna no Nihongo · значення: мої слова, канджі; інакше JMdict © EDRDG (CC BY-SA 4.0).</p>
   </div>`;
   const ta = $('textarea', root), out = $('.tr-out', root), status = $('.tr-status', root);
   const setStatus = (msg, busy = false) => { status.innerHTML = busy ? `<span class="spinner"></span> ${esc(msg)}` : esc(msg); };

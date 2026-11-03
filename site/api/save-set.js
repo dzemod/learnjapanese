@@ -95,7 +95,7 @@ function formatKanji(data) {
 }
 
 function cleanKanjiLesson(l) {
-  const bad = () => Object.assign(new Error('Неправильні дані уроку кандзі.'), { status: 400 });
+  const bad = () => Object.assign(new Error('Неправильні дані уроку канджі.'), { status: 400 });
   if (!l || typeof l !== 'object' || !/^k\d+-\d+$/.test(String(l.id)) || !Array.isArray(l.kanji) || l.kanji.length > 200) throw bad();
   const list = v => (Array.isArray(v) ? v : []).map(x => str(x, 40)).filter(Boolean).slice(0, 20);
   return {
@@ -142,7 +142,7 @@ async function saveKanjiLesson(res, raw) {
       const i = (b.lessons || []).findIndex(l => l.id === lesson.id);
       if (i >= 0) { b.lessons[i] = { ...b.lessons[i], kanji: lesson.kanji }; found = true; }
     }
-    if (!found) return res.status(404).json({ error: 'Такого уроку кандзі немає в kanji.json.' });
+    if (!found) return res.status(404).json({ error: 'Такого уроку канджі немає в kanji.json.' });
     try {
       await writeFile(data, sha, `Update kanji lesson ${lesson.id} from the site`, KANJI_FILE);
       return res.status(200).json({ ok: true });
