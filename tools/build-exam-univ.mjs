@@ -54,7 +54,7 @@ for (const [w, r] of Object.entries(FIXED)) known.set(w, r);
 const verified = new Set();
 for (const L of G) for (const p of L.points) for (const b of [...p.blocks, ...(p.details || [])]) for (const m of String(b.ex || '').matchAll(/\{([^{}|]+)\|([^{}]+)\}/g)) verified.add(m[1] + '|' + m[2]);
 // Kuromoji is wrong on these
-const TOK_FIX = { 国: 'くに', 金: 'かね', 弾き: 'ひき', 弾く: 'ひく', 弾い: 'ひい', 弾か: 'ひか', 弾け: 'ひけ', 方: 'ほう', 間: 'あいだ', 今: 'いま', 車: 'くるま', 辛い: 'からい', 辛: 'から', 角: 'かど', 行っ: 'いっ', 牛: 'ぎゅう', 通っ: 'かよっ', 通い: 'かよい', 通う: 'かよう', 通わ: 'かよわ' };
+const TOK_FIX = { 国: 'くに', 金: 'かね', 弾き: 'ひき', 弾く: 'ひく', 弾い: 'ひい', 弾か: 'ひか', 弾け: 'ひけ', 方: 'ほう', 間: 'あいだ', 今: 'いま', 車: 'くるま', 辛い: 'からい', 辛: 'から', 角: 'かど', 行っ: 'いっ', 牛: 'ぎゅう', 米: 'こめ', 表: 'おもて', 弾ける: 'ひける', 通っ: 'かよっ', 通い: 'かよい', 通う: 'かよう', 通わ: 'かよわ' };
 const longest = [...known.keys()].sort((a, b) => b.length - a.length);
 
 // numbers + counters
@@ -150,7 +150,7 @@ const ALLOW = new Set(`ない かる おはよう おやすみなさい する �
  一 二 三 四 五 六 七 八 九 十 百 千 万 半 時 分 人 日 月 年 円 歳 階 語 屋 中 目 前 後 上 下 方 ごろ ぐらい くらい など 達 たち お ご
  いい よい よく いく くる いらっしゃる なる できる おく 行く 来る`.split(/\s+/));
 const OWN = {};
-const LOOSE = new Set(['A', 'B', 'じゃ', 'まして', 'でし', 'まし', 'ませ', '何で', 'だめ', '客', 'より', 'どん', 'あと', '店', 'ない', '患者', 'どの人', 'やっ', 'かる', 'ほか', 'だし', 'お先に', '通る', '作れる']);
+const LOOSE = new Set(['A', 'B', 'じゃ', 'まして', 'でし', 'まし', 'ませ', '何で', 'だめ', '客', 'より', 'どん', 'あと', '店', 'ない', '患者', 'どの人', 'やっ', 'かる', 'ほか', 'だし', 'お先に', '通る', '作れる', 'ろう', 'おう', '何と', 'きん', 'とおり', 'なら', 'ける', '木の葉', 'とおりに', 'つけ', '長ける', 'その間', 'ときを', 'ベル']);
 
 // ---------- grammar guard: the lesson where a form is introduced ----------
 // fixed phrases that are vocabulary entries of their lesson, whatever their form
