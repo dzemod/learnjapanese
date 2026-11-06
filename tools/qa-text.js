@@ -72,7 +72,7 @@ function furiCheck(file, s, where) {
   if (KANJI.test(bare)) add(file, where, 'kanji-no-reading', s);
 }
 
-const files = ['site/data/sets.json', 'site/data/grammar.json', 'site/data/exam.json', 'site/data/kanji.json', 'site/data/exam-presets.json'].filter(f => fs.existsSync(path.join(ROOT, f)));
+const files = ['site/data/sets.json', 'site/data/grammar.json', 'site/data/exam.json', 'site/data/exam-univ.json', 'site/data/kanji.json', 'site/data/exam-presets.json'].filter(f => fs.existsSync(path.join(ROOT, f)));
 const counts = {};
 for (const f of files) {
   const { data, changed } = walkJSON(f);
@@ -81,6 +81,7 @@ for (const f of files) {
     furiCheck(f, p.title, `L${l.lesson} ${p.id} title`);
     for (const b of p.blocks) { if (b.ex) furiCheck(f, b.ex, `${p.id} ex`); if (b.p) furiCheck(f, b.p, `${p.id} p`); if (b.note) furiCheck(f, b.note, `${p.id} note`); if (b.h) furiCheck(f, b.h, `${p.id} h`); for (const r of b.table || []) for (const c of r) furiCheck(f, c, `${p.id} table`); }
   }
+  if (f.endsWith('exam-univ.json')) for (const l of data.lessons) for (const it of l.items) for (const p of it.parts) for (const t of typeof p === 'string' ? [p] : [...(p.a || []), ...(p.o || []), p.b || '']) furiCheck(f, t, `L${l.lesson} ${it.id}`);
   if (f.endsWith('exam.json')) for (const l of data.lessons) for (const it of l.items) for (const k of ['pre', 'post', 'a', 'ja', 'base']) if (it[k]) furiCheck(f, it[k], `L${l.lesson} ${it.id || ''} ${k}`);
   if (FIX && changed) {
     // keep the one-item-per-line layout: re-serialize with the same writer as the tools

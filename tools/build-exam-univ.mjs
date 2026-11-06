@@ -74,11 +74,11 @@ function preRules(t) {
   return t
     .replace(/(あの|この|その|どの)方/g, '$1{方|かた}')
     .replace(/の間/g, 'の{間|あいだ}').replace(/^間$/, '{間|あいだ}').replace(/^語$/, '{語|ご}').replace(/^屋$/, '{屋|や}').replace(/この辺/g, 'この{辺|へん}')
-    .replace(/([ァ-ヶー]|[㐀-鿿])語/g, '$1{語|ご}')
+    .replace(/([ァ-ヶー]|(?<!日)[㐀-鿿])語/g, '$1{語|ご}')
     .replace(/(^|[^0-9])1人/g, '$1{1人|ひとり}').replace(/(^|[^0-9])2人/g, '$1{2人|ふたり}')
     .replace(/(\d+)日/g, (m, d) => (DAY[+d] ? `{${d}日|${DAY[+d]}}` : `${d}{日|にち}`))
     .replace(/(\d+)か月/g, '$1か{月|げつ}')
-    .replace(/(\d+)(週間|時間|番線|番目|段目|分|本|杯|匹|階|回|枚|台|冊|個|歳|時|月|年|番|円|度|倍|人|万|千|百|課|号|位)/g, (m, d, c) => `${d}{${c}|${NUM_RULE[c](+d)}}`);
+    .replace(/(?<![{\d])(\d+)(週間|時間|番線|番目|段目|分|本|杯|匹|階|回|枚|台|冊|個|歳|時|月|年|番|円|度|倍|人|万|千|百|課|号|位)/g, (m, d, c) => `${d}{${c}|${NUM_RULE[c](+d)}}`);
 }
 const reviewed = new Map();
 function alignToken(surface, reading) {
@@ -261,7 +261,7 @@ for (const lk of Object.keys(src).map(Number).sort((a, b) => a - b)) {
 
 // every kanji of the output must have a reading
 for (const L of out) for (const it of L.items) {
-  const check = s => { if (HAS_K.test(String(s).replace(/\{[^{}|]+\|[^{}]+\}/g, ''))) err(it.id, `kanji without reading: ${s}`); };
+  const check = s => { if (/[{}|]/.test(String(s).replace(/\{[^{}|]+\|[^{}|]+\}/g, ''))) err(it.id, `broken markup: ${s}`); if (HAS_K.test(String(s).replace(/\{[^{}|]+\|[^{}]+\}/g, ''))) err(it.id, `kanji without reading: ${s}`); };
   for (const p of it.parts) {
     if (typeof p === 'string') check(p);
     else [...(p.a || []), ...(p.o || []), p.b || ''].forEach(check);

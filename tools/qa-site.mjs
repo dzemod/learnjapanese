@@ -46,7 +46,7 @@ const sets = JSON.parse(fs.readFileSync(path.join(SITE, 'data/sets.json'), 'utf8
 const grammar = JSON.parse(fs.readFileSync(path.join(SITE, 'data/grammar.json'), 'utf8')).lessons;
 const kanji = JSON.parse(fs.readFileSync(path.join(SITE, 'data/kanji.json'), 'utf8')).books;
 const MODES = ['flashcards', 'learn', 'write', 'test', 'match', 'listen'];
-const EXAM_TYPES = ['p', 'v', 'c', 'tj', 'tu', 'w', 'k', 'g', 'l', 'e'];
+const EXAM_TYPES = ['p', 'v', 'c', 'tj', 'tu', 'w', 'k', 'g', 'l', 'e', 'wt'];
 
 // A step = { name, hash, act?: [actions] }. Actions run after navigation, each followed by a check.
 const plan = { words: [], grammar: [], kanji: [], exam: [], ts: [], translate: [], other: [] };
@@ -71,6 +71,8 @@ for (const b of kanji) for (const l of b.lessons) {
 plan.exam.push({ name: 'exam', hash: '#/exam' });
 for (const t of EXAM_TYPES) plan.exam.push({ name: `exam-${t}`, exam: t });
 plan.exam.push({ name: 'exam-mine', exam: 'w', mine: true });
+plan.exam.push({ name: 'exam-wt-L1-5', exam: 'wt', from: 1, to: 5 }, { name: 'exam-wt-L26-30', exam: 'wt', from: 26, to: 30 }, { name: 'exam-wt-mine', exam: 'wt', mine: true, from: 1, to: 1 });
+plan.exam.push({ name: 'exam-saved-mistakes', hash: '#/exam', act: ['click:[data-saved]', 'wait:.ex-answer'] });
 plan.exam.push({ name: 'exam-mock', exam: 'mock' });
 plan.other.push({ name: 'home-after', hash: '#/' }, { name: 'bad-route', hash: '#/nope' });
 // «Переклад речень»: browser self-check of every item, one exam per 10 lessons, the full mock, saved mistakes
@@ -330,6 +332,7 @@ async function runExam(P, step, group) {
     if (!(await P.page.evaluate(() => location.hash.startsWith('#/exam/run')))) break;
     await check(P, `${step.name}-q${q + 1}`, group, false);
     const page = P.page;
+    if (await page.$('.ex-wtform')) { await answerWt(P, step, group, q); continue; }
     if (await page.$('.ex-sentform')) { await answerTs(P, step, group, q); continue; }
     if (await page.$('.ex-answer .choice')) await page.click('.ex-answer .choice');
     else if (await page.$('.ex-answer .answer-input')) { await page.fill('.ex-answer .answer-input', 'x'); await page.press('.ex-answer .answer-input', 'Enter'); }
@@ -383,6 +386,43 @@ async function answerTs(P, step, group, q) {
   const verdict = await page.$eval('.ex-feedback .feedback', e => e.textContent).catch(() => '');
   if (expectOk && !/^Правильно/.test(verdict)) report.issues.push({ v: P.kind, step: step.name, group, t: 'ts-verdict', d: `${it.uid} ${label}: «${mode === 4 ? 'romaji' : answer}» → ${verdict}`, x: it.answer });
   if (!expectOk && mode !== 2 && /^Правильно/.test(verdict)) report.issues.push({ v: P.kind, step: step.name, group, t: 'ts-wrong-accepted', d: `${it.uid} ${label}: «${answer}» → ${verdict}`, x: it.answer });
+  if (mode === 6) await page.click('[data-right]').catch(() => {});
+  if (mode === 7) await page.click('[data-flag]').catch(() => {});
+  await check(P, `${step.name}-q${q + 1}-${label}`, group, false);
+  await page.click('[data-next]').catch(() => {});
+  await sleep(100);
+}
+// «Слово: напиши сам(а)»: kanji, kana with spaces, dictionary form, romaji, hint, wrong, «Не знаю» + «Я мав(ла) рацію», flag
+async function answerWt(P, step, group, q) {
+  const page = P.page;
+  const it = await page.evaluate(() => { const S = JSON.parse(sessionStorage.getItem('jp.examSession')); return S.qs[S.i]; });
+  const main = it.cards[0], kana = main.reading || main.japanese;
+  const dict = it.cards.find(c => /ます$/.test(main.japanese) && !/ます$/.test(c.japanese));
+  const mode = q % 8, inp = '.ex-wtform .answer-input';
+  let answer = '', expectOk = false, label = '';
+  if (mode === 0) { answer = main.japanese; expectOk = true; label = 'kanji'; }
+  else if (mode === 1) { answer = ' ' + [...kana].join(' ') + ' '; expectOk = true; label = 'kana-spaces'; }
+  else if (mode === 2) { answer = dict ? dict.reading || dict.japanese : kana; expectOk = true; label = dict ? 'dict' : 'kana'; }
+  else if (mode === 4) { await page.click('[data-hint="k"]'); answer = kana; expectOk = true; label = 'hint'; }
+  else if (mode === 5 || mode === 7) { answer = 'ぬぬぬ'; label = mode === 5 ? 'wrong' : 'wrong-flag'; }
+  if (mode === 3) {
+    label = 'romaji';
+    if (!(await page.isChecked('[data-romaji]'))) await page.click('[data-romaji]');
+    await page.waitForFunction(() => window.wanakana, null, { timeout: 20000 }).catch(() => {});
+    const rom = await page.evaluate(k => window.wanakana?.toRomaji(k.replace(/[～〜~]/g, ''), { customRomajiMapping: { ん: 'nn' } }) || '', kana);
+    await page.click(inp);
+    await page.keyboard.type(rom, { delay: 5 });
+    await page.click('[data-romaji]');
+    await page.press(inp, 'Enter');
+    answer = rom; expectOk = !/[ァ-ヶー]/.test(kana); // wanakana writes long katakana vowels as hiragana
+  } else if (mode === 6) { label = 'dont-know'; await page.click('[data-dk]'); }
+  else { await page.fill(inp, answer); await page.press(inp, 'Enter'); }
+  const ok = await page.waitForSelector('[data-next]', { timeout: 10000 }).then(() => true, () => false);
+  if (!ok) { report.issues.push({ v: P.kind, step: step.name, group, t: 'wt-stuck', d: `${it.uid} ${label}` }); await page.click('[data-dk]').catch(() => {}); await sleep(300); }
+  const verdict = await page.$eval('.ex-feedback .feedback', e => e.textContent).catch(() => '');
+  if (expectOk && !/^Правильно/.test(verdict)) report.issues.push({ v: P.kind, step: step.name, group, t: 'wt-verdict', d: `${it.uid} ${label}: «${answer}» → ${verdict}`, x: main.japanese + ' ' + kana });
+  if (!expectOk && mode !== 3 && /^Правильно/.test(verdict)) report.issues.push({ v: P.kind, step: step.name, group, t: 'wt-wrong-accepted', d: `${it.uid} ${label}: «${answer}» → ${verdict}` });
+  if (mode === 4 && !/75%/.test(verdict)) report.issues.push({ v: P.kind, step: step.name, group, t: 'wt-hint-score', d: `${it.uid}: ${verdict}` });
   if (mode === 6) await page.click('[data-right]').catch(() => {});
   if (mode === 7) await page.click('[data-flag]').catch(() => {});
   await check(P, `${step.name}-q${q + 1}-${label}`, group, false);

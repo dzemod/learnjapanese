@@ -10,6 +10,7 @@ import { conjugate, explainConj, detectForm, FORMS, formsUpTo } from './conjugat
 import { preKana, checkSentence, verdictOf, VERDICT, normJa, KANJI_RE } from './sentcheck.js';
 import { ensureTokenizer, tokenize, onTokProgress, tokProgressText } from './tokenizer.js';
 import { loadScript } from './importer.js';
+import { paperView, paperResult, newPaper, availability as univAvail, SECTIONS as UNIV_SECTIONS, univGroups } from './exam-univ.js';
 
 const K = { presets: 'jp.examPresets', history: 'jp.examHistory', session: 'jp.examSession', ret: 'jp.examReturn', mistakes: 'jp.examMistakes', romaji: 'jp.exam.romaji' };
 const load = (k, d) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } };
@@ -21,11 +22,15 @@ export const TYPES = {
   p: 'Частки', v: 'Форми дієслів', c: 'Відмінювання (дріл)', tj: 'Переклад: японська → українська', tu: 'Переклад: українська → японська (збери речення)',
   w: 'Слова', k: 'Канджі', g: 'Вибір граматики', l: 'Аудіювання', e: 'Пошук помилки',
   ts: 'Переклад речень: українська → японська (напишіть)',
+  wt: 'Слово: напиши сам(а)',
 };
-// setup groups (checkboxes)
-const TYPE_GROUPS = [['Граматика', ['p', 'v', 'c', 'g', 'e', 'tj', 'tu', 'ts']], ['Слова', ['w', 'l']], ['Канджі', ['k']]];
+// setup groups (checkboxes); names that must fit two lines of a card
+const TYPE_SHORT = { ts: 'Напишіть речення: українська → японська' };
+const TYPE_GROUPS = [['Граматика', ['p', 'v', 'c', 'g', 'e', 'tj', 'tu', 'ts']], ['Слова', ['w', 'wt', 'l']], ['Канджі', ['k']]];
 // hints of «Переклад речень» and how much they lower the score
 const HINTS = { w: ['Слова', 0.15], g: ['Граматика', 0.1], f: ['Перша частина', 0.25] };
+// hint of «Слово: напиши сам(а)» (the first kana) and how much it lowers the score
+const WT_HINT = 0.25;
 const PARTICLES = ['は', 'が', 'を', 'に', 'で', 'へ', 'と', 'も', 'の', 'から', 'まで', 'や', 'か', 'よ', 'ね'];
 // What each particle does, summarised from IV. Граматика (used to explain a wrong choice).
 const PART_GEN = {
@@ -37,17 +42,18 @@ const PART_GEN = {
   'よ': 'нова інформація (урок 5)', 'ね': 'сподівання на згоду (урок 4)',
 };
 
-let data = { bank: null, remotePresets: [] };
+let data = { bank: null, univ: null, remotePresets: [] };
 async function loadAll() {
   await Promise.all([
     loadGrammar(), loadKanji(),
     data.bank ? null : fetch('data/exam.json', { cache: 'no-cache' }).then(r => (r.ok ? r.json() : { lessons: [] })).then(j => (data.bank = j.lessons || [])).catch(() => (data.bank = [])),
+    data.univ ? null : fetch('data/exam-univ.json', { cache: 'no-cache' }).then(r => (r.ok ? r.json() : { lessons: [] })).then(j => (data.univ = j.lessons || [])).catch(() => (data.univ = [])),
     fetch('data/exam-presets.json', { cache: 'no-cache' }).then(r => (r.ok ? r.json() : { presets: [] })).then(j => (data.remotePresets = j.presets || [])).catch(() => {}),
   ]);
 }
 
 // ---------- presets (browser + GitHub through /api/save-set) ----------
-const DEFAULT = { name: '', part: 'I', from: 1, to: 25, mine: false, kanji: false, kbook: 'k300', kmode: 'lessons', kfrom: 1, kto: 2, krand: 30, types: Object.keys(TYPES), count: 20, mock: false, timer: 0 };
+const DEFAULT = { name: '', univ: false, part: 'I', from: 1, to: 25, mine: false, kanji: false, kbook: 'k300', kmode: 'lessons', kfrom: 1, kto: 2, krand: 30, types: Object.keys(TYPES), count: 20, mock: false, timer: 0 };
 export function presets() {
   const local = load(K.presets, []);
   const names = new Set(local.map(p => p.name));
@@ -108,7 +114,7 @@ export function returnButton(view) {
     b.id = 'exam-return';
     b.className = 'btn primary exam-return';
     b.innerHTML = `${I.back}<span>Повернутися до екзамену</span>`;
-    b.onclick = () => { ssave(K.ret, null); location.hash = '#/exam/run'; };
+    b.onclick = () => { const s = sload(K.session); ssave(K.ret, null); location.hash = s && (s.univ ? s.done : s.i >= s.qs.length) ? '#/exam/result' : '#/exam/run'; };
     document.body.append(b);
   }
 }
@@ -143,13 +149,13 @@ function availability(c) {
   return {
     p: bankItems(c, 'p').length, v: bankItems(c, 'v').length, e: bankItems(c, 'e').length, g: bankItems(c, 'v').length,
     tj: bankItems(c, 'tr').length, tu: bankItems(c, 'tr').filter(okTiles).length, w: words.length, c: Math.max(0, +c.to >= 14 ? verbs.length : 0),
-    k: ks.length, l: words.length + bankItems(c, 'tr').length, ts: bankItems(c, 'ts').length,
+    k: ks.length, l: words.length + bankItems(c, 'tr').length, ts: bankItems(c, 'ts').length, wt: words.length,
   };
 }
 const okTiles = it => !/……|：|:/.test(it.ja) && it.ja.split(' ').length >= 3 && it.ja.split(' ').length <= 9;
 
 function build(c) {
-  const types = uniq([...c.types, ...(c.mock ? ['ts'] : [])]).filter(t => TYPES[t]); // the full mock exam always has sentence translation
+  const types = uniq([...c.types, ...(c.mock ? ['ts', 'wt'] : [])]).filter(t => TYPES[t]); // the full mock exam always has sentence translation + typed words
   const n = c.mock ? 60 : +c.count || 20;
   const words = wordCards(c), ks = kanjiPool(c);
   const verbs = words.filter(w => w.verbGroup && /ます$/.test(w.japanese) && conjugate(w.japanese, w.verbGroup, 'te'));
@@ -162,6 +168,7 @@ function build(c) {
     tj: () => qTransJ(pickOne(bankItems(c, 'tr')), bankItems(c, 'tr')),
     tu: () => qTiles(pickOne(bankItems(c, 'tr').filter(okTiles))),
     w: () => qWord(pickOne(words), words),
+    wt: () => qWordType(pickOne(words), words),
     c: () => qConj(pickOne(verbs), maxL),
     k: () => qKanji(pickOne(ks), ks),
     l: () => qListen(words, bankItems(c, 'tr')),
@@ -336,6 +343,15 @@ function sentResultHTML(q, r) {
     ${issues.length && v !== 'ok' || issues.length && pct < 100 ? `<ul class="sc-issues">${issues.map(i => `<li>${issueHTML(i)}</li>`).join('')}</ul>` : ''}
     <div class="ex-expl"><p>${gtext(q.x || '')}</p></div>`;
 }
+/** Result block of «Слово: напиши сам(а)» (feedback and results page). */
+function wtResultHTML(q, r) {
+  const pct = Math.round((r.pts ?? (r.ok ? 1 : 0)) * 100);
+  return `<div class="feedback ${r.ok ? 'good' : 'bad'}">${r.ok ? 'Правильно!' : 'Неправильно'}${r.ok && pct < 100 ? ` · ${pct}%` : ''}${r.over ? ' <small>(ви позначили як правильну)</small>' : ''}</div>
+    ${(r.hints || []).includes('k') ? `<p class="small muted">Підказка: перша кана (−${WT_HINT * 100}%)</p>` : ''}
+    ${r.given ? `<div class="ex-given-ja">Ваша відповідь: ${r.ok ? '' : '<s>'}<span lang="ja">${esc(r.given)}</span>${r.ok ? '' : '</s>'}</div>` : '<div class="ex-given muted">Без відповіді</div>'}
+    <div class="ex-correct"><span class="muted small">Правильна відповідь:</span> ${q.correct}<button type="button" class="icon-btn sm" data-say-c aria-label="Прослухати слово">${I.speaker}</button></div>
+    <div class="ex-expl"><p>${gtext(q.x || '')}</p></div>`;
+}
 function qWord(cd, pool) {
   if (!cd) return null;
   const dir = Math.random() < 0.5 ? 'ja' : 'uk', typing = Math.random() < 0.4;
@@ -345,6 +361,31 @@ function qWord(cd, pool) {
   const correct = `${wordHTML(cd)} — ${esc(cd.ukrainian)}`;
   if (dir === 'ja') return { ...base, mode: typing ? 'type' : 'choice', side: 'uk', label: typing ? 'Напишіть значення українською' : 'Виберіть значення', prompt: `<div class="ex-word">${wordHTML(cd)}</div>`, options: shuffle([cd, ...others]).map(o => ({ v: o.ukrainian, h: esc(o.ukrainian) })), answer: cd.ukrainian, correct, x };
   return { ...base, mode: typing ? 'type' : 'choice', side: 'ja', label: typing ? 'Напишіть японською (канджі або каною)' : 'Виберіть японське слово', prompt: `<div class="ex-big-uk">${esc(cd.ukrainian)}</div>`, options: shuffle([cd, ...others]).map(o => ({ v: o.japanese, h: wordHTML(o) })), answer: cd.japanese, correct, x };
+}
+/** «Слово: напиши сам(а)»: Ukrainian → the learner types the Japanese word (kanji or kana; verbs: ます-form or dictionary form). */
+function qWordType(cd, pool) {
+  if (!cd) return null;
+  // every word of the chosen lessons with the same Ukrainian meaning is accepted too
+  const same = pool.filter(o => o.ukrainian.trim() === cd.ukrainian.trim());
+  const cards = [];
+  for (const o of same) {
+    cards.push({ japanese: o.japanese, reading: o.reading });
+    if (o.verbGroup && /ます$/.test(o.japanese)) {
+      const d1 = conjugate(o.japanese, o.verbGroup, 'dict'), d2 = o.reading ? conjugate(o.reading, o.verbGroup, 'dict') : '';
+      if (d1) cards.push({ japanese: d1, reading: d2 && d2 !== d1 ? d2 : '' });
+    }
+  }
+  const kana = (cd.reading || cd.japanese).replace(/^[～〜~（(\s]+/, '');
+  const dict = cd.verbGroup && /ます$/.test(cd.japanese) ? conjugate(cd.japanese, cd.verbGroup, 'dict') : '';
+  const dictK = dict && cd.reading ? conjugate(cd.reading, cd.verbGroup, 'dict') : '';
+  return {
+    uid: 'wt' + cd.setId + cd.id, type: 'wt', mode: 'wtype', lesson: cd.lesson, ref: wref(cd), weak: cd.japanese, src: cd.setTitle,
+    label: 'Напишіть японське слово (канджі або каною)',
+    prompt: `<div class="ex-big-uk">${esc(cd.ukrainian)}</div>${cd.verbGroup ? `<div class="ex-uk">дієслово, ${cd.verbGroup} група · можна ます-форму або словникову</div>` : ''}`,
+    cards, answer: cd.japanese, first: kana.charAt(0), say: cd.reading || cd.japanese,
+    correct: `${wordHTML(cd)}${dict ? ` <span class="muted small">· словникова форма</span> <span lang="ja">${esc(dict)}${dictK && dictK !== dict ? `<span class="fg">(${esc(dictK)})</span>` : ''}</span>` : ''}`,
+    x: `${cd.japanese}${cd.reading && cd.reading !== cd.japanese ? `(${cd.reading})` : ''} — ${cd.ukrainian}${cd.verbGroup ? `, дієслово ${cd.verbGroup} групи` : ''}${cd.hint ? ` ${cd.hint}` : ''}.`,
+  };
 }
 function qConj(cd, maxL) {
   if (!cd) return null;
@@ -413,6 +454,7 @@ function judge(q, given) {
   if (q.mode === 'choice') return given === q.answer;
   if (q.mode === 'tiles') return given === q.answer;
   if (q.type === 'w') return checkWord(given, q.card, q.side).ok;
+  if (q.type === 'wt') return q.cards.some(cd => checkWord(given, cd, 'ja').ok);
   return (q.answers || [q.answer]).some(a => a && njp(a) === njp(given));
 }
 function whyWrong(q, given) {
@@ -435,23 +477,46 @@ export async function examView(root, sub) {
   root.innerHTML = '<div class="loading"><span class="sun pulse"></span></div>';
   await loadAll();
   S = S || sload(K.session);
+  if (S?.univ) {
+    if (sub === 'run' && !S.done) return paperView(root, univCtx());
+    if ((sub === 'run' || sub === 'result') && S.done) return paperResult(root, univCtx());
+    return setupView(root);
+  }
   if (sub === 'run' && S && S.i < S.qs.length) return runView(root);
   if (sub === 'result' && S) return resultView(root);
   return setupView(root);
 }
+
+/** What the paper test (exam-univ.js) needs from this module. */
+function startUniv(conf) {
+  const paper = newPaper(data.univ, data.bank, conf);
+  if (!paper.sections.some(x => x.blanks)) return false;
+  S = { univ: true, conf: { ...conf }, paper, ua: {}, over: {}, qs: [], i: 0, res: [], start: Date.now(), deadline: conf.timer ? Date.now() + conf.timer * 60000 : 0 };
+  persist();
+  return true;
+}
+const univCtx = () => ({
+  session: () => S, persist,
+  load: (k, d) => load(K[k], d), save: (k, v) => save(K[k], v),
+  refBtn, wireRefs, gref, mnnRef, pointOf, partGen: PART_GEN,
+  again: () => { if (startUniv(S.conf)) location.hash = '#/exam/run'; },
+});
 
 // ---------- setup ----------
 function setupView(root) {
   const last = load(K.presets + '.last', null);
   let c = { ...DEFAULT, ...(last || {}) };
   if (!c.tsAdded) { c.types = uniq([...c.types, 'ts']); c.tsAdded = true; }
+  if (!c.wtAdded) { c.types = uniq([...c.types, 'wt']); c.wtAdded = true; }
   const draw = () => {
     const av = availability(c);
+    const uav = univAvail(data.univ, data.bank, +c.from, +c.to);
     const kb = kanjiBooks();
     const hist = load(K.history, []);
     root.innerHTML = `<div class="exam fade-in">
       <section class="hero"><div><p class="eyebrow" lang="ja">試験</p><h1>Екзамен</h1><p class="muted">Підготовка до екзамену: частки, форми дієслів, переклад, слова, канджі.</p></div></section>
-      ${S && S.i < S.qs.length ? `<div class="sync-box"><div><b>Є незавершений екзамен</b> — питання ${S.i + 1} з ${S.qs.length}.</div><div class="sync-btns"><a class="btn sm primary" href="#/exam/run">Продовжити</a><button class="btn sm ghost" data-drop>Скасувати</button></div></div>` : ''}
+      ${S?.univ && !S.done ? `<div class="sync-box"><div><b>Є незавершена університетська версія</b> — уроки ${S.conf.from}–${S.conf.to}.</div><div class="sync-btns"><a class="btn sm primary" href="#/exam/run">Продовжити</a><button class="btn sm ghost" data-drop>Скасувати</button></div></div>` : ''}
+      ${S && !S.univ && S.i < S.qs.length ? `<div class="sync-box"><div><b>Є незавершений екзамен</b> — питання ${S.i + 1} з ${S.qs.length}.</div><div class="sync-btns"><a class="btn sm primary" href="#/exam/run">Продовжити</a><button class="btn sm ghost" data-drop>Скасувати</button></div></div>` : ''}
       ${presets().length ? `<section class="panel"><h2 class="sec-title">Мої екзамени</h2><div class="ex-presets">${presets().map(p => `<div class="ex-preset"><button class="btn ghost sm" data-load="${esc(p.name)}">${esc(p.name)}</button><button class="icon-btn sm" data-del="${esc(p.name)}" aria-label="Видалити">${I.trash}</button></div>`).join('')}</div></section>` : ''}
       <form class="panel ex-setup">
         <h2 class="sec-title">Слова і граматика</h2>
@@ -471,11 +536,16 @@ function setupView(root) {
         </div>
 
         <h2 class="sec-title">Типи завдань</h2>
-        <div class="ex-types">${TYPE_GROUPS.map(([g, ks]) => `<h3 class="ex-tgroup">${g}</h3><div class="checks">${ks.map(k => `<label class="check"><input type="checkbox" value="${k}" ${c.types.includes(k) ? 'checked' : ''}><span>${TYPES[k]} <small class="muted">(${av[k] || 0})</small></span></label>`).join('')}</div>`).join('')}</div>
+        <label class="ex-univ ${c.univ ? 'on' : ''}"><input type="checkbox" name="univ" ${c.univ ? 'checked' : ''}><span class="ex-univ-icon" aria-hidden="true">🎓</span><span class="ex-univ-text"><b>Університетська версія</b><small>Як паперовий тест <span lang="ja">復習</span>: 7 розділів, 100 балів, одна сторінка, «Перевірити» в кінці.</small></span><span class="ex-switch" aria-hidden="true"></span></label>
+        ${c.univ ? `<ol class="ex-univ-list">${UNIV_SECTIONS.map(x => `<li class="${uav[x.s] ? '' : 'off'}"><span>${esc(x.title)}</span><small class="muted">${x.pts} б. · у банку ${uav[x.s]}</small></li>`).join('')}</ol>` : ''}
+        <div class="ex-types ${c.univ ? 'off' : ''}">${TYPE_GROUPS.map(([g, ks]) => `<div class="ex-tgroup-wrap"><h3 class="ex-tgroup">${g}</h3><div class="ex-tgrid">${ks.map(k => {
+    const noKanji = k === 'k' && !av.k;
+    return `<label class="check ex-tcard"><input type="checkbox" value="${k}" ${c.types.includes(k) ? 'checked' : ''} ${c.univ || noKanji ? 'disabled' : ''}><span class="ex-tbody"><span class="ex-tname">${TYPE_SHORT[k] || TYPES[k]}</span>${noKanji ? '<small class="ex-thint">Оберіть книжку та діапазон канджі вище</small>' : `<small class="muted ex-tcount">${av[k] || 0}</small>`}</span></label>`;
+  }).join('')}</div></div>`).join('')}</div>
 
         <h2 class="sec-title">Обсяг і час</h2>
         <div class="ex-row">
-          <div class="seg" data-count>${[10, 20, 30, 50].map(v => `<button type="button" class="${!c.mock && +c.count === v ? 'on' : ''}" data-v="${v}">${v}</button>`).join('')}<button type="button" class="${c.mock ? 'on' : ''}" data-v="mock">Повний пробний (60)</button></div>
+          ${c.univ ? '<p class="muted small ex-fixed">Обсяг фіксований: 100 балів (кількість питань залежить від уроків).</p>' : `<div class="seg" data-count>${[10, 20, 30, 50].map(v => `<button type="button" class="${!c.mock && +c.count === v ? 'on' : ''}" data-v="${v}">${v}</button>`).join('')}<button type="button" class="${c.mock ? 'on' : ''}" data-v="mock">Повний пробний (60)</button></div>`}
           <label class="ex-range">Таймер (хвилин) <input class="input" type="number" name="timer" min="0" max="180" value="${c.timer || 0}" inputmode="numeric"> <small class="muted">0 — без таймера</small></label>
         </div>
         <div class="ex-start">
@@ -491,7 +561,7 @@ function setupView(root) {
   const read = () => {
     const f = $('.ex-setup', root);
     c.from = Math.max(1, Math.min(50, +f.from.value || 1)); c.to = Math.max(c.from, Math.min(50, +f.to.value || c.from));
-    c.mine = f.mine.checked; c.kanji = f.kanji.checked; c.timer = Math.max(0, +f.timer.value || 0);
+    c.univ = f.univ.checked; c.mine = f.mine.checked; c.kanji = f.kanji.checked; c.timer = Math.max(0, +f.timer.value || 0);
     if (f.kfrom) { c.kfrom = +f.kfrom.value || 1; c.kto = Math.max(c.kfrom, +f.kto.value || c.kfrom); }
     if (f.krand) c.krand = +f.krand.value || 20;
     c.types = $$('.ex-types input:checked', root).map(i => i.value);
@@ -500,7 +570,7 @@ function setupView(root) {
     const segs = { part: v => { c.part = v; if (v === 'I') { c.from = 1; c.to = 25; } else if (v === 'II') { c.from = 26; c.to = 50; } else { c.from = 1; c.to = 50; } },
       kbook: v => { c.kbook = v; c.kfrom = 1; c.kto = 2; }, kmode: v => (c.kmode = v), count: v => { if (v === 'mock') c.mock = true; else { c.mock = false; c.count = +v; } } };
     for (const [k, fn] of Object.entries(segs)) $(`[data-${k}]`, root)?.addEventListener('click', e => { const b = e.target.closest('button[data-v]'); if (!b) return; read(); fn(b.dataset.v); draw(); });
-    $('.ex-setup', root).addEventListener('change', e => { if (e.target.name === 'kanji' || e.target.closest('.ex-types') || ['from', 'to', 'kfrom', 'kto', 'krand', 'mine'].includes(e.target.name)) { read(); draw(); } });
+    $('.ex-setup', root).addEventListener('change', e => { if (e.target.name === 'kanji' || e.target.name === 'univ' || e.target.closest('.ex-types') || ['from', 'to', 'kfrom', 'kto', 'krand', 'mine'].includes(e.target.name)) { read(); draw(); } });
     $('[data-drop]', root)?.addEventListener('click', () => { S = null; persist(); draw(); });
     $('[data-saved]', root)?.addEventListener('click', () => { S = { conf: { ...c, name: 'Мої помилки', timer: 0 }, qs: shuffle(savedMistakes()), i: 0, res: [], start: Date.now(), deadline: 0, answered: null }; persist(); location.hash = '#/exam/run'; });
     $('[data-saved-clear]', root)?.addEventListener('click', () => { if (confirm('Очистити збережені помилки?')) { save(K.mistakes, []); draw(); } });
@@ -517,8 +587,13 @@ function setupView(root) {
     $('.ex-setup', root).onsubmit = e => {
       e.preventDefault();
       read();
-      if (!c.types.length) return toast('Виберіть хоча б один тип завдань');
       save(K.presets + '.last', c);
+      if (c.univ) {
+        if (!startUniv(c)) return toast('Для вибраних уроків немає завдань');
+        location.hash = '#/exam/run';
+        return;
+      }
+      if (!c.types.length) return toast('Виберіть хоча б один тип завдань');
       const qs = build(c);
       if (!qs.length) return toast('Для вибраних уроків немає завдань цих типів');
       S = { conf: { ...c }, qs, i: 0, res: [], start: Date.now(), deadline: c.timer ? Date.now() + c.timer * 60000 : 0, answered: null };
@@ -544,7 +619,7 @@ function runView(root, api) {
       <div class="ex-q">
         <div class="ex-type">${TYPES[q.type]}<span class="muted"> · ${esc(q.src || '')}</span></div>
         <div class="q-label">${esc(q.label)}</div>
-        <div class="ex-prompt">${q.prompt}${q.say && q.type !== 'l' && q.type !== 'k' ? `<button type="button" class="icon-btn sm ex-say" data-say aria-label="Вимова">${I.speaker}</button>` : ''}</div>
+        <div class="ex-prompt">${q.prompt}${q.say && !['l', 'k', 'wt'].includes(q.type) ? `<button type="button" class="icon-btn sm ex-say" data-say aria-label="Вимова">${I.speaker}</button>` : ''}</div>
         <div class="ex-answer"></div>
         <div class="ex-feedback"></div>
       </div></div>`;
@@ -576,6 +651,7 @@ function runView(root, api) {
   };
   const feedback = (q, given, ok) => {
     if (q.mode === 'sent') return feedbackSent(q);
+    if (q.mode === 'wtype') return feedbackWT(q);
     $$('.ex-answer button, .ex-answer input, .ex-answer textarea', root).forEach(b => (b.disabled = true));
     $$('.ex-answer .choice', root).forEach(b => { if (b.dataset.v === q.answer) b.classList.add('correct'); else if (b.dataset.v === given && !ok) b.classList.add('wrong'); });
     const why = ok ? '' : whyWrong(q, given);
@@ -688,8 +764,67 @@ function runView(root, api) {
       feedbackSent(q);
     };
   }
+  // ----- «Слово: напиши сам(а)» -----
+  function feedbackWT(q) {
+    const a = S.answered;
+    $$('.ex-answer button, .ex-answer input', root).forEach(b => (b.disabled = true));
+    $('.ex-feedback', root).innerHTML = `${wtResultHTML(q, a)}
+      <div class="ex-refs">${refBtn(q.ref)}</div>
+      <div class="btn-row ex-own">${a.ok ? '' : '<button type="button" class="btn ghost sm" data-right>Я мав(ла) рацію</button>'}
+        <button type="button" class="btn ghost sm" data-flag ${a.flag ? 'disabled' : ''}>${a.flag ? 'Додано до помилок ✓' : 'Додати до помилок'}</button></div>
+      <button class="btn primary wide" data-next>Далі <kbd>Enter</kbd></button>`;
+    wireRefs(root);
+    $('[data-say-c]', root).onclick = () => speak(q.say);
+    $('[data-right]', root)?.addEventListener('click', () => { Object.assign(S.answered, { ok: true, pts: 1, over: true }); persist(); feedbackWT(q); });
+    $('[data-flag]', root).onclick = () => { S.answered.flag = true; persist(); addSavedMistake(q); feedbackWT(q); toast('Додано до помилок — їх можна повторити окремо'); };
+    const next = () => { S.res[S.i] = S.answered; S.answered = null; S.i++; persist(); draw(); window.scrollTo(0, 0); };
+    $('[data-next]', root).onclick = next;
+    $('[data-next]', root).focus({ preventScroll: true });
+    $('.ex-feedback', root).scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+  function renderWT(q, el, ans) {
+    const romaji = load(K.romaji, false);
+    const used = ans ? ans.hints || [] : hintsOf();
+    const ph = on => (on ? 'Латиницею: taberu' : '日本語で…');
+    const hintOut = () => (used.includes('k') || hintsOf().includes('k') ? `<div class="ex-hint"><b>Перша кана:</b> <span lang="ja">${esc(q.first)}…</span></div>` : '');
+    el.innerHTML = `<form class="write-form ex-sentform ex-wtform" autocomplete="off">
+        <label class="check sm ex-romaji"><input type="checkbox" data-romaji ${romaji ? 'checked' : ''}><span>Ромаджі → кана</span></label>
+        <input class="answer-input" lang="ja" placeholder="${ph(romaji)}" aria-label="Японське слово" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="done">
+        <div class="ex-hints"><span class="muted small">Підказка (знижує оцінку):</span><button type="button" class="btn ghost sm" data-hint="k" ${used.includes('k') ? 'disabled' : ''}>Перша кана −${WT_HINT * 100}%</button></div>
+        <div class="ex-hint-out">${hintOut()}</div>
+        <div class="write-btns"><button type="button" class="btn ghost" data-dk>Не знаю</button><button class="btn primary">Перевірити</button></div></form>`;
+    const inp = $('input.answer-input', el), box = $('[data-romaji]', el);
+    if (ans) { inp.value = ans.given || ''; return; }
+    if (romaji) bindRomaji(inp, true);
+    box.onchange = () => { save(K.romaji, box.checked); inp.placeholder = ph(box.checked); bindRomaji(inp, box.checked); inp.focus(); };
+    setTimeout(() => inp.focus({ preventScroll: true }), 80);
+    $('[data-hint]', el).onclick = e => {
+      const list = ((S.hints ||= {})[S.i] ||= []);
+      if (!list.includes('k')) list.push('k');
+      persist();
+      e.currentTarget.disabled = true;
+      $('.ex-hint-out', el).innerHTML = hintOut();
+      inp.focus();
+    };
+    const answer = given => {
+      if (S.answered) return;
+      const hints = hintsOf(), ok = !!given && judge(q, given);
+      S.answered = { given, ok, pts: ok ? Math.max(0, 1 - (hints.includes('k') ? WT_HINT : 0)) : 0, hints: [...hints] };
+      persist();
+      feedbackWT(q);
+    };
+    $('form', el).onsubmit = e => {
+      e.preventDefault();
+      let v = inp.value.trim();
+      // romaji mode: wanakana leaves a final «n» in Latin until the next key → convert everything
+      if (box.checked && window.wanakana && /[a-z]/i.test(v)) { v = window.wanakana.toKana(v.toLowerCase()); inp.value = v; }
+      if (v) answer(v);
+    };
+    $('[data-dk]', el).onclick = () => answer('');
+  }
   function renderAnswer(q, el, ans) {
     if (q.mode === 'sent') renderSent(q, el, ans);
+    else if (q.mode === 'wtype') renderWT(q, el, ans);
     else if (q.mode === 'choice') {
       el.innerHTML = `<div class="choices">${q.options.map((o, i) => `<button type="button" class="choice" data-v="${esc(o.v)}"><kbd>${i + 1}</kbd><span class="opt-main">${o.h}</span></button>`).join('')}</div>
         ${q.self && !ans ? `<details class="ex-self"><summary>Написати свій переклад</summary><textarea class="input" rows="2" placeholder="Ваш переклад…"></textarea><button type="button" class="btn ghost sm" data-compare>Порівняти з еталоном</button><div class="ex-self-res"></div></details>` : ''}`;
@@ -792,7 +927,7 @@ function resultView(root) {
     ${wrong.length ? `<section class="panel"><h2 class="sec-title">Помилки (${wrong.length})</h2><div class="ex-mistakes">${wrong.map(({ q, r }, i) => `<div class="ex-mistake" data-i="${i}">
       <div class="ex-type">${TYPES[q.type]} · ${esc(q.src || '')}</div>
       <div class="ex-mprompt">${q.type === 'l' || q.type === 'k' ? '' : q.prompt}</div>
-      ${q.mode === 'sent' ? `${sentResultHTML(q, r)}<div class="ex-refs">${refBtn(q.ref, mnnRef(q.it.pt))}</div></div>` : `${r.given ? `<div class="ex-given">Ваша відповідь: <s lang="ja">${furi(r.given)}</s></div>` : '<div class="ex-given muted">Без відповіді</div>'}
+      ${q.mode === 'sent' ? `${sentResultHTML(q, r)}<div class="ex-refs">${refBtn(q.ref, mnnRef(q.it.pt))}</div></div>` : q.mode === 'wtype' ? `${wtResultHTML(q, r)}<div class="ex-refs">${refBtn(q.ref)}</div></div>` : `${r.given ? `<div class="ex-given">Ваша відповідь: <s lang="ja">${furi(r.given)}</s></div>` : '<div class="ex-given muted">Без відповіді</div>'}
       <div class="ex-correct"><span class="muted small">Правильно:</span> ${q.correct}</div>
       <div class="ex-expl">${(() => { const w = whyWrong(q, r.given); return w ? `<p class="ex-why">${gtext(w)}</p>` : ''; })()}<p>${gtext(q.x || '')}</p></div>
       <div class="ex-refs">${refBtn(q.ref)}</div></div>`}`).join('')}</div></section>` : ''}
@@ -821,7 +956,7 @@ function weakHTML(h) {
   h.slice(-15).forEach(x => (x.mistakes || []).forEach(e => { if (!e.weak) return; const k = e.type + '|' + e.weak; (m[k] ||= { n: 0, e }).n++; }));
   const top = Object.values(m).sort((a, b) => b.n - a.n).slice(0, 10);
   if (!top.length) return '';
-  const groupName = { p: 'частка', e: 'помилка', v: 'форма', c: 'форма', g: 'граматика', k: 'канджі', w: 'слово', l: 'аудіювання', tj: 'переклад', tu: 'порядок слів', ts: 'конструкція' };
+  const groupName = { ...univGroups, p: 'частка', e: 'помилка', v: 'форма', c: 'форма', g: 'граматика', k: 'канджі', w: 'слово', wt: 'слово (написати)', l: 'аудіювання', tj: 'переклад', tu: 'порядок слів', ts: 'конструкція' };
   return `<section class="panel"><h2 class="sec-title">Слабкі місця</h2><p class="muted small">Що ви плутаєте найчастіше (останні 15 спроб):</p>
     <div class="ex-weak">${top.map(({ n, e }) => `<div class="ex-weak-row"><span class="chip">${groupName[e.type] || ''}</span><b lang="ja">${esc(e.weak)}</b><span class="muted">✕ ${n}</span>${e.ref ? `<button type="button" class="ex-ref sm" data-ref='${esc(JSON.stringify(e.ref))}'>Повторити: ${esc(refShort(e.ref))}</button>` : ''}</div>`).join('')}</div></section>`;
 }
