@@ -50,6 +50,11 @@ for (const L of G) for (const p of L.points) for (const b of [...p.blocks, ...(p
 for (const b of K) for (const l of b.lessons) for (const k of l.kanji) for (const e of k.examples || []) if (e.kana && !e.kana.includes('／')) addK(e.word, e.kana);
 const FIXED = { 日本: 'にほん', 日本語: 'にほんご', 上手: 'じょうず', 下手: 'へた', 今日: 'きょう', 明日: 'あした', 昨日: 'きのう', 大人: 'おとな', 一人: 'ひとり', 二人: 'ふたり', 何人: 'なんにん', 何時: 'なんじ', 何時間: 'なんじかん', 何分: 'なんぷん', 何歳: 'なんさい', 何階: 'なんがい', 何本: 'なんぼん', 何枚: 'なんまい', 何台: 'なんだい', 何回: 'なんかい', 何冊: 'なんさつ', 何番: 'なんばん', 何杯: 'なんばい', 何匹: 'なんびき', 何度: 'なんど', 何年: 'なんねん', 何月: 'なんがつ', 何日: 'なんにち', 何週間: 'なんしゅうかん', 何曜日: 'なんようび', 何個: 'なんこ', 何語: 'なにご', 何色: 'なにいろ' };
 for (const [w, r] of Object.entries(FIXED)) known.set(w, r);
+// pairs checked by a person (the textbook markup): a reading from Kuromoji that is not among them goes to the review list
+const verified = new Set();
+for (const L of G) for (const p of L.points) for (const b of [...p.blocks, ...(p.details || [])]) for (const m of String(b.ex || '').matchAll(/\{([^{}|]+)\|([^{}]+)\}/g)) verified.add(m[1] + '|' + m[2]);
+// Kuromoji is wrong on these
+const TOK_FIX = { 国: 'くに', 金: 'かね', 弾き: 'ひき', 弾く: 'ひく', 弾い: 'ひい', 弾か: 'ひか', 弾け: 'ひけ', 方: 'ほう', 間: 'あいだ', 今: 'いま', 車: 'くるま', 辛い: 'からい', 辛: 'から', 角: 'かど', 行っ: 'いっ', 牛: 'ぎゅう', 通っ: 'かよっ', 通い: 'かよい', 通う: 'かよう', 通わ: 'かよわ' };
 const longest = [...known.keys()].sort((a, b) => b.length - a.length);
 
 // numbers + counters
@@ -68,7 +73,7 @@ function preRules(t) {
   if (t === '日') return '{日|にち}';
   return t
     .replace(/(あの|この|その|どの)方/g, '$1{方|かた}')
-    .replace(/の間/g, 'の{間|あいだ}').replace(/^間$/, '{間|あいだ}')
+    .replace(/の間/g, 'の{間|あいだ}').replace(/^間$/, '{間|あいだ}').replace(/^語$/, '{語|ご}').replace(/^屋$/, '{屋|や}').replace(/この辺/g, 'この{辺|へん}')
     .replace(/([ァ-ヶー]|[㐀-鿿])語/g, '$1{語|ご}')
     .replace(/(^|[^0-9])1人/g, '$1{1人|ひとり}').replace(/(^|[^0-9])2人/g, '$1{2人|ふたり}')
     .replace(/(\d+)日/g, (m, d) => (DAY[+d] ? `{${d}日|${DAY[+d]}}` : `${d}{日|にち}`))
@@ -97,10 +102,13 @@ function furiRun(run, ctx) {
     if (!HAS_K.test(s)) { out += s; return; }
     let r = hira(t.reading && t.reading !== '*' ? t.reading : '');
     const next = toks[i + 1]?.surface_form || '';
+    if (TOK_FIX[s]) r = TOK_FIX[s];
+    if (s === '来' && /^られ/.test(next)) r = 'こ';
     if (s === '何') r = /^(で|の|と|だ)/.test(next) ? 'なん' : 'なに';
     if (!r) { err(ctx, `no reading for ${s}`); out += s; return; }
-    if (REVIEW && s.replace(/[^㐀-鿿々〆]/g, '').length === 1) { const k = `${s}→${r}`; if (!reviewed.has(k)) reviewed.set(k, run); }
-    out += alignToken(s, r);
+    const aligned = alignToken(s, r);
+    if (REVIEW) for (const m of aligned.matchAll(/\{([^{}|]+)\|([^{}]+)\}/g)) if (!verified.has(m[1] + '|' + m[2]) && !reviewed.has(m[1] + '→' + m[2])) reviewed.set(m[1] + '→' + m[2], run);
+    out += aligned;
   });
   return out;
 }
@@ -112,6 +120,7 @@ function addFuri(text, ctx) {
 
 // ---------- vocabulary known by lesson ----------
 const vocabBy = {}; // lesson → Set of surface forms
+const allVerbs = [];
 const variants = str => String(str).replace(/\[[^\]]*\]/g, ' ').replace(/[()（）～〜－。？！、…]/g, ' ').split(/[\s／/]+/).filter(Boolean);
 for (let l = 0; l <= 50; l++) {
   const s = SETS.find(x => x.id === 'mnn-' + String(l).padStart(2, '0'));
@@ -120,7 +129,7 @@ for (let l = 0; l <= 50; l++) {
     for (const f of [c.kanji, c.kana].filter(Boolean)) {
       const whole = f.replace(/\[([^\]]*)\]/g, '$1');
       for (const v of [...variants(f), ...variants(whole), ...variants(f.replace(/\s+/g, ''))]) {
-        out.add(v); out.add(hira(v));
+        out.add(v); out.add(hira(v)); out.add(v.replace(/です$/, ''));
         if (c.verbGroup && v.endsWith('ます')) {
           const d = conjugate(v, c.verbGroup, 'dict');
           if (d) { out.add(d); out.add(hira(d)); }
@@ -129,17 +138,19 @@ for (let l = 0; l <= 50; l++) {
       }
     }
   }
+  for (const c of s?.cards || []) if (c.verbGroup) allVerbs.push(c);
+  if (l >= 27) for (const c of allVerbs) for (const f of [c.kanji, c.kana].filter(Boolean)) if (f.endsWith('ます')) { const p = conjugate(f, c.verbGroup, 'pot'); if (p) out.add(p); }
   vocabBy[l] = out;
 }
 // names of the textbook characters and grammar words that are not vocabulary entries
-const ALLOW = new Set(`する いる ある です ます こと もの ん の よう ため とき ところ ほう はず わけ つもり
+const ALLOW = new Set(`ない かる おはよう おやすみなさい する いる ある です ます こと もの ん の よう ため とき ところ ほう はず わけ つもり
  IMC ミラー サントス ワン マリア カリナ テレサ タロー グプタ シュミット イー ポン キム ジョン トム ハンス クララ ワット
  山田 田中 佐藤 鈴木 木村 松本 中村 吉田 渡辺 高橋 林 小川 太郎 一郎 伊藤 斎藤 野村 森 花子 東京 大阪 京都 奈良 北海道 沖縄 広島 富士山
  さん どこ いつ なに なん それ これ あれ ここ そこ あそこ どれ こちら そちら あちら どちら そう ああ こう あの その この どの
  一 二 三 四 五 六 七 八 九 十 百 千 万 半 時 分 人 日 月 年 円 歳 階 語 屋 中 目 前 後 上 下 方 ごろ ぐらい くらい など 達 たち お ご
  いい よい よく いく くる いらっしゃる なる できる おく 行く 来る`.split(/\s+/));
 const OWN = {};
-const LOOSE = new Set(['A', 'B', 'じゃ', 'まして', 'でし', 'まし', 'ませ', '何で', 'だめ', '客', 'より', 'どん', 'あと', '店', 'ない', '患者', 'どの人', 'やっ']);
+const LOOSE = new Set(['A', 'B', 'じゃ', 'まして', 'でし', 'まし', 'ませ', '何で', 'だめ', '客', 'より', 'どん', 'あと', '店', 'ない', '患者', 'どの人', 'やっ', 'かる', 'ほか', 'だし', 'お先に', '通る', '作れる']);
 
 // ---------- grammar guard: the lesson where a form is introduced ----------
 // fixed phrases that are vocabulary entries of their lesson, whatever their form
@@ -156,7 +167,7 @@ function guardForms(plain, l, ctx) {
     if (t.surface_form === 'ば' && t.pos === '助詞' && prev?.surface_form !== 'なけれ') flag(35, 'ば');
     if (t.basic_form === 'れる' || t.basic_form === 'られる') flag(27, 'れる／られる');
     if (t.basic_form === 'せる' || t.basic_form === 'させる') flag(48, 'causative');
-    if (t.surface_form === 'う' && t.pos === '助動詞' && prev?.surface_form !== 'ましょ') flag(31, 'volitional');
+    if (t.surface_form === 'う' && t.pos === '助動詞' && !['ましょ', 'でしょ'].includes(prev?.surface_form)) flag(31, 'volitional');
   });
 }
 
