@@ -54,7 +54,7 @@ for (const [w, r] of Object.entries(FIXED)) known.set(w, r);
 const verified = new Set();
 for (const L of G) for (const p of L.points) for (const b of [...p.blocks, ...(p.details || [])]) for (const m of String(b.ex || '').matchAll(/\{([^{}|]+)\|([^{}]+)\}/g)) verified.add(m[1] + '|' + m[2]);
 // Kuromoji is wrong on these
-const TOK_FIX = { 国: 'くに', 金: 'かね', 弾き: 'ひき', 弾く: 'ひく', 弾い: 'ひい', 弾か: 'ひか', 弾け: 'ひけ', 方: 'ほう', 間: 'あいだ', 今: 'いま', 車: 'くるま', 辛い: 'からい', 辛: 'から', 角: 'かど', 行っ: 'いっ', 牛: 'ぎゅう', 米: 'こめ', 表: 'おもて', 弾ける: 'ひける', 通っ: 'かよっ', 通い: 'かよい', 通う: 'かよう', 通わ: 'かよわ' };
+const TOK_FIX = { 国: 'くに', 金: 'かね', 弾き: 'ひき', 弾く: 'ひく', 弾い: 'ひい', 弾か: 'ひか', 弾け: 'ひけ', 方: 'ほう', 間: 'あいだ', 今: 'いま', 車: 'くるま', 辛い: 'からい', 辛: 'から', 角: 'かど', 行っ: 'いっ', 牛: 'ぎゅう', 様: 'さま', 米: 'こめ', 表: 'おもて', 弾ける: 'ひける', 通っ: 'かよっ', 通い: 'かよい', 通う: 'かよう', 通わ: 'かよわ' };
 const longest = [...known.keys()].sort((a, b) => b.length - a.length);
 
 // numbers + counters
@@ -65,7 +65,7 @@ const NUM_RULE = {
   杯: n => ([1, 6, 8, 0].includes(small(n)) ? 'ぱい' : small(n) === 3 ? 'ばい' : 'はい'),
   匹: n => ([1, 6, 8, 0].includes(small(n)) ? 'ぴき' : small(n) === 3 ? 'びき' : 'ひき'),
   階: n => (small(n) === 3 ? 'がい' : 'かい'),
-  回: () => 'かい', 枚: () => 'まい', 台: () => 'だい', 冊: () => 'さつ', 個: () => 'こ', 歳: () => 'さい', 時: () => 'じ', 時間: () => 'じかん', 月: () => 'がつ', 年: () => 'ねん', 週間: () => 'しゅうかん', 番: () => 'ばん', 円: () => 'えん', 度: () => 'ど', 倍: () => 'ばい', 人: () => 'にん', 万: () => 'まん', 千: () => 'せん', 百: () => 'ひゃく', 番線: () => 'ばんせん', 課: () => 'か', 号: () => 'ごう', 番目: () => 'ばんめ', 段目: () => 'だんめ',
+  回: () => 'かい', 枚: () => 'まい', 台: () => 'だい', 冊: () => 'さつ', 個: () => 'こ', 歳: () => 'さい', 時: () => 'じ', 時間: () => 'じかん', 月: () => 'がつ', 年: () => 'ねん', 週間: () => 'しゅうかん', 番: () => 'ばん', 円: () => 'えん', 度: () => 'ど', 倍: () => 'ばい', 人: () => 'にん', 万: () => 'まん', 千: () => 'せん', 百: () => 'ひゃく', 番線: () => 'ばんせん', 課: () => 'か', 号: () => 'ごう', 位: () => 'い', 番目: () => 'ばんめ', 段目: () => 'だんめ',
 };
 const DAY = { 1: 'ついたち', 2: 'ふつか', 3: 'みっか', 4: 'よっか', 5: 'いつか', 6: 'むいか', 7: 'なのか', 8: 'ようか', 9: 'ここのか', 10: 'とおか', 14: 'じゅうよっか', 20: 'はつか', 24: 'にじゅうよっか' };
 function preRules(t) {
@@ -78,7 +78,7 @@ function preRules(t) {
     .replace(/(^|[^0-9])1人/g, '$1{1人|ひとり}').replace(/(^|[^0-9])2人/g, '$1{2人|ふたり}')
     .replace(/(\d+)日/g, (m, d) => (DAY[+d] ? `{${d}日|${DAY[+d]}}` : `${d}{日|にち}`))
     .replace(/(\d+)か月/g, '$1か{月|げつ}')
-    .replace(/(\d+)(週間|時間|番線|番目|段目|分|本|杯|匹|階|回|枚|台|冊|個|歳|時|月|年|番|円|度|倍|人|万|千|百|課|号)/g, (m, d, c) => `${d}{${c}|${NUM_RULE[c](+d)}}`);
+    .replace(/(\d+)(週間|時間|番線|番目|段目|分|本|杯|匹|階|回|枚|台|冊|個|歳|時|月|年|番|円|度|倍|人|万|千|百|課|号|位)/g, (m, d, c) => `${d}{${c}|${NUM_RULE[c](+d)}}`);
 }
 const reviewed = new Map();
 function alignToken(surface, reading) {
@@ -103,7 +103,7 @@ function furiRun(run, ctx) {
     let r = hira(t.reading && t.reading !== '*' ? t.reading : '');
     const next = toks[i + 1]?.surface_form || '';
     if (TOK_FIX[s]) r = TOK_FIX[s];
-    if (s === '来' && /^られ/.test(next)) r = 'こ';
+    if (s === '来' && /^(ら|さ)/.test(next)) r = 'こ';
     if (s === '何') r = /^(で|の|と|だ)/.test(next) ? 'なん' : 'なに';
     if (!r) { err(ctx, `no reading for ${s}`); out += s; return; }
     const aligned = alignToken(s, r);
@@ -150,11 +150,11 @@ const ALLOW = new Set(`ない かる おはよう おやすみなさい する �
  一 二 三 四 五 六 七 八 九 十 百 千 万 半 時 分 人 日 月 年 円 歳 階 語 屋 中 目 前 後 上 下 方 ごろ ぐらい くらい など 達 たち お ご
  いい よい よく いく くる いらっしゃる なる できる おく 行く 来る`.split(/\s+/));
 const OWN = {};
-const LOOSE = new Set(['A', 'B', 'じゃ', 'まして', 'でし', 'まし', 'ませ', '何で', 'だめ', '客', 'より', 'どん', 'あと', '店', 'ない', '患者', 'どの人', 'やっ', 'かる', 'ほか', 'だし', 'お先に', '通る', '作れる', 'ろう', 'おう', '何と', 'きん', 'とおり', 'なら', 'ける', '木の葉', 'とおりに', 'つけ', '長ける', 'その間', 'ときを', 'ベル']);
+const LOOSE = new Set(['A', 'B', 'じゃ', 'まして', 'でし', 'まし', 'ませ', '何で', 'だめ', '客', 'より', 'どん', 'あと', '店', 'ない', '患者', 'どの人', 'やっ', 'かる', 'ほか', 'だし', 'お先に', '通る', '作れる', 'ろう', 'おう', '何と', 'きん', 'とおり', 'なら', 'ける', '木の葉', 'とおりに', 'つけ', '長ける', 'その間', 'ときを', 'ベル', '場合', 'そる', 'くい', '来す', 'おっしゃる', 'お送り', '作れる']);
 
 // ---------- grammar guard: the lesson where a form is introduced ----------
 // fixed phrases that are vocabulary entries of their lesson, whatever their form
-const PHRASE_OK = ['見せてください', '歩いて', 'いらっしゃってください', 'お上がりください', '慣れました', '行っていらっしゃい', '行ってまいります', 'どうしようかな'];
+const PHRASE_OK = ['見せてください', '歩いて', 'いらっしゃってください', 'お上がりください', '慣れました', '行っていらっしゃい', '行ってまいります', 'どうしようかな', 'お待たせしました'];
 function guardForms(plain, l, ctx) {
   const toks = tk.tokenize(PHRASE_OK.reduce((a, w) => a.split(w).join('。'), plain).replace(/\n/g, '。'));
   toks.forEach((t, i) => {
@@ -195,7 +195,7 @@ function checkVocab(text, l, ctx) {
   for (const t of tk.tokenize(plainOf(text).replace(/\n/g, '。'))) {
     if (['助詞', '助動詞', '記号', 'フィラー'].includes(t.pos) || ['数', '接尾', '非自立'].includes(t.pos_detail_1)) continue;
     const s = t.surface_form, b = t.basic_form === '*' ? s : t.basic_form;
-    if (/^[0-9０-９]+$/.test(s) || /^[ぁ-ん]$/.test(s) || LOOSE.has(s)) continue;
+    if (/^[0-9０-９]+$/.test(s) || /^[ぁ-ん]$/.test(s) || LOOSE.has(s) || LOOSE.has(b)) continue;
     const ok = [s, b, hira(t.reading || ''), hira(b)].some(x => v.has(x) || ALLOW.has(x) || OWN[l]?.has(x));
     // a compound the tokenizer has split: the whole word exists in a card
     if (!ok && ![...v].some(w => w.length > s.length && w.includes(s) && (HAS_K.test(s) || s.length >= 3))) warn(ctx, `word «${b}» not in lessons ≤ ${l}`);
