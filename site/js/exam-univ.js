@@ -3,6 +3,7 @@
 import { $, $$, esc, furi, gtext, I, toast } from './util.js';
 import { loadScript } from './importer.js';
 import { getSets } from './store.js';
+import { addAskButton, mountAskBlock, contextText } from './exam-ask.js';
 import { buildPaper, scorePaper, pointsLabel, availability, SECTIONS, plainText } from './univ-paper.js';
 
 export { availability, SECTIONS };
@@ -70,6 +71,7 @@ export function paperView(root, ctx) {
     </section>`).join('')}
     <div class="u-end"><button type="button" class="btn primary wide" data-check>Перевірити</button></div>
   </div>`;
+  mountAskBlock($('.u-paper', root));
   const updateCount = () => {
     const f = filled();
     $('.u-count', root).textContent = `${f} / ${countBlanks}`;
@@ -198,6 +200,18 @@ function solvedHTML(row, sec) {
   }).join('');
   return `<div class="u-text" lang="ja">${html}</div>`;
 }
+/** What the AI helper sees about one item of the checked paper (read only). */
+function askContext(row, sec, ctx) {
+  const { it, res } = row;
+  const blanks = it.parts.filter(p => typeof p !== 'string');
+  const sentence = it.parts.map(p => (typeof p === 'string' ? plainText(p) : p.o ? `｛${p.o.map(plainText).join('，')}｝` : p.b ? `（${plainText(p.b)}…）` : '（　）')).join('');
+  const given = blanks.map((b, i) => { const v = res[i]?.value; return v === undefined || v === '' ? '—' : b.o ? plainText(b.o[+v]) : v; });
+  return contextText({
+    section: `Університетська версія, розділ ${sec.s}: ${sec.title}`, lesson: String(it.l),
+    question: [sentence, it.uk].filter(Boolean).join(' — '), given: given.join(', '), correct: blanks.map(firstAnswer).join(', '),
+    ok: row.allOk, point: it.pt ? ctx.mnnRef(it.pt) : '', note: explanation(row, ctx).join(' '),
+  });
+}
 function saveHistory(ctx) {
   const S = ctx.session();
   const r = scorePaper(S.paper, S.ua, S.over || {});
@@ -240,6 +254,12 @@ export function paperResult(root, ctx) {
   }).join('')}</div>`).join('')}</section>` : '<section class="panel"><p>Помилок немає 🎉</p></section>'}
   </div>`;
   ctx.wireRefs(root);
+  $$('.ex-mistake', root).forEach(el => {
+    const sec = r.sections.find(s => s.rows.some(x => x.it.id === el.dataset.id));
+    const row = sec.rows.find(x => x.it.id === el.dataset.id);
+    addAskButton(el, () => askContext(row, sec, ctx));
+  });
+  mountAskBlock($('.exam', root));
   $('[data-again]', root).onclick = () => ctx.again();
   $$('[data-right]', root).forEach(b => (b.onclick = () => {
     const id = b.closest('.ex-mistake').dataset.id;

@@ -78,13 +78,14 @@ window.addEventListener('storage', refreshStreak);
 document.addEventListener('click', () => setTimeout(refreshStreak, 0), true);
 
 // Password for saving lessons to GitHub — asked once, remembered on this device.
-setPasswordPrompt(() => new Promise(resolve => {
+setPasswordPrompt(purpose => new Promise(resolve => {
   let done = false;
   const finish = v => { if (!done) { done = true; resolve(v); } };
-  const close = modal(`<h2>Пароль для збереження</h2>
-    <p class="muted small">Щоб зберегти урок у GitHub назавжди, введіть пароль (APP_PASSWORD з налаштувань Vercel). Його буде запам’ятовано на цьому пристрої.</p>
+  const forAsk = purpose === 'ask';
+  const close = modal(`<h2>${forAsk ? 'Пароль для запитань до ШІ' : 'Пароль для збереження'}</h2>
+    <p class="muted small">${forAsk ? 'Щоб запитати ШІ' : 'Щоб зберегти урок у GitHub назавжди'}, введіть пароль (APP_PASSWORD з налаштувань Vercel). Його буде запам’ятовано на цьому пристрої.</p>
     <form><label class="field"><input class="input" type="password" name="pw" autocomplete="current-password" required></label>
-    <div class="modal-btns"><button type="button" class="btn ghost" data-cancel>Лише в браузері</button><button class="btn primary">Зберегти</button></div></form>`,
+    <div class="modal-btns"><button type="button" class="btn ghost" data-cancel>${forAsk ? 'Скасувати' : 'Лише в браузері'}</button><button class="btn primary">${forAsk ? 'Продовжити' : 'Зберегти'}</button></div></form>`,
   (m, close) => {
     const f = m.querySelector('form');
     f.pw.focus();

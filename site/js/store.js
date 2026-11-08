@@ -297,6 +297,7 @@ export const getPassword = () => { try { return localStorage.getItem(K.pw) || ''
 export const setPassword = pw => { try { pw ? localStorage.setItem(K.pw, pw) : localStorage.removeItem(K.pw); } catch { /* ignore */ } };
 let askPassword = async () => null; // set by the UI
 export const setPasswordPrompt = fn => (askPassword = fn);
+export const promptPassword = purpose => askPassword(purpose);
 
 export async function checkSyncConfigured() {
   try {

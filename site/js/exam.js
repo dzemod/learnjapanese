@@ -1,7 +1,8 @@
 // "Екзамен" tab: exam setup, presets, mixed question session, results, history and weak spots.
 // Data: data/exam.json (pre-built bank: particles, verb forms, translations, error finding — every item has an
 // explanation from IV. Граматика and a lesson/point reference) + words (sets.json), grammar.json, kanji.json.
-// Everything runs in the browser; nothing is sent anywhere except optional preset sync to GitHub.
+// Everything runs in the browser; the only things sent anywhere are the optional preset sync to GitHub and
+// questions the learner chooses to send to the AI helper (exam-ask.js → /api/ask).
 import { $, $$, esc, shuffle, furi, furiT, furiPlain, gtext, furiSay, speak, norm, toast, I, check as checkWord, today } from './util.js';
 import { state, getSets, markPresetsPending, registerPresetsPayload, syncAll } from './store.js';
 import { loadGrammar, grammarLessons } from './grammar.js';
@@ -10,6 +11,7 @@ import { conjugate, explainConj, detectForm, FORMS, formsUpTo } from './conjugat
 import { preKana, checkSentence, verdictOf, VERDICT, normJa, KANJI_RE } from './sentcheck.js';
 import { ensureTokenizer, tokenize, onTokProgress, tokProgressText } from './tokenizer.js';
 import { loadScript } from './importer.js';
+import { addAskButton, mountAskBlock, contextText, htmlText } from './exam-ask.js';
 import { paperView, paperResult, newPaper, availability as univAvail, SECTIONS as UNIV_SECTIONS, univGroups } from './exam-univ.js';
 
 const K = { presets: 'jp.examPresets', history: 'jp.examHistory', session: 'jp.examSession', ret: 'jp.examReturn', mistakes: 'jp.examMistakes', romaji: 'jp.exam.romaji' };
@@ -469,6 +471,16 @@ function whyWrong(q, given) {
   return '';
 }
 
+/** What the AI helper sees about an answered question (read only). */
+function askContext(q, a) {
+  const options = q.mode === 'choice' || q.mode === 'error' ? (q.options || []).map(o => htmlText(o.h)) : q.mode === 'tiles' ? q.tiles.map(t => plainT(t.h)) : [];
+  return contextText({
+    section: TYPES[q.type], lesson: q.lesson ? String(q.lesson) : q.src,
+    question: [q.label, htmlText(q.prompt), q.chunks ? q.chunks.map(c => plainT(c.h)).join(' ') : ''].filter(Boolean).join(' — '),
+    options, given: plainT(a?.given), correct: htmlText(q.correct), ok: !!a?.ok, point: refText(q.ref), note: plainT(q.x),
+  });
+}
+
 // ---------- session ----------
 let S = null; // { conf, qs, i, res: [{ok, given}], start, deadline }
 const persist = () => ssave(K.session, S);
@@ -623,6 +635,7 @@ function runView(root, api) {
         <div class="ex-answer"></div>
         <div class="ex-feedback"></div>
       </div></div>`;
+    mountAskBlock($('.exam-run', root));
     $$('[data-play], [data-say]', root).forEach(b => (b.onclick = () => speak(q.say)));
     $('[data-slow]', root)?.addEventListener('click', () => speak(q.say, true));
     renderAnswer(q, $('.ex-answer', root), ans);
@@ -664,6 +677,7 @@ function runView(root, api) {
     wireRefs(root);
     const next = () => { S.res[S.i] = S.answered; S.answered = null; S.i++; persist(); draw(); window.scrollTo(0, 0); };
     $('[data-next]', root).onclick = next;
+    addAskButton($('.ex-feedback', root), () => askContext(q, S.answered), $('[data-next]', root));
     $('[data-next]', root).focus({ preventScroll: true });
     $('.ex-feedback', root).scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   };
@@ -724,6 +738,7 @@ function runView(root, api) {
     $('[data-flag]', root).onclick = () => { S.answered.flag = true; persist(); addSavedMistake(q); feedbackSent(q); toast('Додано до помилок — їх можна повторити окремо'); };
     const next = () => { S.res[S.i] = S.answered; S.answered = null; S.i++; persist(); draw(); window.scrollTo(0, 0); };
     $('[data-next]', root).onclick = next;
+    addAskButton($('.ex-feedback', root), () => askContext(q, S.answered), $('[data-next]', root));
     $('[data-next]', root).focus({ preventScroll: true });
     $('.ex-feedback', root).scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
@@ -779,6 +794,7 @@ function runView(root, api) {
     $('[data-flag]', root).onclick = () => { S.answered.flag = true; persist(); addSavedMistake(q); feedbackWT(q); toast('Додано до помилок — їх можна повторити окремо'); };
     const next = () => { S.res[S.i] = S.answered; S.answered = null; S.i++; persist(); draw(); window.scrollTo(0, 0); };
     $('[data-next]', root).onclick = next;
+    addAskButton($('.ex-feedback', root), () => askContext(q, S.answered), $('[data-next]', root));
     $('[data-next]', root).focus({ preventScroll: true });
     $('.ex-feedback', root).scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
@@ -881,6 +897,7 @@ function runView(root, api) {
   document.addEventListener('keydown', onKey);
   function onKey(e) {
     if (!location.hash.startsWith('#/exam/run')) return document.removeEventListener('keydown', onKey);
+    if (e.target.closest?.('.ask-zone, .modal-back')) return; // typing to the helper or a dialog must not move the exam on
     if (e.key === 'Enter' && $('[data-next]', root) && document.activeElement?.tagName !== 'TEXTAREA') { e.preventDefault(); $('[data-next]', root).click(); }
     else if (/^[1-4]$/.test(e.key) && !/INPUT|TEXTAREA/.test(document.activeElement?.tagName) && !S.answered) $$('.ex-answer .choice', root)[+e.key - 1]?.click();
   }
@@ -935,6 +952,8 @@ function resultView(root) {
   </div>`;
   wireRefs(root);
   $$('[data-say-c]', root).forEach(b => (b.onclick = () => speak(wrong[+b.closest('.ex-mistake').dataset.i]?.q.say)));
+  $$('.ex-mistake', root).forEach(el => { const { q, r } = wrong[+el.dataset.i]; addAskButton(el, () => askContext(q, r)); });
+  mountAskBlock($('.exam', root));
   $('[data-repeat]', root)?.addEventListener('click', () => {
     S = { conf: { ...S.conf, name: (S.conf.name || 'Екзамен') + ' — помилки', timer: 0 }, qs: shuffle(wrong.map(x => x.q)), i: 0, res: [], start: Date.now(), deadline: 0, answered: null };
     persist();
