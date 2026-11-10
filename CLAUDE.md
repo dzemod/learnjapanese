@@ -60,14 +60,12 @@
   - Bank `site/data/exam-univ.json` built by `node tools/build-exam-univ.mjs [--review]` from `tools/exam-univ/L*.js` (plain Japanese, DSL in the tool's header: `[particle|alt]`, `(base=answer|alt)`, `<a|*b|c>`, antonyms `'a=b|c'`). Readings are automatic (numbers + counters by rule, sets/kanji/grammar words, then Kuromoji with `TOK_FIX`; explicit `{漢字|かな}` wins). The build checks every word against sets.json lessons ≤ l, forms not taught yet, kanji without reading. Warnings must be 0; `--review` lists readings not seen in the textbook markup. Distractors must really be wrong in that sentence.
   - Tests: `node tools/test-univ.mjs` (logic + bank), `node tools/qa-univ.mjs` (browser, 1920 + 375 px, panel layout, paper, results, history; output `qa/univ/`).
 
-## AI helper (Exam tab) — `site/api/ask.js`, `site/js/exam-ask.js`
-- **`GEMINI_API_KEY` must be set in Vercel → Settings → Environment Variables** (Production), then redeploy. It stays on the server: never in a file, a log or the client. `APP_PASSWORD` is shared with `/api/save-set`.
-- Free key: open <https://aistudio.google.com/apikey>, sign in with a Google account, «Create API key», copy it into Vercel. No card is needed; do not enable billing on that project, so it stays on the free tier. Google may use free-tier prompts to improve its products, so send nothing private.
-- Check the setup: `GET /api/ask` returns `{"configured":true}`. Model: the `MODEL` constant in `ask.js`; if Google retires it, pick another free model from the pricing page.
-- UI: «Чому так? Запитати ШІ» after each answer and on each mistake in the results, «Запитай ШІ» block at the bottom of run, paper and results pages. It only reads the exam session and must never write to it. Last 5 messages: sessionStorage `jp.examAsk`.
-- Limits: 1000 characters of question + context, `maxOutputTokens` 512, 15 requests per IP per 10 minutes (in memory, so per serverless instance).
-- Tests: `node tools/qa-ask.mjs` (backend with mocked fetch + secret scan of `site/`), `node tools/qa-ask-ui.mjs` (browser, 1920 + 375 px, mocked `/api/ask`). Neither calls Google.
-- Local run with a fake key: `GEMINI_API_KEY=fake APP_PASSWORD=test npx vercel dev` from `site/`. The page works and Google refuses the key, so the helper shows «Не вдалося отримати відповідь, спробуйте ще раз». `.env*` is gitignored.
+## AI helper (Exam tab) — `site/js/exam-ask.js` (Puter.js, no key)
+- The AI helper runs on **Puter.js** in the browser (https://docs.puter.com, script `https://js.puter.com/v2/`, `puter.ai.chat`). No API key, no server function, no env variable: each learner signs in to their own free Puter account (Puter's “user-pays” model with a free monthly allowance) on the first question. The site's `APP_PASSWORD` is not used by the helper (only by `/api/save-set`).
+- The script is added only by the Exam tab (`loadPuter()` in `mountAskBlock`, with `defer`), never in `index.html`. Sign-in (`puter.auth.isSignedIn` / `signIn`) runs on the click on «Надіслати» so the popup is not blocked; cancelled/blocked → «Щоб отримати пояснення, увійдіть у безкоштовний акаунт Puter», the exam keeps working.
+- Model: `MODELS` in `exam-ask.js` = `claude-haiku-5-5` (cheapest strong model on Puter, 2026-11), fallback `gpt-5.4-nano` (Puter's default). Current list: `https://api.puter.com/puterai/chat/models/details` or `puter.ai.listModels()`. System prompt = `SYSTEM` in `exam-ask.js`, sent with every request. Errors → «Не вдалося отримати відповідь, спробуйте ще раз» (real error code/message in the console only).
+- UI: «Чому так? Запитати ШІ» after each answer and on each mistake in the results, «Запитай ШІ» block at the bottom of run, paper and results pages. It only reads the exam session and must never write to it. Last 5 messages: sessionStorage `jp.examAsk`. Limit 1000 characters of question + context.
+- Tests: `node tools/qa-ask.mjs` (static checks + scan of `site/` and `api/` for Google/Gemini keys), `node tools/qa-ask-ui.mjs` (browser, 1920 + 375 px, Puter.js replaced by a mock: sign-in cancelled/blocked/ok, answers, errors, fallback, script missing). Neither calls Puter.
 
 ## Progress of the textbook import (update after each batch)
 - Grammar: ALL lessons 1–50 done (exam bank 1–50). PDF page maps: skill `textbook-pages`.
@@ -84,7 +82,7 @@
 - Editing on the site: inline edit / add / delete on the set page, edit buttons inside every study mode, bulk edit at `#/set/<id>/edit` (reorder + edit all), undo toast, per-word history (last 5 versions, browser only). Edited sets are kept as a local copy (`jp.custom.newSets`) until the redeployed sets.json matches, so nothing is lost if saving fails.
 - Card ids must never change when editing — learning progress is keyed by `setId/cardId`.
 - Progress, stars, unsynced lessons, streak, best times: browser localStorage (`jp.*`), Export/Import backup on the home page.
-- Everything must stay 100% free: no paid APIs. The only AI API is the Gemini free tier, used by the exam's AI helper (see «AI helper»).
+- Everything must stay 100% free: no paid APIs. The exam's AI helper runs on Puter.js with each learner's own free Puter account — no key, nothing billed to the site (see «AI helper»).
 - Run locally: `npx serve site` (the save API only works on Vercel or with `vercel dev`).
 
 ## Review (REVIEW.md)
