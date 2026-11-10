@@ -260,6 +260,92 @@ for (const [kind, width, height] of [['desktop', 1920, 1080], ['mobile', 375, 78
   ok(await page.locator('.u-result .ask-block').count() === 1, T('block on the paper results'));
   await layout('paper results');
   await page.screenshot({ path: `${OUT}/${kind}-univ-results.png`, clip: { x: 0, y: 0, width, height: 1500 }, fullPage: true });
+
+  // ---------- grammar lessons: the same block at the bottom of every lesson ----------
+  const G = JSON.parse(fs.readFileSync(path.join(ROOT, 'site/data/grammar.json'), 'utf8')).lessons;
+  await page.evaluate(() => { for (const k of Object.keys(sessionStorage)) if (k.startsWith('jp.ask.grammar.')) sessionStorage.removeItem(k); });
+  for (const n of [1, 26, 50]) {
+    const L = G.find(l => l.lesson === n);
+    await page.goto(URL_ + `#/grammar/${n}`, { waitUntil: 'networkidle' });
+    await page.waitForSelector('.grammar-lesson .ask-block');
+    ok(await page.locator('.g-card').count() === L.points.length, T(`grammar ${n}: all points shown`));
+    ok(await page.locator('.ask-block').count() === 1 && await page.evaluate(() => { const b = document.querySelector('.grammar-lesson .ask-block'); return b.nextElementSibling?.classList.contains('g-pager') && b.previousElementSibling?.classList.contains('g-cards'); }), T(`grammar ${n}: block between the lesson content and the pager`));
+    ok(await page.locator('script[src="https://js.puter.com/v2/"][defer]').count() === 1, T(`grammar ${n}: Puter.js loaded once, with defer`));
+    ok(await page.locator('.ask-block [aria-live="polite"]').count() === 1, T(`grammar ${n}: aria-live`));
+    ok(await page.locator('.ask-block .ask-select option').count() === L.points.length + 1, T(`grammar ${n}: «Увесь урок» + every point in the select`));
+    ok((await page.locator('.ask-block textarea').inputValue()) === '' && await page.locator('.ask-block .ask-text').count() === 0, T(`grammar ${n}: no exam question when not coming from the exam`));
+    ok(await page.evaluate(() => getComputedStyle(document.querySelector('.ask-block textarea')).fontFamily === getComputedStyle(document.querySelector('.g-ja')).fontFamily), T(`grammar ${n}: textarea uses the Japanese font stack`), await page.evaluate(() => getComputedStyle(document.querySelector('.ask-block textarea')).fontFamily + ' | ' + getComputedStyle(document.querySelector('.g-ja')).fontFamily));
+    // a question about the whole lesson
+    await page.locator('.ask-block textarea').fill(`Питання про урок ${n}`);
+    await page.locator('.ask-block .ask-send').click();
+    await page.waitForFunction(q => [...document.querySelectorAll('.ask-block .ask-msg.me')].some(m => m.textContent === q), `Питання про урок ${n}`);
+    let c = (await pm()).calls.at(-1);
+    ok(c.messages[0].content.startsWith('You are a patient Japanese teacher') && /Answer in Ukrainian/.test(c.messages[0].content) && /only in kana/.test(c.messages[0].content), T(`grammar ${n}: same rules in the system prompt`));
+    ok(c.messages[0].content.includes(`Minna no Nihongo, урок ${n}. Пункти:`) && L.points.every((p, i) => c.messages[0].content.includes(`Урок ${n}, пункт ${i + 1}:`)), T(`grammar ${n}: whole lesson in the system prompt`));
+    ok(c.messages[1].content === `Питання про урок ${n}`, T(`grammar ${n}: user message = the question`), c.messages[1].content);
+    // a question about one point: title, textbook explanation, examples and «Детальніше»
+    const pi = L.points.length > 1 ? 1 : 0, P = L.points[pi];
+    await page.locator('.ask-block .ask-select').selectOption(String(pi + 1));
+    await page.locator('.ask-block .ask-ctx summary').click();
+    ok((await page.locator('.ask-block .ask-note').innerText()).includes(`пункт ${pi + 1}`), T(`grammar ${n}: «Що побачить ШІ» follows the select`));
+    await page.locator('.ask-block textarea').fill('Поясни цей пункт');
+    const nCalls = (await pm()).calls.length;
+    await page.locator('.ask-block .ask-send').click();
+    await page.waitForFunction(k => window.__pm.calls.length === k, nCalls + 1);
+    c = (await pm()).calls.at(-1);
+    const sys = c.messages[0].content, plain = s => String(s).replace(/\{([^|}]+)\|([^}]+)\}/g, '$1($2)');
+    const ex = P.blocks.find(b => b.ex != null), para = P.blocks.find(b => b.p), det = (P.details || []).find(b => b.p || b.ex);
+    ok(sys.includes(`Урок ${n}, пункт ${pi + 1}: ${plain(P.title)}`) && !sys.includes(`Урок ${n}, пункт ${pi + 2}:`), T(`grammar ${n}: point title, only that point`));
+    ok(!para || sys.includes(plain(para.p)), T(`grammar ${n}: textbook explanation`));
+    ok(!ex || (sys.includes(plain(ex.ex)) && (!ex.uk || sys.includes(plain(ex.uk)))), T(`grammar ${n}: example with translation`));
+    ok(!det || (sys.includes('Детальніше') && sys.includes(plain(det.p ?? det.ex))), T(`grammar ${n}: «Детальніше» text`), det ? 'missing' : '');
+    ok(!/\{[^|}]+\|/.test(sys), T(`grammar ${n}: no furigana markup left in the material`));
+    await page.waitForFunction(() => document.querySelectorAll('.ask-block .ask-msg.ai').length >= 2);
+    const lg = await page.evaluate(k => JSON.parse(sessionStorage.getItem(k) || '[]'), `jp.ask.grammar.${n}`);
+    ok(lg.length === 4, T(`grammar ${n}: own history in sessionStorage`), lg.length);
+    // the lesson itself still works: «Детальніше», collapse, pager
+    const more = page.locator('.g-more').first();
+    await more.locator('summary').click();
+    ok(await more.evaluate(d => d.open), T(`grammar ${n}: «Детальніше» opens`));
+    await page.locator('[data-toggle]').click();
+    ok(await page.evaluate(() => [...document.querySelectorAll('.g-card')].every(d => !d.open)), T(`grammar ${n}: «Згорнути все»`));
+    await page.locator('[data-toggle]').click();
+    await layout(`grammar ${n}`);
+    await page.screenshot({ path: `${OUT}/${kind}-grammar-${n}.png`, fullPage: true });
+    await page.locator('.grammar-lesson .ask-block').screenshot({ path: `${OUT}/${kind}-grammar-${n}-block.png` });
+    const nextL = G.find(l => l.lesson > n), prevL = G.filter(l => l.lesson < n).at(-1);
+    const go = nextL || prevL;
+    await page.locator(`.g-pager a[href="#/grammar/${go.lesson}"]`).click();
+    await page.waitForFunction(h => location.hash === h && document.querySelector('.set-title')?.textContent.includes(`Урок ${h.split('/')[2]} `), `#/grammar/${go.lesson}`);
+    await page.waitForSelector('.grammar-lesson .ask-block');
+    ok(await page.locator('.ask-block .ask-msg').count() === 0, T(`grammar ${n} → ${go.lesson}: pager works, the other lesson has its own (empty) history`));
+  }
+  await page.goto(URL_ + '#/grammar/1', { waitUntil: 'networkidle' });
+  await page.waitForSelector('.grammar-lesson .ask-block .ask-msg');
+  ok(await page.locator('.ask-block .ask-msg').count() === 4, T('grammar 1: history is back on return'));
+  await page.goto(URL_ + '#/grammar/1/1-2', { waitUntil: 'networkidle' });
+  await page.waitForSelector('.grammar-lesson .ask-block');
+  ok((await page.locator('.ask-block .ask-select').inputValue()) === '2', T('a link to a point preselects that point'));
+
+  // ---------- exam → reference link → grammar: the question goes with it ----------
+  await startOn(page);
+  const qx = await page.evaluate(() => { const S = JSON.parse(sessionStorage.getItem('jp.examSession')); return S.qs[S.i]; });
+  await page.locator(`.ex-answer .choice:not([data-v="${qx.answer}"])`).first().click();
+  await page.waitForSelector('.ex-ref');
+  await page.locator('.ex-ref').first().click();
+  await page.waitForSelector('.grammar-lesson .ask-block');
+  const gctx = await page.locator('.ask-block .ask-text').innerText();
+  ok(gctx.includes('Розділ: Частки') && gctx.includes('неправильно') && gctx.includes(`Урок: ${qx.lesson}`), T('exam question shown in the grammar block'), gctx);
+  ok((await page.locator('.ask-block textarea').inputValue()).startsWith('Поясни, будь ласка'), T('exam prefill in the grammar block'));
+  ok(await page.locator('#exam-return').count() === 1, T('«Повернутися до екзамену» still there'));
+  await page.locator('.ask-block .ask-send').click();
+  await page.waitForFunction(() => document.querySelectorAll('.ask-block .ask-msg.ai').length > 0);
+  const cx = (await pm()).calls.at(-1);
+  ok(cx.messages[1].content.startsWith(gctx) && cx.messages[0].content.includes('Minna no Nihongo') && /Урок \d+, пункт \d+:/.test(cx.messages[0].content), T('exam question in the user message + lesson material in the system prompt'));
+  await layout('grammar from exam');
+  await page.locator('#exam-return').click();
+  await page.waitForSelector('[data-next]');
+  ok(await page.locator('#exam-return').count() === 0, T('back in the exam'));
   await ctx.close();
 
   // ---------- not signed in: cancelled / blocked sign-in, then a successful one ----------

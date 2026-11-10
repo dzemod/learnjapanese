@@ -33,7 +33,7 @@ for (const f of files) {
 }
 
 // ---------- the helper ----------
-const src = fs.readFileSync(path.join(ROOT, 'site/js/exam-ask.js'), 'utf8');
+const src = fs.readFileSync(path.join(ROOT, 'site/js/ai-helper.js'), 'utf8');
 ok(src.includes("'https://js.puter.com/v2/'"), 'Puter.js from its documented URL');
 ok(!/fetch\(\s*['"`]api\/ask/.test(src) && !/password/i.test(src.replace(/\/\/.*$/gm, '')), 'no /api/ask call and no password in the helper');
 ok(/s\.defer = true/.test(src), 'the script is added with defer');
@@ -45,10 +45,13 @@ for (const phrase of ['patient Japanese teacher', 'Minna no Nihongo', 'Answer in
   ok(src.includes(phrase), `system prompt: ${phrase}`);
 ok(/sessionStorage\.getItem[^\n]*\}\s*catch/.test(src) && /sessionStorage\.setItem[^\n]*\}\s*catch/.test(src), 'sessionStorage in try/catch');
 ok(/aria-live="polite"/.test(src) && /MAX_INPUT = 1000/.test(src), 'aria-live answer area, 1000-character limit');
-// Puter.js only on the Exam tab: not in the page, only the exam modules use the helper
+// Puter.js only where the helper is: not in the page; only the exam modules and the grammar lesson use the helper
 ok(!/puter/i.test(fs.readFileSync(path.join(ROOT, 'site/index.html'), 'utf8')), 'index.html does not load Puter.js');
-const users = fs.readdirSync(path.join(ROOT, 'site/js')).filter(f => f !== 'exam-ask.js' && /exam-ask\.js|puter/i.test(fs.readFileSync(path.join(ROOT, 'site/js', f), 'utf8')));
-ok(users.every(f => f.startsWith('exam')), 'only exam modules use the helper', users.join(', '));
+const users = fs.readdirSync(path.join(ROOT, 'site/js')).filter(f => f !== 'ai-helper.js' && /ai-helper\.js|puter/i.test(fs.readFileSync(path.join(ROOT, 'site/js', f), 'utf8')));
+ok(users.every(f => f.startsWith('exam') || f === 'grammar.js') && users.includes('grammar.js') && users.includes('exam.js'), 'the exam modules and grammar.js use the one shared helper', users.join(', '));
+ok(!fs.existsSync(path.join(ROOT, 'site/js/exam-ask.js')), 'no second copy: exam-ask.js is gone');
+ok(src.includes('`${SYSTEM}\\n\\n${MATERIAL_INTRO}\\n\\n${material}`'), 'lesson material goes into the system prompt after the rules');
+ok(/logKey: `jp\.ask\.grammar\.\$\{n\}`/.test(fs.readFileSync(path.join(ROOT, 'site/js/grammar.js'), 'utf8')), 'grammar: own history per lesson');
 
 console.log(`qa-ask: ${passed} passed, ${fails} failed`);
 process.exit(fails ? 1 : 0);
