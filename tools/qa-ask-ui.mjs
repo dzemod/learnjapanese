@@ -1,4 +1,6 @@
-// Browser QA of the exam's AI helper (1920 and 375 px). /api/ask is mocked, so no key and no network to Google.
+// Browser QA of the exam's AI helper (1920 and 375 px). The Puter.js script (https://js.puter.com/v2/) is replaced by a
+// mock, so nothing reaches Puter and no account is needed. The mock is steered through window.__pm:
+//   signedIn, signIn ('ok' | 'cancel' | 'blocked'), reply { text | parts | reject }, queue [one-off replies], hold, calls
 //   npm i --no-save playwright-core   (or QA_MODULES=<dir with node_modules>), Chrome installed
 //   node tools/qa-ask-ui.mjs          → screenshots in qa/ask/
 import fs from 'fs';
@@ -26,25 +28,58 @@ let passed = 0;
 const issues = [];
 const ok = (c, name, extra = '') => { if (process.env.QA_VERBOSE) console.log(new Date().toISOString().slice(11, 19), name); if (c) passed++; else { issues.push(`${name} ${extra}`); console.log('FAIL', name, extra); } };
 const FAIL = 'Не вдалося отримати відповідь, спробуйте ще раз';
-const LIMIT = 'Ліміт безкоштовних запитів вичерпано, спробуйте пізніше';
+const SIGNIN = 'Щоб отримати пояснення, увійдіть у безкоштовний акаунт Puter';
+const PUTER = /^https:\/\/js\.puter\.com\/v2\//;
+
+// The mock SDK: the documented calls only (auth.isSignedIn, auth.signIn, ai.chat(messages, testMode, options)).
+const MOCK = `(() => {
+  const M = window.__pm = Object.assign({ signedIn: false, signIn: 'ok', reply: { text: 'ок' }, queue: [], calls: [], signIns: 0, hold: null }, window.__pm || {});
+  window.puter = {
+    auth: {
+      isSignedIn: () => M.signedIn,
+      signIn: async () => {
+        M.signIns++;
+        if (M.signIn === 'ok') { M.signedIn = true; return { success: true }; }
+        throw M.signIn === 'blocked' ? { error: 'popup_blocked', msg: 'Popup blocked' } : { error: 'auth_window_closed', msg: 'The user closed the window' };
+      },
+    },
+    ai: {
+      chat: async (messages, testMode, options) => {
+        M.calls.push({ messages, testMode, options });
+        if (M.hold) await M.hold;
+        const r = M.queue.length ? M.queue.shift() : M.reply;
+        if (r.reject) throw r.reject;
+        return { message: { role: 'assistant', content: r.parts || r.text } };
+      },
+    },
+  };
+})();`;
+const mockPuter = async (ctx, init = {}) => {
+  await ctx.addInitScript(s => { window.__pm = s; }, init);
+  await ctx.route(PUTER, route => route.fulfill({ status: 200, contentType: 'text/javascript', body: MOCK }));
+};
+const PRESET = (extra = {}) => JSON.stringify({ name: '', part: 'I', from: 1, to: 5, tsAdded: true, wtAdded: true, mine: false, kanji: false, kbook: 'k300', kmode: 'lessons', kfrom: 1, kto: 2, krand: 30, types: ['p'], count: 3, mock: false, timer: 0, ...extra });
+const startOn = async (page, extra) => {
+  await page.goto(URL_ + '#/exam', { waitUntil: 'networkidle' });
+  await page.evaluate(p => { localStorage.setItem('jp.examPresets.last', p); sessionStorage.removeItem('jp.examSession'); }, PRESET(extra));
+  await page.reload({ waitUntil: 'networkidle' });
+  await page.waitForSelector('[data-start]');
+  await page.locator('[data-start]').click();
+  await page.waitForSelector('.ex-answer .choice');
+};
 
 const browser = await chromium.launch({ executablePath: process.env.QA_CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe', headless: true });
 for (const [kind, width, height] of [['desktop', 1920, 1080], ['mobile', 375, 780]]) {
   const T = s => `${kind}: ${s}`;
   const ctx = await browser.newContext({ viewport: { width, height }, hasTouch: kind === 'mobile', isMobile: kind === 'mobile', locale: 'uk-UA' });
-  await ctx.addInitScript(() => { try { localStorage.setItem('jp.pw', 'test'); } catch { /* */ } });
+  await mockPuter(ctx, { signedIn: true, reply: { text: 'Тут потрібна **は**: 私(わたし)は — тема речення.\nУрок 1.' } });
   const page = await ctx.newPage();
   const errs = [];
   page.on('pageerror', e => errs.push(String(e)));
-  page.on('console', m => { if (m.type() === 'error' && !/Failed to load resource|net::ERR/.test(m.text())) errs.push(m.text()); });
+  page.on('console', m => { if (m.type() === 'error' && !/Failed to load resource|net::ERR|^ask: /.test(m.text())) errs.push(m.text()); });
   page.on('dialog', d => d.accept());
-  // mock of /api/ask: the test sets the next reply and can hold it to look at the loading state
-  const api = { requests: [], reply: { status: 200, body: { answer: 'Тут потрібна **は**: 私(わたし)は — тема речення.\nУрок 1.', truncated: false } }, hold: null };
-  await page.route('**/api/ask', async route => {
-    api.requests.push(JSON.parse(route.request().postData()));
-    if (api.hold) await api.hold;
-    await route.fulfill({ status: api.reply.status, contentType: 'application/json', body: JSON.stringify(api.reply.body) });
-  });
+  const pm = () => page.evaluate(() => ({ calls: window.__pm.calls, signIns: window.__pm.signIns }));
+  const setPm = v => page.evaluate(v => Object.assign(window.__pm, v), v);
   const layout = async step => {
     const r = await page.evaluate(() => {
       const w = document.documentElement.clientWidth, out = [];
@@ -62,21 +97,18 @@ for (const [kind, width, height] of [['desktop', 1920, 1080], ['mobile', 375, 78
   const session = () => page.evaluate(() => sessionStorage.getItem('jp.examSession'));
   const results = () => page.evaluate(() => localStorage.getItem('jp.examHistory'));
   const log = () => page.evaluate(() => JSON.parse(sessionStorage.getItem('jp.examAsk') || '[]'));
-  const startExam = async () => {
-    await page.goto(URL_ + '#/exam', { waitUntil: 'networkidle' });
-    await page.evaluate(() => {
-      localStorage.setItem('jp.examPresets.last', JSON.stringify({ name: '', part: 'I', from: 1, to: 5, tsAdded: true, wtAdded: true, mine: false, kanji: false, kbook: 'k300', kmode: 'lessons', kfrom: 1, kto: 2, krand: 30, types: ['p'], count: 3, mock: false, timer: 30 }));
-      sessionStorage.removeItem('jp.examSession');
-    });
-    await page.reload({ waitUntil: 'networkidle' });
-    await page.waitForSelector('[data-start]');
-    await page.locator('[data-start]').click();
-    await page.waitForSelector('.ex-answer .choice');
-  };
+
+  // ---------- the script is loaded only on the Exam tab, with defer ----------
+  await page.goto(URL_ + '#/', { waitUntil: 'networkidle' });
+  ok(await page.locator('script[src*="puter.com"]').count() === 0, T('no Puter.js on the Words tab'));
+  await page.goto(URL_ + '#/grammar', { waitUntil: 'networkidle' });
+  ok(await page.locator('script[src*="puter.com"]').count() === 0, T('no Puter.js on the Grammar tab'));
 
   // ---------- normal exam ----------
-  await startExam();
+  await startOn(page, { timer: 30 });
+  ok(await page.locator('script[src="https://js.puter.com/v2/"][defer]').count() === 1, T('Puter.js loaded once on the Exam tab, with defer'));
   ok(await page.locator('.ask-block textarea').count() === 1, T('«Запитай ШІ» block is there before answering'));
+  ok(await page.locator('.ask-block [aria-live="polite"]').count() === 1, T('answer area has aria-live'));
   ok(await page.locator('.ask-open').count() === 0, T('no «Чому так?» before answering'));
   await layout('question');
   const q0 = await page.evaluate(() => { const S = JSON.parse(sessionStorage.getItem('jp.examSession')); return S.qs[S.i]; });
@@ -93,20 +125,22 @@ for (const [kind, width, height] of [['desktop', 1920, 1080], ['mobile', 375, 78
   await layout('panel open');
   await page.screenshot({ path: `${OUT}/${kind}-panel.png`, fullPage: true });
 
-  // loading state, then the answer; the mock's text must be escaped
-  let release;
-  api.hold = new Promise(r => (release = r));
+  // loading state, then the answer
+  await page.evaluate(() => { window.__pm.hold = new Promise(r => (window.__release = r)); });
   await page.locator('.ask-panel .ask-send').click();
   await page.waitForSelector('.ask-panel .spinner');
   ok(await page.locator('.ask-panel .ask-send').isDisabled(), T('button disabled while waiting'));
   ok(await page.locator('.ask-block .ask-send').isDisabled(), T('bottom button disabled too: one request at a time'));
   await page.screenshot({ path: `${OUT}/${kind}-loading.png`, fullPage: true });
-  release(); api.hold = null;
+  await page.evaluate(() => { window.__pm.hold = null; window.__release(); });
   await page.waitForSelector('.ask-panel .ask-msg.ai');
   ok(!(await page.locator('.ask-panel .ask-send').isDisabled()), T('button enabled again'));
-  const req = api.requests.at(-1);
-  ok(req.password === 'test' && req.context === ctxText && req.question.length > 0, T('request carries question, context and password'), JSON.stringify(req).slice(0, 200));
-  ok(req.question.length + req.context.length <= 1000, T('request is within 1000 characters'));
+  const call = (await pm()).calls.at(-1);
+  const [sys, user] = call.messages;
+  ok(sys.role === 'system' && /Minna no Nihongo/.test(sys.content) && /Answer in Ukrainian/.test(sys.content) && /only in kana/.test(sys.content) && /contact the developer/.test(sys.content), T('system prompt sent with the request'), sys.content.slice(0, 80));
+  ok(user.role === 'user' && user.content.startsWith(ctxText) && user.content.includes('Запитання учня: Поясни'), T('user message carries context and question'), user.content.slice(0, 120));
+  ok(call.testMode === false && call.options.model === 'claude-haiku-5-5' && call.options.max_tokens > 0, T('documented call: chat(messages, false, { model, max_tokens })'), JSON.stringify(call.options));
+  ok((await pm()).signIns === 0, T('no sign-in when already signed in'));
   ok((await page.locator('.ask-panel .ask-msg b').innerText()) === 'は', T('**bold** of the answer'));
   await layout('answer');
   ok((await session()) === before.session, T('session (scoring, timer) untouched by the helper'));
@@ -120,26 +154,35 @@ for (const [kind, width, height] of [['desktop', 1920, 1080], ['mobile', 375, 78
   await page.waitForTimeout(100);
   ok((await page.evaluate(() => JSON.parse(sessionStorage.getItem('jp.examSession')).i)) === iBefore, T('Enter in the helper does not skip the question'));
 
-  // errors: exactly the agreed text, and the typed question is kept
+  // errors: exactly the agreed text, the typed question is kept, the fallback model is tried once
   await page.locator('.ask-block textarea').fill('Що таке は?');
-  for (const [status, body, text] of [[429, { code: 'quota', error: LIMIT }, LIMIT], [502, { code: 'upstream', error: FAIL }, FAIL], [404, null, FAIL]]) {
-    api.reply = { status, body };
+  for (const [name, setup, text, calls] of [
+    ['model unavailable', { queue: [{ reject: { error: { code: 'model_not_found', message: 'no such model' } } }, { reject: { error: { code: 'model_not_found', message: 'no such model' } } }] }, FAIL, 2],
+    ['service error', { queue: [{ reject: new Error('500 Internal') }, { reject: new Error('500 Internal') }] }, FAIL, 2],
+    ['empty answer', { queue: [{ text: '' }, { text: '' }] }, FAIL, 2],
+    ['auth error from chat', { queue: [{ reject: { error: { code: 'token_auth_failed', message: 'auth' } } }] }, SIGNIN, 1],
+  ]) {
+    const n0 = (await pm()).calls.length;
+    await setPm(setup);
     await page.locator('.ask-block .ask-send').click();
     await page.waitForSelector('.ask-block .ask-err');
-    ok((await page.locator('.ask-block .ask-err').innerText()) === text, T(`error text for ${status}`));
-    ok((await page.locator('.ask-block textarea').inputValue()) === 'Що таке は?', T(`question kept after ${status}`));
+    ok((await page.locator('.ask-block .ask-err').innerText()) === text, T(`error text: ${name}`), await page.locator('.ask-block .ask-err').innerText());
+    ok((await pm()).calls.length - n0 === calls, T(`${name}: ${calls} model call(s)`), (await pm()).calls.length - n0);
+    ok((await page.locator('.ask-block textarea').inputValue()) === 'Що таке は?', T(`question kept after: ${name}`));
   }
+  const fb = (await pm()).calls.slice(-3, -1).map(c => c.options.model);
+  ok(fb[0] === 'claude-haiku-5-5' && fb[1] === 'gpt-5.4-nano', T('fallback model after a failure'), fb.join(', '));
   await layout('error');
-  // free-form question: no context; markup in the answer is shown as text
-  api.reply = { status: 200, body: { answer: '<img src=x onerror="window.__xss=1"> は — тема.', truncated: true } };
+  // the fallback answers; a list of parts is read too; markup in the answer is shown as text
+  await setPm({ queue: [{ reject: new Error('busy') }, { parts: [{ type: 'text', text: '<img src=x onerror="window.__xss=1"> は — ' }, { type: 'text', text: 'тема.' }] }] });
   await page.locator('.ask-block .ask-send').click();
-  await page.waitForFunction(() => [...document.querySelectorAll('.ask-block .ask-msg.ai')].some(m => m.textContent.includes('обрізано')));
-  ok(api.requests.at(-1).context === '', T('free-form question has no context'));
+  await page.waitForFunction(() => [...document.querySelectorAll('.ask-block .ask-msg.ai')].some(m => m.textContent.includes('тема.')));
+  ok(!(await pm()).calls.at(-1).messages[1].content.includes('Розділ:'), T('free-form question has no context'));
   ok((await page.locator('.ask-block textarea').inputValue()) === '', T('box cleared after success'));
   ok(await page.evaluate(() => !window.__xss && !document.querySelector('.ask-msg img')), T('the answer cannot inject markup'));
-  ok((await page.locator('.ask-block .ask-msg.ai').last().innerText()).includes('обрізано'), T('truncated answer is marked'));
 
   // only the last 5 messages are kept, and they survive the next question
+  await setPm({ reply: { text: 'Так.' } });
   for (let i = 0; i < 2; i++) {
     await page.locator('.ask-block textarea').fill(`Питання ${i}`);
     await page.locator('.ask-block .ask-send').click();
@@ -155,7 +198,6 @@ for (const [kind, width, height] of [['desktop', 1920, 1080], ['mobile', 375, 78
   await page.screenshot({ path: `${OUT}/${kind}-history.png`, fullPage: true });
 
   // a correct answer gets the button too; then the results page
-  api.reply = { status: 200, body: { answer: 'Так, правильно.', truncated: false } };
   for (let i = 0; i < 2; i++) {
     const q = await page.evaluate(() => { const S = JSON.parse(sessionStorage.getItem('jp.examSession')); return S.qs[S.i]; });
     await page.locator(`.ex-answer .choice[data-v="${q.answer}"]`).click();
@@ -171,16 +213,14 @@ for (const [kind, width, height] of [['desktop', 1920, 1080], ['mobile', 375, 78
   await page.locator('.ex-mistake .ask-send').click();
   await page.waitForSelector('.ex-mistake .ask-msg.ai');
   ok(await page.locator('.ask-block').count() === 1, T('block on the results page'));
+  ok(await page.locator('script[src*="puter.com"]').count() === 1, T('Puter.js is not added twice'));
   await layout('results');
   await page.screenshot({ path: `${OUT}/${kind}-results.png`, fullPage: true });
 
   // the typed task types have their own feedback code
   for (const [type, form] of [['ts', '.ex-sentform'], ['wt', '.ex-wtform']]) {
     await page.goto(URL_ + '#/exam', { waitUntil: 'networkidle' });
-    await page.evaluate(t => {
-      localStorage.setItem('jp.examPresets.last', JSON.stringify({ name: '', part: 'I', from: 1, to: 5, tsAdded: true, wtAdded: true, mine: false, kanji: false, kbook: 'k300', kmode: 'lessons', kfrom: 1, kto: 2, krand: 30, types: [t], count: 2, mock: false, timer: 0 }));
-      sessionStorage.removeItem('jp.examSession');
-    }, type);
+    await page.evaluate(p => { localStorage.setItem('jp.examPresets.last', p); sessionStorage.removeItem('jp.examSession'); }, PRESET({ types: [type], count: 2 }));
     await page.reload({ waitUntil: 'networkidle' });
     await page.waitForSelector('[data-start]');
     await page.locator('[data-start]').click();
@@ -195,10 +235,7 @@ for (const [kind, width, height] of [['desktop', 1920, 1080], ['mobile', 375, 78
 
   // ---------- university version ----------
   await page.goto(URL_ + '#/exam', { waitUntil: 'networkidle' });
-  await page.evaluate(() => {
-    localStorage.setItem('jp.examPresets.last', JSON.stringify({ name: '', univ: true, part: 'I', from: 1, to: 5, tsAdded: true, wtAdded: true, mine: false, kanji: false, kbook: 'k300', kmode: 'lessons', kfrom: 1, kto: 2, krand: 30, types: ['p'], count: 3, mock: false, timer: 0 }));
-    sessionStorage.removeItem('jp.examSession');
-  });
+  await page.evaluate(p => { localStorage.setItem('jp.examPresets.last', p); sessionStorage.removeItem('jp.examSession'); }, PRESET({ univ: true }));
   await page.reload({ waitUntil: 'networkidle' });
   await page.waitForSelector('[data-start]');
   if (!(await page.locator('.ex-univ.on').count())) await page.locator('.ex-univ').click();
@@ -211,8 +248,7 @@ for (const [kind, width, height] of [['desktop', 1920, 1080], ['mobile', 375, 78
   await page.locator('.ask-block .ask-send').click();
   await page.waitForFunction(() => [...document.querySelectorAll('.ask-block .ask-msg.me')].some(m => m.textContent === 'Що таке か?'));
   ok((await session()) === uBefore, T('paper session untouched by the helper'));
-  const firstIn = page.locator('.u-in').first();
-  await firstIn.fill('は');
+  await page.locator('.u-in').first().fill('は');
   await page.locator('.u-paper [data-check]').click();
   await page.waitForSelector('.u-result');
   ok(await page.locator('.u-result .ex-mistake .ask-open').count() === await page.locator('.u-result .ex-mistake').count(), T('button on every mistake of the paper'));
@@ -226,54 +262,71 @@ for (const [kind, width, height] of [['desktop', 1920, 1080], ['mobile', 375, 78
   await page.screenshot({ path: `${OUT}/${kind}-univ-results.png`, clip: { x: 0, y: 0, width, height: 1500 }, fullPage: true });
   await ctx.close();
 
-  // ---------- no password yet: asked once, Enter in the dialog must not skip the question ----------
+  // ---------- not signed in: cancelled / blocked sign-in, then a successful one ----------
   const ctx2 = await browser.newContext({ viewport: { width, height }, locale: 'uk-UA' });
+  await mockPuter(ctx2, { signedIn: false, signIn: 'cancel', reply: { text: 'Пояснення після входу.' } });
   const p2 = await ctx2.newPage();
-  const seen = [];
-  await p2.route('**/api/ask', async route => {
-    const b = JSON.parse(route.request().postData());
-    seen.push(b.password);
-    const good = b.password === 'right';
-    await route.fulfill({ status: good ? 200 : 401, contentType: 'application/json', body: JSON.stringify(good ? { answer: 'ок' } : { code: 'bad_password', error: 'Неправильний пароль. Спробуйте ще раз.' }) });
-  });
-  await p2.goto(URL_ + '#/exam', { waitUntil: 'networkidle' });
-  await p2.evaluate(() => localStorage.setItem('jp.examPresets.last', JSON.stringify({ name: '', part: 'I', from: 1, to: 5, tsAdded: true, wtAdded: true, mine: false, kanji: false, kbook: 'k300', kmode: 'lessons', kfrom: 1, kto: 2, krand: 30, types: ['p'], count: 3, mock: false, timer: 0 })));
-  await p2.reload({ waitUntil: 'networkidle' });
-  await p2.waitForSelector('[data-start]');
-  await p2.locator('[data-start]').click();
-  await p2.waitForSelector('.ex-answer .choice');
+  const errs2 = [];
+  p2.on('pageerror', e => errs2.push(String(e)));
+  await startOn(p2);
   await p2.locator('.ex-answer .choice').first().click();
   await p2.waitForSelector('[data-next]');
   const i0 = await p2.evaluate(() => JSON.parse(sessionStorage.getItem('jp.examSession')).i);
   await p2.locator('.ask-open').click();
   await p2.locator('.ask-panel .ask-send').click();
-  await p2.waitForSelector('.modal input[type=password]');
-  ok((await p2.locator('.modal h2').innerText()).includes('ШІ'), T('the dialog says what the password is for'));
-  await p2.locator('.modal input[type=password]').fill('wrong');
-  await p2.locator('.modal input[type=password]').press('Enter');
   await p2.waitForSelector('.ask-panel .ask-err');
-  ok(seen.at(-1) === 'wrong' && (await p2.evaluate(() => JSON.parse(sessionStorage.getItem('jp.examSession')).i)) === i0, T('Enter in the password dialog submits it and does not skip the question'));
-  ok((await p2.locator('.ask-panel .ask-err').innerText()).includes('Неправильний пароль'), T('wrong password message'));
+  const st2 = await p2.evaluate(() => ({ signIns: window.__pm.signIns, calls: window.__pm.calls.length }));
+  ok((await p2.locator('.ask-panel .ask-err').innerText()) === SIGNIN, T('cancelled sign-in: the sign-in message'));
+  ok(st2.signIns === 1 && st2.calls === 0, T('cancelled sign-in: no model call'), JSON.stringify(st2));
+  ok(await p2.locator('.modal').count() === 0, T('no password dialog for the helper'));
+  ok((await p2.evaluate(() => JSON.parse(sessionStorage.getItem('jp.examSession')).i)) === i0, T('cancelled sign-in does not move the exam'));
+  await p2.evaluate(() => { window.__pm.signIn = 'blocked'; });
   await p2.locator('.ask-panel .ask-send').click();
-  await p2.waitForSelector('.modal input[type=password]');
-  await p2.locator('.modal input[type=password]').fill('right');
-  await p2.locator('.modal input[type=password]').press('Enter');
-  await p2.waitForSelector('.ask-panel .ask-msg.ai');
-  ok(seen.at(-1) === 'right', T('asked again after a wrong password'));
+  await p2.waitForFunction(() => window.__pm.signIns === 2);
+  await p2.waitForSelector('.ask-panel .ask-err');
+  ok((await p2.locator('.ask-panel .ask-err').innerText()) === SIGNIN, T('blocked popup: the sign-in message'));
+  // the rest of the exam keeps working
+  await p2.locator('[data-next]').click();
+  await p2.waitForSelector('.ex-answer .choice');
+  ok((await p2.evaluate(() => JSON.parse(sessionStorage.getItem('jp.examSession')).i)) === i0 + 1, T('the exam goes on after a cancelled sign-in'));
+  await p2.evaluate(() => { window.__pm.signIn = 'ok'; });
+  await p2.locator('.ask-block textarea').fill('Що таке を?');
+  await p2.locator('.ask-block .ask-send').click();
+  await p2.waitForSelector('.ask-block .ask-msg.ai');
+  ok((await p2.locator('.ask-block .ask-msg.ai').innerText()) === 'Пояснення після входу.', T('signed in on click, then the answer'));
+  ok(await p2.evaluate(() => window.__pm.signIns === 3 && window.__pm.signedIn), T('sign-in asked once more, now done'));
+  await p2.locator('.ask-block textarea').fill('Ще одне');
+  await p2.locator('.ask-block .ask-send').click();
+  await p2.waitForFunction(() => window.__pm.calls.length === 2);
+  ok(await p2.evaluate(() => window.__pm.signIns === 3), T('no sign-in again once signed in'));
+  ok(!errs2.length, T('no page errors in the sign-in path'), errs2.join(' | '));
   await ctx2.close();
+
+  // ---------- Puter.js cannot be loaded (offline, blocked): the message, and the exam still works ----------
+  const ctx4 = await browser.newContext({ viewport: { width, height }, locale: 'uk-UA' });
+  await ctx4.route(PUTER, route => route.abort());
+  const p4 = await ctx4.newPage();
+  const errs4 = [];
+  p4.on('pageerror', e => errs4.push(String(e)));
+  await startOn(p4);
+  await p4.locator('.ask-block textarea').fill('Питання');
+  await p4.locator('.ask-block .ask-send').click();
+  await p4.waitForSelector('.ask-block .ask-err');
+  ok((await p4.locator('.ask-block .ask-err').innerText()) === FAIL, T('no Puter.js: the failure message'));
+  await p4.locator('.ex-answer .choice').first().click();
+  await p4.waitForSelector('[data-next]');
+  ok(!errs4.length, T('no Puter.js: no page errors, the exam works'), errs4.join(' | '));
+  await ctx4.close();
 
   // ---------- sessionStorage unavailable: the helper still works ----------
   const ctx3 = await browser.newContext({ viewport: { width, height }, locale: 'uk-UA' });
-  await ctx3.addInitScript(() => {
-    try { localStorage.setItem('jp.pw', 'test'); } catch { /* */ }
-    Object.defineProperty(window, 'sessionStorage', { get() { throw new Error('storage blocked'); } });
-  });
+  await mockPuter(ctx3, { signedIn: true, reply: { text: 'працює' } });
+  await ctx3.addInitScript(() => { Object.defineProperty(window, 'sessionStorage', { get() { throw new Error('storage blocked'); } }); });
   const p3 = await ctx3.newPage();
   const errs3 = [];
   p3.on('pageerror', e => errs3.push(String(e)));
-  await p3.route('**/api/ask', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ answer: 'працює' }) }));
   await p3.goto(URL_ + '#/exam', { waitUntil: 'networkidle' });
-  await p3.evaluate(() => localStorage.setItem('jp.examPresets.last', JSON.stringify({ name: '', part: 'I', from: 1, to: 5, tsAdded: true, wtAdded: true, mine: false, kanji: false, kbook: 'k300', kmode: 'lessons', kfrom: 1, kto: 2, krand: 30, types: ['p'], count: 3, mock: false, timer: 0 })));
+  await p3.evaluate(p => localStorage.setItem('jp.examPresets.last', p), PRESET());
   await p3.reload({ waitUntil: 'networkidle' });
   await p3.waitForSelector('[data-start]');
   await p3.locator('[data-start]').click();
