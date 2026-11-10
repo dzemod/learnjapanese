@@ -1152,15 +1152,19 @@ button.u-opt:hover { border-color: var(--border-2); background: var(--panel-2); 
 .u-good { color: var(--text); font-weight: 600; }
 .u-empty { color: #ff8a9b; font: 500 .78rem var(--ui); }
 
-/* ---------- Exam: AI helper (exam-ask.js) ---------- */
+/* ---------- AI helper «Запитай ШІ» (ai-helper.js): Exam and Grammar ---------- */
 .ask-slot { display: grid; gap: 10px; min-width: 0; }
 .ask-open { justify-self: start; max-width: 100%; white-space: normal; }
 .ask-panel { padding: 14px; background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--r); min-width: 0; }
 .ask-block { min-width: 0; }
+.grammar-lesson .ask-block { margin-top: 20px; }
+.ask-topic { display: grid; gap: 4px; min-width: 0; }
+.ask-select { width: 100%; max-width: 100%; min-width: 0; text-overflow: ellipsis; font-family: var(--jp); }
+.ask-note { margin: 6px 0 0; }
 .ask-form { display: grid; gap: 10px; min-width: 0; }
 .ask-ctx summary { cursor: pointer; font-size: .85rem; color: var(--muted); }
 .ask-text { margin-top: 6px; font: .85rem/1.55 var(--jp); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 220px; overflow-y: auto; }
-.ask-input { width: 100%; min-height: 84px; resize: vertical; font-family: var(--jp); font-size: 1rem; }
+textarea.ask-input { width: 100%; min-height: 84px; resize: vertical; font-family: var(--jp); font-size: 1rem; } /* beats textarea.input (--ui) */
 .ask-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .ask-status { display: flex; align-items: center; gap: 8px; font-size: .9rem; color: var(--muted); }
 .ask-status:empty, .ask-out:empty { display: none; }

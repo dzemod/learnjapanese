@@ -1,22 +1,25 @@
-// AI helper of the Exam tab: «Чому так? Запитати ШІ» after an answer and the «Запитай ШІ» block at the bottom.
+// «Запитай ШІ»: the AI helper shared by the Exam tab and the Grammar tab.
+//   Exam: «Чому так? Запитати ШІ» after an answer (addAskButton) and the «Запитай ШІ» block at the bottom (mountAskBlock).
+//   Grammar: the same block at the bottom of every lesson, with the lesson's textbook material as reference.
 // Runs fully in the browser on Puter.js (https://docs.puter.com): every learner signs in to their own free Puter
-// account ("user-pays" model), so there is no API key and no server function. It reads the exam session through the
-// context the caller builds and never writes to it, so scoring, timers and results are not affected.
-// The last messages live in sessionStorage (or memory if unavailable).
+// account ("user-pays" model), so there is no API key and no server function. The helper only reads what the caller
+// passes (exam context, lesson material) and never writes to the exam session, so scoring, timers and results are not
+// affected. Each block keeps its last messages in sessionStorage under its own key (or in memory if unavailable).
 import { $, esc, toast } from './util.js';
 
-const KEY = 'jp.examAsk';
+export const EXAM_LOG = 'jp.examAsk'; // the exam's messages; a grammar lesson uses `jp.ask.grammar.<n>`
 const KEEP = 5; // messages
-const MAX_INPUT = 1000; // characters: question + context
+const MAX_INPUT = 1000; // characters: the learner's question + the exam question context (not the lesson material)
 const MAX_CONTEXT = 800; // leaves room for the question
 const MAX_OUTPUT_TOKENS = 700; // the prompt asks for ≈150 words; this only stops runaway answers
 const TIMEOUT_MS = 45000;
 const MSG_FAIL = 'Не вдалося отримати відповідь, спробуйте ще раз';
 const MSG_SIGNIN = 'Щоб отримати пояснення, увійдіть у безкоштовний акаунт Puter';
+const WHY = 'Поясни, будь ласка, чому правильна саме ця відповідь.';
 
 export const PUTER_SRC = 'https://js.puter.com/v2/'; // docs.puter.com/getting-started
 // Chosen from Puter's model list (2026-11): Claude Haiku 5.5 is the cheapest strong model there (0.10 / 0.50 USD per
-// million tokens ≈ 0.03 ¢ per answer, so the free monthly allowance of a Puter account lasts long) and writes good
+// million tokens ≈ 0.03–0.05 ¢ per answer, so the free monthly allowance of a Puter account lasts long) and writes good
 // Ukrainian and Japanese. If it fails, Puter's documented default model is tried once.
 export const MODELS = ['claude-haiku-5-5', 'gpt-5.4-nano'];
 
@@ -26,8 +29,9 @@ Keep the answer under about 150 words unless the learner asks for more. Use plai
 Write Japanese readings only in kana: never romaji and never Cyrillic.
 Do not invent facts beyond the textbook; if you are unsure, say so.
 If the question is about the website itself and not about Japanese, tell the learner to contact the developer.`;
+const MATERIAL_INTRO = `The learner is reading this lesson of the textbook (Minna no Nihongo, Ukrainian edition). Base your answer on this material, refer to it by lesson and point, and do not contradict it. Readings are given in brackets after kanji.`;
 
-// ---------- context of a question (plain text, sent to the helper) ----------
+// ---------- context of an exam question (plain text, sent to the helper) ----------
 /** HTML of a question → plain text; furigana stays as 漢字(かな). Parsed in an inert document, buttons dropped. */
 export function htmlText(html) {
   const doc = new DOMParser().parseFromString(String(html || ''), 'text/html');
@@ -56,23 +60,34 @@ export function contextText({ section, lesson, question, options = [], given, co
   return out;
 }
 
-// ---------- last messages ----------
-let messages = null;
-function readLog() {
-  if (messages) return messages;
-  let saved = null;
-  try { saved = JSON.parse(sessionStorage.getItem(KEY) || 'null'); } catch { /* unavailable */ }
-  messages = (Array.isArray(saved) ? saved : []).filter(m => m && typeof m.t === 'string' && (m.r === 'u' || m.r === 'a')).slice(-KEEP);
-  return messages;
+// ---------- the exam question the learner came from (exam → «reference» link → grammar page) ----------
+// exam.js saves { at, lesson, ask } in jp.examReturn when a reference link is followed; the floating
+// «Повернутися до екзамену» button clears it. Only read here.
+const sload = k => { try { return JSON.parse(sessionStorage.getItem(k) || 'null'); } catch { return null; } };
+export function examQuestionFor(lesson) {
+  const r = sload('jp.examReturn');
+  return r && r.ask && r.lesson === lesson && sload('jp.examSession') ? String(r.ask) : '';
 }
-function pushLog(...items) {
-  messages = [...readLog(), ...items].slice(-KEEP);
-  try { sessionStorage.setItem(KEY, JSON.stringify(messages)); } catch { /* the messages stay in memory */ }
+
+// ---------- last messages, per block ----------
+const logs = new Map(); // key → messages
+function readLog(key) {
+  if (logs.has(key)) return logs.get(key);
+  let saved = null;
+  try { saved = JSON.parse(sessionStorage.getItem(key) || 'null'); } catch { /* unavailable */ }
+  const list = (Array.isArray(saved) ? saved : []).filter(m => m && typeof m.t === 'string' && (m.r === 'u' || m.r === 'a')).slice(-KEEP);
+  logs.set(key, list);
+  return list;
+}
+function pushLog(key, ...items) {
+  const list = [...readLog(key), ...items].slice(-KEEP);
+  logs.set(key, list);
+  try { sessionStorage.setItem(key, JSON.stringify(list)); } catch { /* the messages stay in memory */ }
 }
 
 // ---------- Puter.js ----------
 let puterLoad = null;
-/** Adds the Puter.js script once (only the Exam tab calls this). Resolves to window.puter. */
+/** Adds the Puter.js script once (only pages with the helper call this). Resolves to window.puter. */
 export function loadPuter() {
   if (window.puter?.ai) return Promise.resolve(window.puter);
   if (puterLoad) return puterLoad;
@@ -109,7 +124,8 @@ export function replyText(r) {
 const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))]);
 
 // ---------- request ----------
-async function request(question, context) {
+/** question + context (exam question) go in the user message; material (lesson text) goes into the system prompt. */
+async function request(question, context, material = '') {
   let puter;
   try { puter = await loadPuter(); } catch (e) { console.error('ask:', errInfo(e)); return { error: MSG_FAIL }; }
   // Sign-in opens Puter's popup, so it runs here, right after the click on «Надіслати».
@@ -118,7 +134,7 @@ async function request(question, context) {
   } catch (e) { console.warn('ask: Puter sign-in did not finish:', errInfo(e)); return { error: MSG_SIGNIN }; }
   if (!puter.auth.isSignedIn()) return { error: MSG_SIGNIN };
   const messages = [
-    { role: 'system', content: SYSTEM },
+    { role: 'system', content: material ? `${SYSTEM}\n\n${MATERIAL_INTRO}\n\n${material}` : SYSTEM },
     { role: 'user', content: context ? `${context}\n\nЗапитання учня: ${question}` : question },
   ];
   for (const model of MODELS) {
@@ -137,7 +153,7 @@ async function request(question, context) {
 
 // ---------- widgets ----------
 let busy = false; // one request at a time, shared by all widgets on the page
-let draft = ''; // text of the bottom block; survives moving to the next question
+const drafts = new Map(); // text of a bottom block per log key; survives moving to the next question
 const widgets = new Set();
 const syncAll = () => widgets.forEach(w => (w.el.isConnected ? w.sync() : widgets.delete(w)));
 
@@ -145,17 +161,26 @@ const syncAll = () => widgets.forEach(w => (w.el.isConnected ? w.sync() : widget
 const answerHTML = t => esc(t).replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>');
 const msgHTML = m => `<div class="ask-msg ${m.r === 'u' ? 'me' : 'ai'}">${m.r === 'u' ? esc(m.t) : answerHTML(m.t)}</div>`;
 
-function widget(el, { context = '', question = '', bottom = false }) {
+/**
+ * One form. context = exam question (shown and sent in the user message, counts towards the 1000 characters);
+ * topics = [{ label, material, note }] for a grammar lesson (a select; material goes into the system prompt).
+ */
+function widget(el, { context = '', question = '', bottom = false, logKey = EXAM_LOG, topics = null, topic = 0 }) {
   const limit = MAX_INPUT - context.length;
+  const showCtx = context || topics;
   el.innerHTML = `<form class="ask-form" autocomplete="off">
-    ${context ? `<details class="ask-ctx" open><summary>Що побачить ШІ</summary><div class="ask-text">${esc(context)}</div></details>` : ''}
+    ${topics ? `<label class="ask-topic"><span class="muted small">Про що запитання</span><select class="input ask-select">${topics.map((t, i) => `<option value="${i}" ${i === topic ? 'selected' : ''}>${esc(t.label)}</option>`).join('')}</select></label>` : ''}
+    ${showCtx ? `<details class="ask-ctx" ${context ? 'open' : ''}><summary>Що побачить ШІ</summary>${topics ? '<p class="muted small ask-note"></p>' : ''}${context ? `<div class="ask-text">${esc(context)}</div>` : ''}</details>` : ''}
     <textarea class="input ask-input" rows="3" maxlength="${limit}" aria-label="Ваше запитання" placeholder="Ваше запитання…"></textarea>
     <div class="ask-row"><span class="muted small ask-count"></span><button class="btn primary ask-send"></button></div>
     <div class="ask-status" role="status"></div>
     <div class="ask-out" aria-live="polite"></div>
   </form>`;
   const form = $('form', el), input = $('textarea', el), send = $('.ask-send', el), status = $('.ask-status', el), out = $('.ask-out', el), count = $('.ask-count', el);
-  input.value = bottom ? draft : question;
+  const select = $('.ask-select', el), note = $('.ask-note', el);
+  const showNote = () => { if (note) note.textContent = topics[+select.value].note; };
+  if (select) { select.onchange = showNote; showNote(); }
+  input.value = bottom ? (drafts.get(logKey) || question) : question;
   let reply = null, error = '';
   const counter = () => { count.textContent = `${input.value.length} / ${limit}`; };
   const w = {
@@ -165,12 +190,12 @@ function widget(el, { context = '', question = '', bottom = false }) {
       send.textContent = busy ? 'Надсилаю…' : 'Надіслати';
       status.innerHTML = busy ? '<span class="spinner"></span> <span>ШІ готує відповідь…</span>' : error ? `<span class="ask-err">${esc(error)}</span>` : '';
       if (bottom) {
-        const log = readLog();
+        const log = readLog(logKey);
         out.innerHTML = log.length ? `<p class="muted small ask-log-title">Останні повідомлення</p>${log.map(msgHTML).join('')}` : '';
       } else out.innerHTML = reply ? msgHTML({ r: 'a', t: reply }) : '';
     },
   };
-  input.addEventListener('input', () => { if (bottom) draft = input.value; counter(); });
+  input.addEventListener('input', () => { if (bottom) drafts.set(logKey, input.value); counter(); });
   form.onsubmit = async e => {
     e.preventDefault();
     const question = input.value.trim();
@@ -178,13 +203,13 @@ function widget(el, { context = '', question = '', bottom = false }) {
     if (!question) { input.focus(); return; }
     busy = true; error = '';
     syncAll();
-    const r = await request(question, context);
+    const r = await request(question, context, topics ? topics[+select.value].material : '');
     busy = false;
     if (r.answer) {
-      pushLog({ r: 'u', t: question }, { r: 'a', t: r.answer });
+      pushLog(logKey, { r: 'u', t: question }, { r: 'a', t: r.answer });
       reply = r.answer;
       input.value = '';
-      if (bottom) draft = '';
+      if (bottom) drafts.set(logKey, '');
       counter();
     } else {
       error = r.error;
@@ -199,8 +224,8 @@ function widget(el, { context = '', question = '', bottom = false }) {
   return input;
 }
 
-/** The small button after an answer; opens the panel with the context right below it. getContext runs on the first click. */
-export function addAskButton(parent, getContext, before = null, question = 'Поясни, будь ласка, чому правильна саме ця відповідь.') {
+/** The small button after an exam answer; opens the panel with the context right below it. getContext runs on the first click. */
+export function addAskButton(parent, getContext, before = null, question = WHY) {
   const slot = document.createElement('div');
   slot.className = 'ask-zone ask-slot';
   slot.innerHTML = '<button type="button" class="btn ghost sm ask-open" aria-expanded="false">Чому так? Запитати ШІ</button><div class="ask-panel" hidden></div>';
@@ -210,6 +235,7 @@ export function addAskButton(parent, getContext, before = null, question = 'По
     panel.hidden = !panel.hidden;
     btn.setAttribute('aria-expanded', String(!panel.hidden));
     if (panel.hidden) return;
+    loadPuter();
     input ||= widget(panel, { context: getContext(), question });
     input.focus({ preventScroll: true });
     panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -217,12 +243,22 @@ export function addAskButton(parent, getContext, before = null, question = 'По
   parent.insertBefore(slot, before);
 }
 
-/** The permanent «Запитай ШІ» block at the bottom of an exam page. */
-export function mountAskBlock(container) {
+const INTRO = {
+  exam: 'Відповідь ШІ може містити помилки, тому звіряйте її з підручником. На оцінку та час запитання не впливають.',
+  grammar: 'Запитайте про граматику цього уроку: ШІ бачить пояснення, приклади й «Детальніше» вибраного пункту. Відповідь ШІ може містити помилки, тому звіряйте її з підручником.',
+};
+const SIGNIN_NOTE = 'Відповідає ШІ сервісу Puter: при першому запитанні відкриється вікно входу в безкоштовний акаунт Puter.';
+
+/**
+ * The permanent «Запитай ШІ» block at the bottom of an exam page or a grammar lesson.
+ * Grammar: { kind: 'grammar', logKey: 'jp.ask.grammar.<n>', topics, topic, context (exam question or '') }.
+ */
+export function mountAskBlock(container, { kind = 'exam', logKey = EXAM_LOG, topics = null, topic = 0, context = '' } = {}) {
   const box = document.createElement('section');
-  box.className = 'panel ask-zone ask-block';
-  box.innerHTML = '<h2 class="sec-title">Запитай ШІ</h2><p class="muted small">Відповідь ШІ може містити помилки, тому звіряйте її з підручником. На оцінку та час запитання не впливають. Відповідає ШІ сервісу Puter: при першому запитанні відкриється вікно входу в безкоштовний акаунт Puter.</p><div class="ask-body"></div>';
+  box.className = `panel ask-zone ask-block ask-${kind}`;
+  box.innerHTML = `<h2 class="sec-title">Запитай ШІ</h2><p class="muted small">${INTRO[kind]} ${SIGNIN_NOTE}</p><div class="ask-body"></div>`;
   container.append(box);
   loadPuter(); // preload, so the sign-in popup can open right on the first click
-  widget($('.ask-body', box), { bottom: true });
+  widget($('.ask-body', box), { bottom: true, logKey, topics, topic, context, question: context ? WHY : '' });
+  return box;
 }

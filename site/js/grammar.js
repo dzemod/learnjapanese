@@ -4,6 +4,7 @@
 // Blocks: { h } subheading · { p } paragraph · { note } note · { ex, uk, src? } example · { table: [[...]] }
 // Japanese text uses furigana markup {漢字|かんじ}, shown as 漢字(かんじ).
 import { $, $$, esc, I, furi, furiT, furiPlain, furiSay, furiBase, speak, norm } from './util.js';
+import { mountAskBlock, examQuestionFor } from './ai-helper.js';
 
 const G = { data: null, loading: null, error: false };
 export function loadGrammar() {
@@ -30,6 +31,29 @@ function blockHTML(b) {
   return '';
 }
 const pointText = pt => [pt.title, ...[...pt.blocks, ...(pt.details || [])].flatMap(b => [b.h, b.p, b.note, b.ex, b.uk, ...(b.table || []).flat()])].filter(Boolean).map(furiPlain).join(' ');
+
+// ---------- «Запитай ШІ»: the lesson's material for the helper (goes into its system prompt) ----------
+// Plain text with readings as 漢字(かな): textbook blocks (explanation, 文型/例文 with translations) + «Детальніше».
+const blockPlain = b => (b.h ? `■ ${furiPlain(b.h)}` : b.p ? furiPlain(b.p) : b.note ? `Примітка: ${furiPlain(b.note)}`
+  : b.table ? b.table.map(r => r.map(furiPlain).join(' | ')).join('\n')
+  : b.ex != null ? `${b.src || 'Приклад'}: ${furiPlain(b.ex)}${b.uk ? ' — ' + furiPlain(b.uk) : ''}` : '');
+const pointMaterial = (n, pt, i) => [`Урок ${n}, пункт ${i + 1}: ${furiPlain(pt.title)}`, 'Підручник (IV. Граматика, 文型, 例文):', ...pt.blocks.map(blockPlain),
+  ...(pt.details?.length ? ['Детальніше (додаткові пояснення на сайті):', ...pt.details.map(blockPlain)] : [])].filter(Boolean).join('\n');
+const MAT_POINT = 6000, MAT_LESSON = 9000; // characters; the longest point (≈4400) and lesson (≈8000) fit whole
+const capText = (s, n) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
+/** «Увесь урок» + one topic per point: { label, material (system prompt), note (what the AI sees, shown to the learner) }. */
+function askTopics(n, l) {
+  const all = {
+    label: 'Увесь урок',
+    material: capText([`Minna no Nihongo, урок ${n}. Пункти: ${l.points.map((p, i) => `${i + 1}. ${furiPlain(p.title)}`).join('; ')}`, ...l.points.map((pt, i) => pointMaterial(n, pt, i))].join('\n\n'), MAT_LESSON),
+    note: `Урок ${n}, ${pointsTxt(l.points.length)}: назви, пояснення з підручника, приклади й «Детальніше».`,
+  };
+  return [all, ...l.points.map((pt, i) => ({
+    label: `${i + 1}. ${furiPlain(pt.title)}`,
+    material: capText(pointMaterial(n, pt, i), MAT_POINT),
+    note: `Урок ${n}, пункт ${i + 1}: назва, пояснення з підручника, приклади${pt.details?.length ? ' й «Детальніше»' : ''}.`,
+  }))];
+}
 
 function wireSay(root) {
   root.addEventListener('click', e => {
@@ -105,6 +129,10 @@ export async function grammarLesson(root, n, pointId) {
     <div class="g-pager">${prev ? `<a class="btn ghost" href="#/grammar/${prev.lesson}">${I.left}<span>Урок ${prev.lesson}</span></a>` : '<span></span>'}
       ${next ? `<a class="btn ghost" href="#/grammar/${next.lesson}"><span>Урок ${next.lesson}</span>${I.right}</a>` : '<span></span>'}</div>
   </div>`;
+  const lessonEl = $('.grammar-lesson', root);
+  const pi = pointId ? l.points.findIndex(p => p.id === pointId) : -1;
+  const ask = mountAskBlock(lessonEl, { kind: 'grammar', logKey: `jp.ask.grammar.${n}`, topics: askTopics(n, l), topic: pi + 1, context: examQuestionFor(n) });
+  lessonEl.insertBefore(ask, $('.g-pager', lessonEl)); // at the bottom of the lesson content, above the lesson pager
   wireSay($('.grammar-lesson', root)); // the lesson node is new on every render → one listener, never stacked on #app
   const tg = $('[data-toggle]', root);
   tg.onclick = () => {

@@ -3,7 +3,7 @@
 import { $, $$, esc, furi, gtext, I, toast } from './util.js';
 import { loadScript } from './importer.js';
 import { getSets } from './store.js';
-import { addAskButton, mountAskBlock, contextText } from './exam-ask.js';
+import { addAskButton, mountAskBlock, contextText } from './ai-helper.js';
 import { buildPaper, scorePaper, pointsLabel, availability, SECTIONS, plainText } from './univ-paper.js';
 
 export { availability, SECTIONS };
@@ -253,10 +253,10 @@ export function paperResult(root, ctx) {
       </div>`;
   }).join('')}</div>`).join('')}</section>` : '<section class="panel"><p>Помилок немає 🎉</p></section>'}
   </div>`;
-  ctx.wireRefs(root);
+  const rowOf = el => { const sec = r.sections.find(s => s.rows.some(x => x.it.id === el.dataset.id)); return { sec, row: sec.rows.find(x => x.it.id === el.dataset.id) }; };
+  ctx.wireRefs(root, b => { const m = b.closest('.ex-mistake'); if (!m) return ''; const { row, sec } = rowOf(m); return askContext(row, sec, ctx); });
   $$('.ex-mistake', root).forEach(el => {
-    const sec = r.sections.find(s => s.rows.some(x => x.it.id === el.dataset.id));
-    const row = sec.rows.find(x => x.it.id === el.dataset.id);
+    const { row, sec } = rowOf(el);
     addAskButton(el, () => askContext(row, sec, ctx));
   });
   mountAskBlock($('.exam', root));

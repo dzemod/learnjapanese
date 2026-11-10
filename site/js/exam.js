@@ -2,7 +2,7 @@
 // Data: data/exam.json (pre-built bank: particles, verb forms, translations, error finding — every item has an
 // explanation from IV. Граматика and a lesson/point reference) + words (sets.json), grammar.json, kanji.json.
 // Everything runs in the browser; the only things sent anywhere are the optional preset sync to GitHub and
-// questions the learner chooses to send to the AI helper (exam-ask.js → Puter.js in the browser).
+// questions the learner chooses to send to the AI helper (ai-helper.js → Puter.js in the browser).
 import { $, $$, esc, shuffle, furi, furiT, furiPlain, gtext, furiSay, speak, norm, toast, I, check as checkWord, today } from './util.js';
 import { state, getSets, markPresetsPending, registerPresetsPayload, syncAll } from './store.js';
 import { loadGrammar, grammarLessons } from './grammar.js';
@@ -11,7 +11,7 @@ import { conjugate, explainConj, detectForm, FORMS, formsUpTo } from './conjugat
 import { preKana, checkSentence, verdictOf, VERDICT, normJa, KANJI_RE } from './sentcheck.js';
 import { ensureTokenizer, tokenize, onTokProgress, tokProgressText } from './tokenizer.js';
 import { loadScript } from './importer.js';
-import { addAskButton, mountAskBlock, contextText, htmlText } from './exam-ask.js';
+import { addAskButton, mountAskBlock, contextText, htmlText } from './ai-helper.js';
 import { paperView, paperResult, newPaper, availability as univAvail, SECTIONS as UNIV_SECTIONS, univGroups } from './exam-univ.js';
 
 const K = { presets: 'jp.examPresets', history: 'jp.examHistory', session: 'jp.examSession', ret: 'jp.examReturn', mistakes: 'jp.examMistakes', romaji: 'jp.exam.romaji' };
@@ -100,10 +100,15 @@ function refBtn(r, label) { return r ? `<button type="button" class="ex-ref" dat
 // «Додати до помилок»: questions kept on this device to repeat later (setup → «Повторити збережені помилки»)
 const savedMistakes = () => load(K.mistakes, []);
 function addSavedMistake(q) { save(K.mistakes, [q, ...savedMistakes().filter(x => x.uid !== q.uid)].slice(0, 100)); }
-function wireRefs(root) {
+/** askOf(button) → the AI helper's context of the question the link belongs to; the grammar page's «Запитай ШІ»
+ *  shows it while «Повернутися до екзамену» is active (ai-helper.js examQuestionFor). */
+function wireRefs(root, askOf = null) {
   $$('[data-ref]', root).forEach(b => (b.onclick = () => {
-    ssave(K.ret, { at: Date.now() });
-    location.hash = refUrl(JSON.parse(b.dataset.ref));
+    const r = JSON.parse(b.dataset.ref);
+    let ask = '';
+    try { ask = (r.kind === 'g' && askOf?.(b)) || ''; } catch (e) { console.error('ask context', e); }
+    ssave(K.ret, { at: Date.now(), lesson: r.kind === 'g' ? r.lesson : null, ask });
+    location.hash = refUrl(r);
   }));
 }
 /** Floating "back to exam" button on other pages (called by app.js on every route). */
@@ -677,7 +682,7 @@ function runView(root, api) {
       <div class="ex-expl">${why ? `<p class="ex-why">${gtext(why)}</p>` : ''}<p>${gtext(q.x || '')}</p></div>
       <div class="ex-refs">${refBtn(q.ref)}${q.link2 ? refBtn(q.link2) : ''}</div>
       <button class="btn primary wide" data-next>Далі <kbd>Enter</kbd></button>`;
-    wireRefs(root);
+    wireRefs(root, () => askContext(q, S.answered));
     const next = () => { S.res[S.i] = S.answered; S.answered = null; S.i++; persist(); draw(); window.scrollTo(0, 0); };
     $('[data-next]', root).onclick = next;
     addAskButton($('.ex-feedback', root), () => askContext(q, S.answered), $('[data-next]', root));
@@ -735,7 +740,7 @@ function runView(root, api) {
       <div class="btn-row ex-own">${a.ok ? '' : '<button type="button" class="btn ghost sm" data-right>Я мав(ла) рацію</button>'}
         <button type="button" class="btn ghost sm" data-flag ${a.flag ? 'disabled' : ''}>${a.flag ? 'Додано до помилок ✓' : 'Додати до помилок'}</button></div>
       <button class="btn primary wide" data-next>Далі <kbd>Enter</kbd></button>`;
-    wireRefs(root);
+    wireRefs(root, () => askContext(q, S.answered));
     $('[data-say-c]', root).onclick = () => speak(q.say);
     $('[data-right]', root)?.addEventListener('click', () => { Object.assign(S.answered, { ok: true, pts: 1, over: true }); persist(); feedbackSent(q); });
     $('[data-flag]', root).onclick = () => { S.answered.flag = true; persist(); addSavedMistake(q); feedbackSent(q); toast('Додано до помилок — їх можна повторити окремо'); };
@@ -791,7 +796,7 @@ function runView(root, api) {
       <div class="btn-row ex-own">${a.ok ? '' : '<button type="button" class="btn ghost sm" data-right>Я мав(ла) рацію</button>'}
         <button type="button" class="btn ghost sm" data-flag ${a.flag ? 'disabled' : ''}>${a.flag ? 'Додано до помилок ✓' : 'Додати до помилок'}</button></div>
       <button class="btn primary wide" data-next>Далі <kbd>Enter</kbd></button>`;
-    wireRefs(root);
+    wireRefs(root, () => askContext(q, S.answered));
     $('[data-say-c]', root).onclick = () => speak(q.say);
     $('[data-right]', root)?.addEventListener('click', () => { Object.assign(S.answered, { ok: true, pts: 1, over: true }); persist(); feedbackWT(q); });
     $('[data-flag]', root).onclick = () => { S.answered.flag = true; persist(); addSavedMistake(q); feedbackWT(q); toast('Додано до помилок — їх можна повторити окремо'); };
@@ -953,7 +958,7 @@ function resultView(root) {
       <div class="ex-refs">${refBtn(q.ref)}</div></div>`}`).join('')}</div></section>` : ''}
     ${weakHTML(load(K.history, []))}
   </div>`;
-  wireRefs(root);
+  wireRefs(root, b => { const m = b.closest('.ex-mistake'); return m ? askContext(wrong[+m.dataset.i].q, wrong[+m.dataset.i].r) : ''; });
   $$('[data-say-c]', root).forEach(b => (b.onclick = () => speak(wrong[+b.closest('.ex-mistake').dataset.i]?.q.say)));
   $$('.ex-mistake', root).forEach(el => { const { q, r } = wrong[+el.dataset.i]; addAskButton(el, () => askContext(q, r)); });
   mountAskBlock($('.exam', root));
