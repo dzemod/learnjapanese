@@ -210,11 +210,14 @@ function qParticle(it) {
     src: it.src ? `${it.src}, урок ${it.l}` : `урок ${it.l}`,
   };
 }
+// The form named in a task: the form is the question there, but its bracketed note would give the answer away
+// («вольова форма (～よう)» → «вольова форма»).
+const formName = f => FORMS[f].label.replace(/\s*\([^)]*\)/g, '');
 function qVerb(it) {
   if (!it) return null;
   const f = FORMS[it.f];
   return {
-    uid: it.id, type: 'v', mode: 'type', lesson: it.l, ref: gref(it.pt), weak: f.label, label: `Напишіть дієслово у потрібній формі (${f.label})`,
+    uid: it.id, type: 'v', mode: 'type', lesson: it.l, ref: gref(it.pt), weak: f.label, label: 'Напишіть дієслово у потрібній формі',
     prompt: sentHTML(it.pre, `<span class="ex-blank">（${furi(it.base)} → ？）</span>`, it.post) + `<div class="ex-uk">${esc(it.uk)}</div>`,
     answers: [plainT(it.a), it.ak], answer: plainT(it.a), verb: { base: plainT(it.base), kana: it.base.replace(/\{([^|}]+)\|([^}]+)\}/g, '$2'), g: it.g, f: it.f },
     correct: sentHTML(it.pre, `<b class="ex-hl">${furi(it.a)}</b>`, it.post), x: it.x, link2: it.spt !== it.pt ? gref(it.spt) : null, say: furiSay(it.pre + it.a + it.post),
@@ -256,7 +259,7 @@ function qTransJ(it, pool) {
   const ds = uniq([...(it.d || []), ...pick(others, 3)]).filter(d => d !== it.uk).slice(0, 3);
   const L = gLesson(it.l), p = L?.points.find(x => x.id === it.pt);
   return {
-    uid: it.id, type: 'tj', mode: 'choice', self: true, lesson: it.l, ref: gref(it.pt), weak: plainT(p?.title || ''), label: 'Виберіть правильний переклад (або напишіть свій)',
+    uid: it.id, type: 'tj', mode: 'choice', self: true, lesson: it.l, ref: gref(it.pt), weak: plainT(p?.title || ''), label: 'Виберіть правильний переклад або напишіть свій',
     prompt: `<div class="ex-sent" lang="ja">${furi(it.ja)}</div>`, options: shuffle([it.uk, ...ds]).map(o => ({ v: o, h: esc(o) })), answer: it.uk,
     correct: `<div lang="ja">${furi(it.ja)}</div><div>${esc(it.uk)}</div>`,
     x: `Речення ілюструє конструкцію «${plainT(p?.title || '')}»${it.src ? ` (${it.src})` : ''}. Переклад — з розділу «II. Переклад»${it.src ? '' : ' / IV. Граматика'}.`, say: furiSay(it.ja), src: `урок ${it.l}`,
@@ -296,7 +299,7 @@ function qSent(it) {
   const title = P ? plainT(P.p.title) : '';
   const firstP = P?.p.blocks.find(b => b.p)?.p || '';
   return {
-    uid: it.id, type: 'ts', mode: 'sent', lesson: it.l, ref: gref(it.pt), weak: title, label: 'Перекладіть речення японською (канджі або каною)',
+    uid: it.id, type: 'ts', mode: 'sent', lesson: it.l, ref: gref(it.pt), weak: title, label: 'Перекладіть речення японською: канджі або каною',
     prompt: `<div class="ex-big-uk">${esc(it.uk)}</div>`, answer: plainT(it.ja),
     it: { k: it.k, alt: it.alt || [], w: it.w || [], hl: it.hl || null, ja: it.ja, pt: it.pt, title: P?.p.title || '' },
     correct: `<div class="ex-sent" lang="ja">${markupHL(it.ja, it.hl)}</div>`, say: furiSay(it.ja),
@@ -362,7 +365,7 @@ function qWord(cd, pool) {
   const x = `${cd.japanese}${cd.reading && cd.reading !== cd.japanese ? `(${cd.reading})` : ''} — ${cd.ukrainian}${cd.verbGroup ? `, дієслово ${cd.verbGroup} групи` : ''}${cd.hint ? ` ${cd.hint}` : ''}.`;
   const correct = `${wordHTML(cd)} — ${esc(cd.ukrainian)}`;
   if (dir === 'ja') return { ...base, mode: typing ? 'type' : 'choice', side: 'uk', label: typing ? 'Напишіть значення українською' : 'Виберіть значення', prompt: `<div class="ex-word">${wordHTML(cd)}</div>`, options: shuffle([cd, ...others]).map(o => ({ v: o.ukrainian, h: esc(o.ukrainian) })), answer: cd.ukrainian, correct, x };
-  return { ...base, mode: typing ? 'type' : 'choice', side: 'ja', label: typing ? 'Напишіть японською (канджі або каною)' : 'Виберіть японське слово', prompt: `<div class="ex-big-uk">${esc(cd.ukrainian)}</div>`, options: shuffle([cd, ...others]).map(o => ({ v: o.japanese, h: wordHTML(o) })), answer: cd.japanese, correct, x };
+  return { ...base, mode: typing ? 'type' : 'choice', side: 'ja', label: typing ? 'Напишіть японською: канджі або каною' : 'Виберіть японське слово', prompt: `<div class="ex-big-uk">${esc(cd.ukrainian)}</div>`, options: shuffle([cd, ...others]).map(o => ({ v: o.japanese, h: wordHTML(o) })), answer: cd.japanese, correct, x };
 }
 /** «Слово: напиши сам(а)»: Ukrainian → the learner types the Japanese word (kanji or kana; verbs: ます-form or dictionary form). */
 function qWordType(cd, pool) {
@@ -382,7 +385,7 @@ function qWordType(cd, pool) {
   const dictK = dict && cd.reading ? conjugate(cd.reading, cd.verbGroup, 'dict') : '';
   return {
     uid: 'wt' + cd.setId + cd.id, type: 'wt', mode: 'wtype', lesson: cd.lesson, ref: wref(cd), weak: cd.japanese, src: cd.setTitle,
-    label: 'Напишіть японське слово (канджі або каною)',
+    label: 'Напишіть японське слово: канджі або каною',
     prompt: `<div class="ex-big-uk">${esc(cd.ukrainian)}</div>${cd.verbGroup ? `<div class="ex-uk">дієслово, ${cd.verbGroup} група · можна ます-форму або словникову</div>` : ''}`,
     cards, answer: cd.japanese, first: kana.charAt(0), say: cd.reading || cd.japanese,
     correct: `${wordHTML(cd)}${dict ? ` <span class="muted small">· словникова форма</span> <span lang="ja">${esc(dict)}${dictK && dictK !== dict ? `<span class="fg">(${esc(dictK)})</span>` : ''}</span>` : ''}`,
@@ -400,7 +403,7 @@ function qConj(cd, maxL) {
   const fp = FORMS[f].point;
   return {
     uid: 'c' + cd.setId + cd.id + f, type: 'c', mode: 'type', lesson: cd.lesson, ref: fp && gLesson(+fp.split('-')[0]) ? gref(fp) : gref(null, FORMS[f].lesson), weak: FORMS[f].label,
-    label: `Поставте дієслово у форму: ${FORMS[f].label}`, prompt: `<div class="ex-word">${wordHTML(cd)}</div><div class="ex-uk">${esc(cd.ukrainian)} · група ${cd.verbGroup}</div>`,
+    label: `Поставте дієслово у форму: ${formName(f)}`, prompt: `<div class="ex-word">${wordHTML(cd)}</div><div class="ex-uk">${esc(cd.ukrainian)} · група ${cd.verbGroup}</div>`,
     answers: [a1, a2], answer: a1 === a2 ? a1 : `${a1} (${a2})`, verb: { base: cd.japanese, kana, g: cd.verbGroup, f },
     correct: `<span lang="ja">${esc(a1)}${a1 !== a2 ? `<span class="fg">(${esc(a2)})</span>` : ''}</span>`, x: explainConj(kana, cd.verbGroup, f), link2: wref(cd), src: cd.setTitle, say: a2,
   };

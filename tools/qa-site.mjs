@@ -295,6 +295,8 @@ async function check(P, name, group, full = true) {
   if (P.cdp) issues = issues.concat(await fontCheck(P, r.texts));
   if (P.cdp && name === 'home' && !['Manrope', 'Noto Serif JP'].every(f => r.loaded.includes(f))) issues.push({ t: 'fonts-not-loaded', d: r.loaded.join(', ') });
   for (const e of P.errs.splice(0)) issues.push({ t: 'error', d: e });
+  // exam instructions carry no hint in brackets (e.g. the form name): task line of a question, section task of the paper
+  for (const t of await P.page.$$eval('.q-label, .u-task', els => els.map(e => e.textContent)).catch(() => [])) if (/[(（]/.test(t)) issues.push({ t: 'exam-label-hint', d: t });
   if (SHOTS) {
     await P.page.screenshot({ path: path.join(OUT, 'shots', P.kind, safe(name) + '.png'), fullPage: full }).catch(() => {});
     report.shots++;
