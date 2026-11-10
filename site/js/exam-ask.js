@@ -1,15 +1,31 @@
 // AI helper of the Exam tab: «Чому так? Запитати ШІ» after an answer and the «Запитай ШІ» block at the bottom.
-// Talks only to /api/ask. It reads the exam session through the context the caller builds and never writes to it,
-// so scoring, timers and results are not affected. The last messages live in sessionStorage (or memory if unavailable).
+// Runs fully in the browser on Puter.js (https://docs.puter.com): every learner signs in to their own free Puter
+// account ("user-pays" model), so there is no API key and no server function. It reads the exam session through the
+// context the caller builds and never writes to it, so scoring, timers and results are not affected.
+// The last messages live in sessionStorage (or memory if unavailable).
 import { $, esc, toast } from './util.js';
-import { getPassword, setPassword, promptPassword } from './store.js';
 
 const KEY = 'jp.examAsk';
 const KEEP = 5; // messages
-const MAX_INPUT = 1000; // same limit as api/ask.js: question + context
+const MAX_INPUT = 1000; // characters: question + context
 const MAX_CONTEXT = 800; // leaves room for the question
+const MAX_OUTPUT_TOKENS = 700; // the prompt asks for ≈150 words; this only stops runaway answers
+const TIMEOUT_MS = 45000;
 const MSG_FAIL = 'Не вдалося отримати відповідь, спробуйте ще раз';
-const MSG_NO_PW = 'Щоб запитати ШІ, потрібен пароль.';
+const MSG_SIGNIN = 'Щоб отримати пояснення, увійдіть у безкоштовний акаунт Puter';
+
+export const PUTER_SRC = 'https://js.puter.com/v2/'; // docs.puter.com/getting-started
+// Chosen from Puter's model list (2026-11): Claude Haiku 5.5 is the cheapest strong model there (0.10 / 0.50 USD per
+// million tokens ≈ 0.03 ¢ per answer, so the free monthly allowance of a Puter account lasts long) and writes good
+// Ukrainian and Japanese. If it fails, Puter's documented default model is tried once.
+export const MODELS = ['claude-haiku-5-5', 'gpt-5.4-nano'];
+
+export const SYSTEM = `You are a patient Japanese teacher for a Ukrainian-speaking learner who uses the Minna no Nihongo textbook.
+Answer in Ukrainian. Explain why the learner's answer is wrong (if it is) and why the correct answer is right, and name the grammar point.
+Keep the answer under about 150 words unless the learner asks for more. Use plain text without Markdown headings or tables.
+Write Japanese readings only in kana: never romaji and never Cyrillic.
+Do not invent facts beyond the textbook; if you are unsure, say so.
+If the question is about the website itself and not about Japanese, tell the learner to contact the developer.`;
 
 // ---------- context of a question (plain text, sent to the helper) ----------
 /** HTML of a question → plain text; furigana stays as 漢字(かな). Parsed in an inert document, buttons dropped. */
@@ -54,26 +70,69 @@ function pushLog(...items) {
   try { sessionStorage.setItem(KEY, JSON.stringify(messages)); } catch { /* the messages stay in memory */ }
 }
 
+// ---------- Puter.js ----------
+let puterLoad = null;
+/** Adds the Puter.js script once (only the Exam tab calls this). Resolves to window.puter. */
+export function loadPuter() {
+  if (window.puter?.ai) return Promise.resolve(window.puter);
+  if (puterLoad) return puterLoad;
+  puterLoad = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = PUTER_SRC;
+    s.defer = true;
+    s.onload = () => (window.puter?.ai ? resolve(window.puter) : reject(new Error('Puter.js loaded without puter.ai')));
+    s.onerror = () => { puterLoad = null; s.remove(); reject(new Error('Puter.js could not be loaded')); };
+    document.head.append(s);
+  });
+  puterLoad.catch(() => {}); // a failed preload is reported on the first question
+  return puterLoad;
+}
+
+// For the console only: the error code and message, never the whole object (the SDK may attach request details).
+const errInfo = e => {
+  if (!e || typeof e !== 'object') return String(e);
+  const code = e.error?.code || e.code || (typeof e.error === 'string' ? e.error : '');
+  const msg = e.message || e.msg || e.error?.message || '';
+  return [code, msg].filter(Boolean).join(': ').slice(0, 300) || 'unknown error';
+};
+const AUTH_CODES = /auth|sign|token|unauthori[sz]ed|permission|forbidden|401|403/i;
+const isAuthError = e => AUTH_CODES.test(String(e?.error?.code || e?.code || (typeof e?.error === 'string' ? e.error : '') || e?.status || ''));
+
+/** Text of a ChatResponse: message.content is a string or (for some providers) a list of parts. */
+export function replyText(r) {
+  const c = r?.message?.content;
+  if (typeof c === 'string') return c.trim();
+  if (Array.isArray(c)) return c.map(p => (typeof p === 'string' ? p : p?.text || '')).join('').trim();
+  return typeof r === 'string' ? r.trim() : '';
+}
+
+const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))]);
+
 // ---------- request ----------
 async function request(question, context) {
-  let password = getPassword();
-  if (!password) {
-    password = await promptPassword('ask');
-    if (!password) return { error: MSG_NO_PW };
-    setPassword(password);
-  }
+  let puter;
+  try { puter = await loadPuter(); } catch (e) { console.error('ask:', errInfo(e)); return { error: MSG_FAIL }; }
+  // Sign-in opens Puter's popup, so it runs here, right after the click on «Надіслати».
   try {
-    const r = await fetch('api/ask', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question, context, password }),
-      signal: AbortSignal.timeout(35000),
-    });
-    let j = {};
-    try { j = await r.json(); } catch { /* not JSON, e.g. the 404 page of a local server */ }
-    if (r.status === 401) setPassword('');
-    if (r.ok && j.answer) return { answer: j.truncated ? `${j.answer}\n\n(Відповідь обрізано через ліміт довжини.)` : j.answer };
-    return { error: j.code && j.error ? j.error : MSG_FAIL };
-  } catch { return { error: MSG_FAIL }; }
+    if (!puter.auth.isSignedIn()) await puter.auth.signIn();
+  } catch (e) { console.warn('ask: Puter sign-in did not finish:', errInfo(e)); return { error: MSG_SIGNIN }; }
+  if (!puter.auth.isSignedIn()) return { error: MSG_SIGNIN };
+  const messages = [
+    { role: 'system', content: SYSTEM },
+    { role: 'user', content: context ? `${context}\n\nЗапитання учня: ${question}` : question },
+  ];
+  for (const model of MODELS) {
+    try {
+      const r = await withTimeout(puter.ai.chat(messages, false, { model, max_tokens: MAX_OUTPUT_TOKENS }), TIMEOUT_MS);
+      const answer = replyText(r);
+      if (answer) return { answer };
+      console.error('ask: empty answer from', model);
+    } catch (e) {
+      console.error('ask: Puter AI failed with', model, '-', errInfo(e));
+      if (isAuthError(e)) return { error: MSG_SIGNIN };
+    }
+  }
+  return { error: MSG_FAIL };
 }
 
 // ---------- widgets ----------
@@ -162,7 +221,8 @@ export function addAskButton(parent, getContext, before = null, question = 'По
 export function mountAskBlock(container) {
   const box = document.createElement('section');
   box.className = 'panel ask-zone ask-block';
-  box.innerHTML = '<h2 class="sec-title">Запитай ШІ</h2><p class="muted small">Відповідь ШІ може містити помилки, тому звіряйте її з підручником. На оцінку та час запитання не впливають.</p><div class="ask-body"></div>';
+  box.innerHTML = '<h2 class="sec-title">Запитай ШІ</h2><p class="muted small">Відповідь ШІ може містити помилки, тому звіряйте її з підручником. На оцінку та час запитання не впливають. Відповідає ШІ сервісу Puter: при першому запитанні відкриється вікно входу в безкоштовний акаунт Puter.</p><div class="ask-body"></div>';
   container.append(box);
+  loadPuter(); // preload, so the sign-in popup can open right on the first click
   widget($('.ask-body', box), { bottom: true });
 }

@@ -2,7 +2,7 @@
 // Data: data/exam.json (pre-built bank: particles, verb forms, translations, error finding — every item has an
 // explanation from IV. Граматика and a lesson/point reference) + words (sets.json), grammar.json, kanji.json.
 // Everything runs in the browser; the only things sent anywhere are the optional preset sync to GitHub and
-// questions the learner chooses to send to the AI helper (exam-ask.js → /api/ask).
+// questions the learner chooses to send to the AI helper (exam-ask.js → Puter.js in the browser).
 import { $, $$, esc, shuffle, furi, furiT, furiPlain, gtext, furiSay, speak, norm, toast, I, check as checkWord, today } from './util.js';
 import { state, getSets, markPresetsPending, registerPresetsPayload, syncAll } from './store.js';
 import { loadGrammar, grammarLessons } from './grammar.js';
