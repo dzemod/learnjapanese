@@ -194,7 +194,7 @@ const KVG = 'r20260714';
 const KVG_URLS = [`https://cdn.jsdelivr.net/gh/KanjiVG/kanjivg@${KVG}/kanji/`, `https://raw.githubusercontent.com/KanjiVG/kanjivg/${KVG}/kanji/`];
 const getText = url => fetch(url).then(r => { if (!r.ok) throw new Error(r.status); return r.text(); });
 const fetchSVG = hex => getText(KVG_URLS[0] + hex + '.svg').catch(() => getText(KVG_URLS[1] + hex + '.svg'));
-function kanjiVG(ch) {
+export function kanjiVG(ch) {
   const hex = ch.codePointAt(0).toString(16).padStart(5, '0');
   if (!svgCache.has(hex)) {
     svgCache.set(hex, fetchSVG(hex)
@@ -260,7 +260,7 @@ export function openKanji(lessonId, kanjiId, onChange) {
         </div>
         <div class="kc-head">
           <div class="kc-big" lang="ja">${esc(k.kanji)}</div>
-          <div class="kc-so"><div class="so-box"></div><button class="btn ghost sm" data-replay>${I.undo}<span>Повторити</span></button></div>
+          <div class="kc-so"><div class="so-box"></div><div class="kc-so-btns"><button class="btn ghost sm" data-replay>${I.undo}<span>Повторити</span></button><a class="btn ghost sm" data-write href="#/kanji/write/${encodeURIComponent(lessonId)}/${encodeURIComponent(k.id)}"><span lang="ja">書</span><span>Писати</span></a></div></div>
         </div>
         <div class="kc-meaning">${esc(k.meaning)} ${k.check ? `<button class="check-badge as-btn" data-edit title="Перекладено з англійської — перевірте">перевірити</button>` : ''}</div>
         <div class="kc-en muted small">англійською: ${esc(k.en || '')}</div>
@@ -321,7 +321,8 @@ export function kanjiHome(root) {
   }
   root.innerHTML = `<div class="kanji-home fade-in">
     <section class="hero"><div><p class="eyebrow" lang="ja">漢字</p><h1>Канджі</h1>
-      <p class="muted">${books().map(b => `${esc(b.title)}: ${b.lessons.reduce((n, l) => n + l.kanji.length, 0)}`).join(' · ')}</p></div></section>
+      <p class="muted">${books().map(b => `${esc(b.title)}: ${b.lessons.reduce((n, l) => n + l.kanji.length, 0)}`).join(' · ')}</p>
+      <div class="kw-entry"><a class="btn primary" href="#/kanji/write"><span lang="ja">書</span><span>Писати канджі</span></a>${books().filter(b => b.lessons.length).map(b => `<a class="btn ghost" href="#/kanji/write/${encodeURIComponent(b.id)}"><span>Писати: ${esc(b.title)}</span></a>`).join('')}</div></div></section>
     ${books().map(b => `<h2 class="group-title"><span lang="ja">${esc(b.titleJp || '')}</span> ${esc(b.title)}</h2>
       ${b.lessons.length ? '' : '<p class="muted small">Уроки цієї книжки ще не додано.</p>'}
       <div class="set-grid">${b.lessons.map(l => {
@@ -364,6 +365,7 @@ export function kanjiLessonView(root, id, openId) {
           </button>`;
         }).join('')}</div>
         <h3 class="sub-title">Вчити канджі</h3>
+        <a class="mode-btn kw-mode-btn" href="#/kanji/write/${encodeURIComponent(id)}"><span class="mode-ic" lang="ja">書</span><span><b>Писати канджі</b><small>риска за риською, з повтореннями</small></span></a>
         ${modesGrid(id)}
       </section>
 
