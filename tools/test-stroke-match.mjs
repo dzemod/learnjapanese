@@ -1,11 +1,14 @@
 // Unit test of the stroke matching rules (site/js/stroke-match.js) on real KanjiVG strokes, no browser.
 //   node tools/test-stroke-match.mjs [svg dir]   (default: fetch the few SVGs needed from jsDelivr)
+//   node tools/test-stroke-match.mjs <svg dir> --all   every kanji of data/kanji.json: each stroke drawn with the
+//     human and the crooked hand must be accepted (an accepted stroke is what the writing mode swaps for the clean one)
 // Checks: exact / overshoot 20 % / undershoot 25 % / two pieces / reversed / wrong place / later stroke (order),
 // and that every stroke of the test kanji drawn with a "human" offset + wobble is accepted.
 import fs from 'fs';
 import { STROKE, judgeStroke, compareStroke, pathLength, resample } from '../site/js/stroke-match.js';
 
-const dir = process.argv[2];
+const dir = process.argv[2] && !process.argv[2].startsWith('--') ? process.argv[2] : null;
+const ALL_MODE = process.argv.includes('--all');
 const KVG = 'https://cdn.jsdelivr.net/gh/KanjiVG/kanjivg@r20260714/kanji/';
 async function svg(ch) {
   const hex = ch.codePointAt(0).toString(16).padStart(5, '0');
