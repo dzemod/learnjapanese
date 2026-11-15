@@ -8,7 +8,7 @@ export const STROKE = {
   SHAPE_TOL: 10,         // an expected point is "covered" when the drawn path passes within this distance
   COVERAGE_MIN: 0.85,    // share of expected points that must be covered (catches undershooting)
   END_SLACK: 3,          // …and only up to this far past the end of the drawn line (measured with its start on the expected start)
-  SHORT_LEN: 12, SHORT_SLACK: 4, // dots and other short strokes (< SHORT_LEN) get a larger end slack
+  SHORT_LEN: 24, SHORT_SLACK: 4, // short strokes (< SHORT_LEN, ≈ 22 % of the box) get a larger end slack
   MAX_LENGTH_RATIO: 1.5, // drawn length ≤ ratio × expected length + LENGTH_MARGIN (overshoot ok, long wrong line not)
   LENGTH_MARGIN: 8,
   MIN_LEN: 3,            // shorter strokes are taps → ignored, not counted as mistakes

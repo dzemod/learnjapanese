@@ -87,6 +87,21 @@ for (const ch of '畳妻議競警願療震書飛必左右人一難鬱') {
   S2.forEach((s, i) => { const x = judgeStroke(human(s), S2, i); if (!x.ok) bad.push(`${i + 1}: ${fmt(x)}`); });
   t(`${ch} all ${S2.length} strokes accepted`, !bad.length, bad.join(' | '));
 }
+if (ALL_MODE) {
+  const crooked = pts => resample(pts, Math.max(6, Math.round(pathLength(pts) / 2))).map(([x, y], i) => [x + 3 + 3 * Math.sin(i * 0.45), y + 2 + 2.6 * Math.cos(i * 0.35)]);
+  const kj = JSON.parse(fs.readFileSync(new URL('../site/data/kanji.json', import.meta.url), 'utf8'));
+  const failed = [];
+  let n = 0, strokes = 0;
+  for (const b of kj.books) for (const l of b.lessons) for (const k of l.kanji) {
+    const S3 = strokesOf(await svg(k.kanji));
+    n++; strokes += S3.length;
+    for (const [hand, fn] of [['human', human], ['crooked', crooked]]) {
+      S3.forEach((st, i) => { const x = judgeStroke(fn(st), S3, i); if (!x.ok) failed.push(`${k.id} ${k.kanji} stroke ${i + 1} (${hand}): ${fmt(x)}`); });
+    }
+  }
+  t(`all ${n} kanji (${strokes} strokes, 2 hands): every stroke accepted`, !failed.length, `${failed.length} rejected`);
+  if (failed.length) console.log(failed.join('\n'));
+}
 console.log(`\nthresholds ${JSON.stringify(STROKE)}`);
 console.log(fails ? `${fails} FAILED` : 'ALL PASSED');
 process.exit(fails ? 1 : 0);
