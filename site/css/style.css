@@ -1224,7 +1224,9 @@ textarea.ask-input { width: 100%; min-height: 84px; resize: vertical; font-famil
 .kw-grid line.mid { stroke: rgba(220, 200, 205, .55); stroke-dasharray: 2.4 1.6; }
 .kw-hint path { stroke: rgba(245, 241, 234, .28); stroke-width: 3.8; }
 .kw-ink path, .kw-replay path { stroke: #f5f1ea; stroke-width: 3.2; }
-.kw-wrongs path { stroke: #e5484d; stroke-width: 3.2; opacity: .92; }
+.kw-user path { stroke: #f5f1ea; }
+.kw-wrong path { stroke: #e5484d; }
+.kw-wrong { opacity: .92; }
 .kw-svg.replaying .kw-ink { opacity: 0; }
 .kw-pad .so-missing { position: absolute; inset: 0; display: grid; place-items: center; padding: 16px; color: var(--muted); }
 .kw-btn { position: absolute; width: 44px; height: 44px; display: grid; place-items: center; border: 0; background: transparent; color: var(--text); font-size: 1.35rem; font-weight: 700; opacity: .85; }

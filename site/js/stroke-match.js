@@ -16,7 +16,6 @@ export const STROKE = {
   GRACE_MS: 500,         // after lifting, wait this long before judging (the learner may continue the stroke)
   JOIN_DIST: 15,         // a new piece within GRACE_MS that starts this close to the last point continues the stroke
 };
-export const WRONG_MS = 1000;   // a rejected stroke stays red this long (fade-out included)
 
 // ---------- geometry ----------
 const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);

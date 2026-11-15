@@ -6,16 +6,17 @@ import { $, $$, esc, I } from './util.js';
 import { books, kanjiVG } from './kanji.js';
 import { kunHTML } from './modes.js';
 import {
-  STROKE, WRONG_MS, judgeStroke, RATINGS, nextInterval, applyRating, counts, buildQueue, fmtInterval,
+  STROKE, judgeStroke, RATINGS, nextInterval, applyRating, counts, buildQueue, fmtInterval,
 } from './stroke-match.js';
 
 const KEY = 'jp.kanjiWrite';
 // Stroke colours of the diagram: red, orange, yellow, green, … (repeats after 10)
 const PALETTE = ['#e5484d', '#f08c3a', '#f2c94c', '#5ec26a', '#2bb3a3', '#3b9ae1', '#6e6ae8', '#b45ce0', '#e0589c', '#9aa0a6'];
 const INK = '#f5f1ea'; // red (#e5484d) and the hint grey live in style.css (.kw-wrong, .kw-hint)
-const STROKE_W = 3.2; // ink width in 109-units
 // demonstration / replay timing: per-stroke duration from MIN_MS (short) to MAX_MS (long), pause between strokes
-const ANIM = { MIN_MS: 350, MAX_MS: 700, PAUSE_MS: 120 };
+const ANIM = { MIN_MS: 350, MAX_MS: 700, PAUSE_MS: 120, WRONG_HOLD_MS: 600, WRONG_FADE_MS: 400 };
+// live brush: width from speed (faster = thinner), smoothed, tapered at both ends (109-units, units/ms)
+const BRUSH = { W_MAX: 4.4, W_MIN: 1.9, V_FAST: 0.45, SPEED_EMA: 0.3, WIDTH_EMA: 0.35, TAPER: 6, TAPER_MIN: 0.35 };
 
 // ---------- schedule storage (never throws; falls back to memory) ----------
 let memSched = null;
@@ -136,7 +137,7 @@ export function kanjiWriteView(root, scope = '', startId = '') {
         <div class="kw-ex-list">${ex.map(e => `<div class="kw-exrow"><ruby lang="ja">${mask(e.word)}<rt>${esc(e.kana)}</rt></ruby><span>— ${esc(e.uk)}</span></div>`).join('') || '<p class="muted small">Немає прикладів.</p>'}</div>
       </details>
       <div class="kw-pad">
-        <svg class="kw-svg" viewBox="0 0 109 109" aria-hidden="true"><g class="kw-grid"></g><g class="kw-hint"></g><g class="kw-ink"></g><g class="kw-wrongs"></g></svg>
+        <svg class="kw-svg" viewBox="0 0 109 109" aria-hidden="true"><g class="kw-grid"></g><g class="kw-hint"></g><g class="kw-ink"></g><g class="kw-fades"></g><g class="kw-wrongs"></g></svg>
         <canvas class="kw-canvas" aria-label="Поле для письма"></canvas>
         <button class="kw-btn kw-hint" data-hint aria-label="Показати штрих" title="Показати штрих">?</button>
         <button class="kw-btn kw-play" data-replay aria-label="Повторити" title="Повторити" hidden>▶</button>
@@ -211,23 +212,50 @@ export function kanjiWriteView(root, scope = '', startId = '') {
   let cv, ctx, size = 0, svgPad, liveQueued = false;
   const SVGNS = 'http://www.w3.org/2000/svg';
   const mk = (tag, attrs) => { const el = document.createElementNS(SVGNS, tag); for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v); return el; };
-  /** Smooth SVG path through the points: quadratic curves via the midpoints of consecutive points. */
-  function smoothD(pts) {
-    if (!pts.length) return '';
-    const f = n => n.toFixed(2);
-    if (pts.length < 3) return `M${f(pts[0][0])} ${f(pts[0][1])}L${f(pts.at(-1)[0] + 0.01)} ${f(pts.at(-1)[1])}`;
-    let d = `M${f(pts[0][0])} ${f(pts[0][1])}`;
-    for (let i = 1; i < pts.length - 1; i++) {
-      const mx = (pts[i][0] + pts[i + 1][0]) / 2, my = (pts[i][1] + pts[i + 1][1]) / 2;
-      d += `Q${f(pts[i][0])} ${f(pts[i][1])} ${f(mx)} ${f(my)}`;
+  /** Brush widths for the points: speed-based (faster = thinner), smoothed over the last points, tapered at both ends. */
+  function brushWidths(pts) {
+    const n = pts.length, w = new Array(n);
+    let v = 0, wPrev = BRUSH.W_MAX, acc = 0;
+    const cum = [0];
+    for (let i = 1; i < n; i++) cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+    const total = cum[n - 1] || 0;
+    for (let i = 0; i < n; i++) {
+      if (i) {
+        const dt = Math.max(1, (pts[i][2] || 0) - (pts[i - 1][2] || 0));
+        v += BRUSH.SPEED_EMA * ((cum[i] - cum[i - 1]) / dt - v);
+      }
+      const raw = BRUSH.W_MAX - (BRUSH.W_MAX - BRUSH.W_MIN) * Math.min(1, v / BRUSH.V_FAST);
+      wPrev += BRUSH.WIDTH_EMA * (raw - wPrev);
+      const ends = Math.min(cum[i], total - cum[i]);
+      acc = BRUSH.TAPER_MIN + (1 - BRUSH.TAPER_MIN) * Math.min(1, ends / BRUSH.TAPER);
+      w[i] = wPrev * acc;
     }
-    return d + `L${f(pts.at(-1)[0])} ${f(pts.at(-1)[1])}`;
+    return w;
   }
-  function traceSmooth(c, pts) {
-    c.moveTo(pts[0][0], pts[0][1]);
-    if (pts.length < 3) { c.lineTo(pts.at(-1)[0] + 0.01, pts.at(-1)[1]); return; }
-    for (let i = 1; i < pts.length - 1; i++) c.quadraticCurveTo(pts[i][0], pts[i][1], (pts[i][0] + pts[i + 1][0]) / 2, (pts[i][1] + pts[i + 1][1]) / 2);
-    c.lineTo(pts.at(-1)[0], pts.at(-1)[1]);
+  /** Brush segments: quadratic curves through the midpoints, each with its own width. */
+  function brushSegments(pts) {
+    const w = brushWidths(pts), segs = [];
+    if (pts.length < 3) return [{ a: pts[0], c: null, b: [pts.at(-1)[0] + 0.01, pts.at(-1)[1]], w: w[0] }];
+    let a = pts[0];
+    for (let i = 1; i < pts.length - 1; i++) {
+      const b = [(pts[i][0] + pts[i + 1][0]) / 2, (pts[i][1] + pts[i + 1][1]) / 2];
+      segs.push({ a, c: pts[i], b, w: w[i] }); a = b;
+    }
+    segs.push({ a, c: null, b: pts.at(-1), w: w.at(-1) });
+    return segs;
+  }
+  /** The brush line as SVG: consecutive segments with (almost) the same width share one <path>. */
+  function brushSVG(pts, cls) {
+    const g = mk('g', { class: cls }), f = n => n.toFixed(2);
+    let d = '', wq = null;
+    const flush = () => { if (d) g.append(mk('path', { d, 'stroke-width': wq })); d = ''; };
+    for (const s of brushSegments(pts)) {
+      const q = (Math.round(s.w * 4) / 4).toFixed(2);
+      if (q !== wq) { flush(); wq = q; }
+      d += `M${f(s.a[0])} ${f(s.a[1])}` + (s.c ? `Q${f(s.c[0])} ${f(s.c[1])} ${f(s.b[0])} ${f(s.b[1])}` : `L${f(s.b[0])} ${f(s.b[1])}`);
+    }
+    flush();
+    return g;
   }
 
   function setupCanvas() {
@@ -243,7 +271,7 @@ export function kanjiWriteView(root, scope = '', startId = '') {
       paintLive();
     };
     ro?.disconnect(); ro = new ResizeObserver(fit); ro.observe(cv); fit();
-    const toPt = e => { const r = cv.getBoundingClientRect(); return [((e.clientX - r.left) * 109) / r.width, ((e.clientY - r.top) * 109) / r.height]; };
+    const toPt = e => { const r = cv.getBoundingClientRect(); return [((e.clientX - r.left) * 109) / r.width, ((e.clientY - r.top) * 109) / r.height, e.timeStamp || performance.now()]; };
     const minStep = () => 109 / (cv.getBoundingClientRect().width || 109); // 1 CSS px in 109-units
     const add = (arr, p) => { const q = arr.at(-1); if (!q || Math.hypot(p[0] - q[0], p[1] - q[1]) >= minStep()) arr.push(p); };
     cv.addEventListener('pointerdown', e => {
@@ -383,15 +411,28 @@ export function kanjiWriteView(root, scope = '', startId = '') {
     g.dataset.d = want;
     g.replaceChildren(...(show ? [mk('path', { d: want })] : []));
   }
-  /** Accepted stroke → white ink in the SVG layer (the learner's own line; null = revealed by «✓»). */
+  /** Accepted stroke i (any kanji): the clean KanjiVG stroke is drawn in along its path while the learner's own
+   *  ink (pts; null = revealed by «✓») fades out over the same time and is then removed. */
   function addInk(pts, i) {
-    $('.kw-ink', svgPad).append(mk('path', { d: pts ? smoothD(pts) : cur.strokes[i].d, 'data-i': i }));
+    const s = cur.strokes[i];
+    const clean = mk('path', { d: s.d, 'data-i': i, class: 'kw-clean' });
+    $('.kw-ink', svgPad).append(clean);
+    drawIn(clean, s.len);
+    if (!pts) return;
+    const ink = brushSVG(pts, 'kw-user');
+    $('.kw-fades', svgPad).append(ink);
+    if (reduceMotion()) { ink.remove(); return; }
+    const a = ink.animate([{ opacity: 1 }, { opacity: 0 }], { duration: strokeMs(s.len), easing: 'ease-in-out', fill: 'forwards' });
+    a.finished.then(() => ink.remove(), () => ink.remove());
   }
+  /** Rejected stroke: the learner's line in red, held WRONG_HOLD_MS, then faded out over WRONG_FADE_MS. */
   function showWrong(pts, reason) {
     cur.wrong = { reason };
-    const p = mk('path', { d: smoothD(pts), class: 'kw-wrong' });
-    $('.kw-wrongs', svgPad).append(p);
-    later(() => { p.remove(); if (!$('.kw-wrongs path', svgPad)) { cur.wrong = null; status_(); } }, WRONG_MS);
+    const g = brushSVG(pts, 'kw-wrong');
+    $('.kw-wrongs', svgPad).append(g);
+    const gone = () => { g.remove(); if (!$('.kw-wrongs .kw-wrong', svgPad)) { cur.wrong = null; status_(); } };
+    const a = g.animate([{ opacity: 0.92 }, { opacity: 0 }], { duration: ANIM.WRONG_FADE_MS, delay: ANIM.WRONG_HOLD_MS, easing: 'ease-in', fill: 'forwards' });
+    a.finished.then(gone, gone);
   }
 
   // ----- live canvas: only the stroke being drawn (and pieces waiting in the grace period), once per frame -----
@@ -405,10 +446,13 @@ export function kanjiWriteView(root, scope = '', startId = '') {
     ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, cv.width, cv.height); ctx.restore();
     const lines = [...(cur.pending?.pieces || []), ...(cur.pieces || []), ...(cur.live ? [cur.live] : [])];
     if (!lines.length) return;
-    ctx.save(); ctx.strokeStyle = INK; ctx.lineWidth = STROKE_W; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    ctx.beginPath();
-    for (const p of lines) traceSmooth(ctx, p);
-    ctx.stroke(); ctx.restore();
+    ctx.save(); ctx.strokeStyle = INK; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    for (const p of lines) for (const sg of brushSegments(p)) {
+      ctx.lineWidth = sg.w; ctx.beginPath(); ctx.moveTo(sg.a[0], sg.a[1]);
+      if (sg.c) ctx.quadraticCurveTo(sg.c[0], sg.c[1], sg.b[0], sg.b[1]); else ctx.lineTo(sg.b[0], sg.b[1]);
+      ctx.stroke();
+    }
+    ctx.restore();
   }
   function status_() {
     const el = $('[data-st]', body);
@@ -430,7 +474,8 @@ export function kanjiWriteView(root, scope = '', startId = '') {
   window.__kw = { // read-only hook for tools/qa-kanji-write.mjs
     get id() { return cur?.k.id; }, get idx() { return cur?.idx; }, get done() { return cur?.done; }, get mistakes() { return cur?.mistakes; },
     get strokes() { return cur?.strokes?.map(s => s.pts); }, get last() { return window.__kwLast; }, STROKE,
-    get judged() { return cur?.judged || 0; }, get pending() { return !!cur?.pending; }, get wrongShown() { return !!document.querySelector('.kw-wrongs path'); },
+    get judged() { return cur?.judged || 0; }, get pending() { return !!cur?.pending; }, get wrongShown() { return !!document.querySelector('.kw-wrongs .kw-wrong'); },
+    get paths() { return cur?.strokes?.map(s => s.d); },
   };
 
   load(nextId());
