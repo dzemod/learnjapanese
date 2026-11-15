@@ -11,6 +11,8 @@
 //   so a long run uses little memory and an interrupted run still leaves a partial report.
 //
 // Screenshots + report go to qa/ (gitignored): qa/report.json, qa/report.md, qa/shots/{d,m}/*.png
+//   QA_BASE=<url> — test a deployed site instead of the local server (e.g. https://learnjapanese-site-two.vercel.app/).
+//   QA_STEPS=<name,name,…> — run only these step names (e.g. kcard-k700-046,kmode-k300-15-flashcards).
 // Chrome: QA_CHROME=<path to chrome.exe> (default: Program Files Google Chrome).
 import http from 'http';
 import fs from 'fs';
@@ -29,6 +31,8 @@ const groups = (args.find(a => !a.startsWith('--') && !/^\d+$/.test(a)) || 'word
 const SHOTS = !args.includes('--no-shots');
 const LIMIT = args.includes('--limit') ? +args[args.indexOf('--limit') + 1] : Infinity;
 const PORT = +process.env.QA_PORT || 5190;
+const BASE = process.env.QA_BASE || `http://localhost:${PORT}/`;
+const ONLY_STEPS = process.env.QA_STEPS ? new Set(process.env.QA_STEPS.split(',')) : null;
 
 // ---------- static server ----------
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png' };
@@ -252,7 +256,7 @@ async function makePage(kind) {
   page.on('dialog', d => d.dismiss().catch(() => {}));
   const cdp = kind === 'd' ? await ctx.newCDPSession(page) : null;
   if (cdp) { await cdp.send('DOM.enable'); await cdp.send('CSS.enable'); }
-  await page.goto(`http://localhost:${PORT}/`, { waitUntil: 'networkidle' });
+  await page.goto(BASE, { waitUntil: 'networkidle' });
   return { kind, page, cdp, errs };
 }
 
@@ -458,6 +462,7 @@ async function runAll(P) {
   for (const g of groups) {
     let n = 0;
     for (const step of plan[g] || []) {
+      if (ONLY_STEPS && !ONLY_STEPS.has(step.name)) continue;
       if (++n > LIMIT) break;
       try {
         if (step.selfcheck) { await tsSelfcheck(P, g); continue; }
