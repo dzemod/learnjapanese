@@ -3,14 +3,20 @@
 
 // ---------- tuning (all thresholds in one place) ----------
 export const STROKE = {
-  POINTS: 32,       // both strokes are resampled to this many points (equal arc-length steps)
-  START_MAX: 20,    // max distance learner start ↔ expected start (≈18 % of the 109 box)
-  END_MAX: 20,      // max distance learner end ↔ expected end
-  AVG_MAX: 13,      // max mean distance between the 32 matching points (shape + position)
-  MIN_LEN: 3,       // shorter strokes are taps → ignored, not counted as mistakes
-  REVERSE_MARGIN: 2, // stroke counts as drawn backwards when the reversed fit is better by this much
+  POINTS: 32,            // the expected stroke is resampled to this many points (equal arc-length steps)
+  START_TOL: 18,         // learner start ↔ expected start (≈16 % of the 109 box)
+  SHAPE_TOL: 10,         // an expected point is "covered" when the drawn path passes within this distance
+  COVERAGE_MIN: 0.85,    // share of expected points that must be covered (catches undershooting)
+  END_SLACK: 3,          // …and only up to this far past the end of the drawn line (measured with its start on the expected start)
+  SHORT_LEN: 12, SHORT_SLACK: 4, // dots and other short strokes (< SHORT_LEN) get a larger end slack
+  MAX_LENGTH_RATIO: 1.5, // drawn length ≤ ratio × expected length + LENGTH_MARGIN (overshoot ok, long wrong line not)
+  LENGTH_MARGIN: 8,
+  MIN_LEN: 3,            // shorter strokes are taps → ignored, not counted as mistakes
+  REVERSE_MARGIN: 2,     // drawn backwards when the reversed point-by-point fit is better by this much
+  GRACE_MS: 500,         // after lifting, wait this long before judging (the learner may continue the stroke)
+  JOIN_DIST: 15,         // a new piece within GRACE_MS that starts this close to the last point continues the stroke
 };
-export const WRONG_MS = 1000;   // a rejected stroke stays red this long
+export const WRONG_MS = 1000;   // a rejected stroke stays red this long (fade-out included)
 
 // ---------- geometry ----------
 const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
@@ -37,15 +43,47 @@ export function resample(pts, n = STROKE.POINTS) {
 }
 const avgDist = (a, b) => a.reduce((s, p, i) => s + dist(p, b[i]), 0) / a.length;
 
-/** Compare one learner stroke with one expected stroke (both arrays of [x, y] in 109 space). */
+/** Nearest distance from p to the polyline pts, and how far p lies beyond its first/last point (along the line). */
+export function polyNear(p, pts) {
+  if (pts.length === 1) return { d: dist(p, pts[0]), beyond: dist(p, pts[0]) };
+  let best = { d: Infinity, beyond: 0 };
+  // first / last segments with a length (repeated points, e.g. the lift point, make zero-length segments)
+  let first = 1, last = pts.length - 1;
+  while (first < last && pts[first][0] === pts[first - 1][0] && pts[first][1] === pts[first - 1][1]) first++;
+  while (last > first && pts[last][0] === pts[last - 1][0] && pts[last][1] === pts[last - 1][1]) last--;
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1], b = pts[i], vx = b[0] - a[0], vy = b[1] - a[1], l2 = vx * vx + vy * vy;
+    if (!l2) continue;
+    const raw = ((p[0] - a[0]) * vx + (p[1] - a[1]) * vy) / l2, t = Math.max(0, Math.min(1, raw));
+    const d = Math.hypot(p[0] - a[0] - t * vx, p[1] - a[1] - t * vy);
+    if (d < best.d) {
+      const l = Math.sqrt(l2);
+      const beyond = raw < 0 && i === first ? -raw * l : raw > 1 && i === last ? (raw - 1) * l : 0;
+      best = { d, beyond };
+    }
+  }
+  return best.d === Infinity ? { d: dist(p, pts[0]), beyond: dist(p, pts[0]) } : best;
+}
+
+/** Compare one learner stroke with one expected stroke (both arrays of [x, y] in 109 space).
+ *  Accepted when: start within START_TOL, ≥ COVERAGE_MIN of the expected points within SHAPE_TOL of the drawn path
+ *  (and not more than END_SLACK past its ends — so stopping short is caught),
+ *  not drawn backwards, and not longer than MAX_LENGTH_RATIO × expected + LENGTH_MARGIN. */
 export function compareStroke(user, expected, T = STROKE) {
-  if (pathLength(user) < T.MIN_LEN) return { ok: false, reason: 'tap' };
-  const u = resample(user, T.POINTS), e = resample(expected, T.POINTS);
-  const start = dist(u[0], e[0]), end = dist(u[u.length - 1], e[e.length - 1]);
+  const len = pathLength(user), elen = pathLength(expected);
+  if (len < T.MIN_LEN) return { ok: false, reason: 'tap' };
+  const e = resample(expected, T.POINTS), u = resample(user, T.POINTS);
+  const start = dist(user[0], e[0]);
+  const slack = elen < T.SHORT_LEN ? T.SHORT_SLACK : T.END_SLACK;
+  // position: the drawn line itself; completeness: the drawn line moved so that it starts on the expected start
+  // (a hand that is a little off everywhere is not "short", a line that stops early is)
+  const sx = e[0][0] - user[0][0], sy = e[0][1] - user[0][1], aligned = user.map(([x, y]) => [x + sx, y + sy]);
+  const coverage = e.filter(p => polyNear(p, user).d <= T.SHAPE_TOL && polyNear(p, aligned).beyond <= slack).length / e.length;
   const avg = avgDist(u, e), avgRev = avgDist(u, [...e].reverse());
-  const m = { start, end, avg, avgRev };
-  if (avgRev + T.REVERSE_MARGIN < avg && avgRev <= T.AVG_MAX) return { ok: false, reason: 'direction', ...m };
-  if (start > T.START_MAX || end > T.END_MAX || avg > T.AVG_MAX) return { ok: false, reason: 'shape', ...m };
+  const m = { start, coverage, len, elen, avg, avgRev };
+  if (avgRev + T.REVERSE_MARGIN < avg && dist(user[0], e[e.length - 1]) < dist(user[0], e[0])) return { ok: false, reason: 'direction', ...m };
+  if (start > T.START_TOL || coverage < T.COVERAGE_MIN) return { ok: false, reason: 'shape', ...m };
+  if (len > T.MAX_LENGTH_RATIO * elen + T.LENGTH_MARGIN) return { ok: false, reason: 'long', ...m };
   return { ok: true, ...m };
 }
 

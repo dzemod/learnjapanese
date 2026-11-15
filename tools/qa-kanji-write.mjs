@@ -8,6 +8,7 @@ import http from 'http';
 import path from 'path';
 import { createRequire } from 'module';
 import { fileURLToPath } from 'url';
+import { resample, pathLength, STROKE } from '../site/js/stroke-match.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(process.env.QA_MODULES ? path.join(process.env.QA_MODULES, 'x.js') : path.join(ROOT, 'x.js'));
@@ -30,10 +31,22 @@ const ALL = [];
 for (const b of KJ.books) for (const l of b.lessons) for (const k of l.kanji) ALL.push({ id: k.id, kanji: k.kanji, strokes: +k.strokes, lesson: l.id });
 const pick = ch => ALL.find(k => k.kanji === ch);
 const complex = ALL.filter(k => k.id.startsWith('k700')).sort((a, b) => b.strokes - a.strokes).slice(0, 4);
-const TEST = [...new Set([pick('妻'), pick('一'), pick('人'), pick('書'), pick('右'), pick('左'), pick('必'), pick('飛'), pick('療'), pick('震'), ...complex].filter(Boolean))];
+// 妻 first (full scenario), then 畳 + 12 more from book 700 (incl. the 4 most complex) and 5 from book 300
+const TEST = [...new Set([pick('妻'), pick('畳'), pick('難'), pick('必'), pick('飛'), pick('療'), pick('震'), pick('違'), pick('際'), ...complex, pick('一'), pick('人'), pick('書'), pick('右'), pick('左')].filter(Boolean))];
 const ONLY = process.argv[2] ? process.argv[2].split(',') : null;
 
-const results = [], issues = [];
+const results = [], issues = [], perf = [];
+const p95 = a => { const b = [...a].sort((x, y) => x - y); return b.length ? b[Math.min(b.length - 1, Math.floor(b.length * 0.95))] : NaN; };
+// part of a stroke from fraction a to b of its length (b > 1 = extended along its last direction)
+function part(pts, a, b) {
+  const r = resample(pts, 101);
+  const out = r.slice(Math.round(a * 100), Math.round(Math.min(1, b) * 100) + 1);
+  if (b > 1) {
+    const [p, q] = [r[99], r[100]], L = pathLength(pts) * (b - 1), dx = q[0] - p[0], dy = q[1] - p[1], n = Math.hypot(dx, dy) || 1;
+    for (let k = 1; k <= 10; k++) out.push([q[0] + (dx / n) * L * k / 10, q[1] + (dy / n) * L * k / 10]);
+  }
+  return out;
+}
 let steps = 0;
 const ok = (v, step, cond, detail = '') => { steps++; if (!cond) { issues.push(`${v} · ${step}: ${detail}`); console.log('FAIL', v, step, detail); } return cond; };
 
@@ -47,6 +60,7 @@ for (const [kind, width, height] of [['desktop', 1280, 900], ['phone', 375, 780]
   page.on('console', m => { if (m.type() === 'error' && !/Failed to load resource|net::ERR/.test(m.text())) errs.push(m.text()); });
 
   const open = async (k) => {
+    await page.evaluate(() => { location.hash = '#/kanji'; }).catch(() => {}); // same URL twice must still restart
     await page.goto(`${URL0}#/kanji/write/${k.lesson}/${k.id}`);
     await page.waitForFunction(id => window.__kw?.id === id && window.__kw.strokes?.length, k.id, { timeout: 20000 });
     await page.locator('.kw-pad').scrollIntoViewIfNeeded();
@@ -56,7 +70,7 @@ for (const [kind, width, height] of [['desktop', 1280, 900], ['phone', 375, 780]
     return pts.map(([x, y]) => [r.x + (x * r.width) / 109, r.y + (y * r.height) / 109]);
   };
   // "human" version of a KanjiVG stroke: shifted ~3 units, wobble ±1.5 units, ~2-unit steps
-  const human = pts => pts.filter((_, i) => i % 2 === 0 || i === pts.length - 1).map(([x, y], i) => [x + 2.5 + 1.5 * Math.sin(i * 0.9), y - 1.5 + Math.cos(i * 1.3) * 1.2]);
+  const human = pts => resample(pts, Math.max(6, Math.round(pathLength(pts) / 2))).map(([x, y], i) => [x + 2.5 + 1.5 * Math.sin(i * 0.9), y - 1.5 + Math.cos(i * 1.3) * 1.2]);
   const draw = async pts109 => {
     const pts = await toScreen(pts109);
     if (kind === 'desktop') {
@@ -70,8 +84,23 @@ for (const [kind, width, height] of [['desktop', 1280, 900], ['phone', 375, 780]
       for (const p of pts.slice(1)) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: tp(p) });
       await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
     }
-    await page.waitForTimeout(40);
+    await page.waitForTimeout(20);
   };
+  // draw one stroke and wait until it is judged (after the grace period)
+  const judge = async pts => {
+    const n = await page.evaluate(() => window.__kw.judged);
+    await draw(pts);
+    await page.waitForFunction(n => window.__kw.judged > n, n, { timeout: 4000 }).catch(() => {});
+    return st();
+  };
+  // rAF frame intervals while fn runs (ms)
+  const frames = async fn => {
+    await page.evaluate(() => { const f = window.__qaF = { d: [], on: true, t: performance.now() }; const loop = t => { if (!f.on) return; f.d.push(t - f.t); f.t = t; requestAnimationFrame(loop); }; requestAnimationFrame(t => { f.t = t; requestAnimationFrame(loop); }); });
+    await fn();
+    return page.evaluate(() => { window.__qaF.on = false; return window.__qaF.d; });
+  };
+  // is a rejected (red) stroke on screen?
+  const redShown = () => page.evaluate(() => !!window.__kw.wrongShown);
   const st = () => page.evaluate(() => ({ id: window.__kw.id, idx: window.__kw.idx, done: window.__kw.done, mistakes: window.__kw.mistakes, last: window.__kw.last }));
   const strokes = () => page.evaluate(() => window.__kw.strokes);
   const counters = () => page.evaluate(() => Object.fromEntries([...document.querySelectorAll('[data-c]')].map(b => [b.dataset.c, +b.textContent])));
@@ -100,24 +129,21 @@ for (const [kind, width, height] of [['desktop', 1280, 900], ['phone', 375, 780]
 
   // wrong order: stroke 3 before stroke 1
   const h2 = human(S[2]), mid2 = h2[Math.floor(h2.length / 2)];
-  await draw(h2);
-  let s = await st();
-  const redOrder = isRed(await pixel(mid2));
+  let s = await judge(h2);
+  const redOrder = await redShown();
   ok(kind, 'wrong order rejected', s.idx === 0 && s.last.reason === 'order', JSON.stringify(s.last));
   ok(kind, 'wrong order shown in red', redOrder);
   await shot('02-wrong-order');
   await page.waitForTimeout(1200);
-  ok(kind, 'red stroke removed after ~1 s', !isRed(await pixel(mid2)));
+  ok(kind, 'red stroke removed after ~1 s', !await redShown());
   // wrong shape / place: a vertical line in the bottom-left corner
-  await draw([[8, 70], [8, 80], [8, 90], [8, 100]]);
-  s = await st();
+  s = await judge([[8, 70], [8, 80], [8, 90], [8, 100]]);
   ok(kind, 'wrong shape rejected', s.idx === 0 && s.last.reason === 'shape', JSON.stringify(s.last));
-  ok(kind, 'wrong shape shown in red', isRed(await pixel([8, 85])));
+  ok(kind, 'wrong shape shown in red', await redShown());
   await shot('03-wrong-stroke');
   await page.waitForTimeout(1200);
   // wrong direction: stroke 1 drawn right → left
-  await draw(human([...S[0]].reverse()));
-  s = await st();
+  s = await judge(human([...S[0]].reverse()));
   ok(kind, 'wrong direction rejected', s.idx === 0 && s.last.reason === 'direction', JSON.stringify(s.last));
   await page.waitForTimeout(1200);
   ok(kind, 'mistakes counted', s.mistakes === 3, `mistakes ${s.mistakes}`);
@@ -125,8 +151,11 @@ for (const [kind, width, height] of [['desktop', 1280, 900], ['phone', 375, 780]
   await page.locator('[data-hint]').click();
   // correct drawing, stroke by stroke
   const scrollBefore = await page.evaluate(() => window.scrollY);
+  const drawF = [];
   for (let i = 0; i < S.length; i++) {
-    await draw(human(S[i]));
+    const n = await page.evaluate(() => window.__kw.judged);
+    drawF.push(...await frames(() => draw(human(S[i])))); // frame times while the finger moves
+    await page.waitForFunction(n => window.__kw.judged > n, n, { timeout: 4000 }).catch(() => {});
     s = await st();
     if (!ok(kind, `妻 stroke ${i + 1} accepted`, s.idx === i + 1, JSON.stringify(s.last))) break;
     if (i === 3) await shot('04-drawing');
@@ -180,6 +209,53 @@ for (const [kind, width, height] of [['desktop', 1280, 900], ['phone', 375, 780]
   ok(kind, '«Ще раз» → 1 min', again.interval === 60000 && again.rating === 'again', JSON.stringify(again));
   results.push({ kind, kanji: '妻', id: tsuma.id, strokes: S.length, result: issues.some(x => x.startsWith(kind)) ? 'FAIL' : 'ok (wrong order / shape / direction rejected in red, 8/8 accepted, rated, review state)' });
 
+  // ================= 畳: overshoot, undershoot, lift-and-continue, wrong place =================
+  const tatami = pick('畳');
+  await open(tatami);
+  const T = await strokes(), t0 = T[0];
+  const ink = await page.evaluate(() => window.__kw.STROKE);
+  s = await judge(human(part(t0, 0, 1.2)));
+  ok(kind, '畳 stroke 1 overshoot 20 % accepted', s.idx === 1 && s.last.ok, JSON.stringify(s.last));
+  await open(tatami); // fresh attempt
+  // undershoot 25 %: no red while the stroke is drawn or inside the grace period, red only after it
+  const u = human(part(t0, 0, 0.75)), umid = u[Math.floor(u.length / 2)];
+  const n0 = await page.evaluate(() => window.__kw.judged);
+  await draw(u);
+  const tLift = Date.now();
+  const during = await page.evaluate(() => ({ pending: window.__kw.pending, red: window.__kw.wrongShown }));
+  const px = await pixel(umid);
+  ok(kind, '畳 undershoot: no red during the grace period', during.pending && !during.red && !isRed(px), JSON.stringify(during) + ' pixel ' + px);
+  await page.waitForFunction(n => window.__kw.judged > n, n0, { timeout: 4000 }).catch(() => {});
+  const waited = Date.now() - tLift;
+  s = await st();
+  ok(kind, '畳 undershoot 25 % rejected after the grace period', !s.last.ok && s.idx === 0 && waited >= ink.GRACE_MS - 120 && await redShown(), `${JSON.stringify(s.last)} after ${waited} ms`);
+  await shot('08-undershoot');
+  await page.waitForTimeout(1100);
+  // two pieces: lift for ~300 ms, continue from the last point → one stroke
+  const a1 = human(part(t0, 0, 0.5)), a2 = human(part(t0, 0.5, 1));
+  a2[0] = a1[a1.length - 1];
+  const n1 = await page.evaluate(() => window.__kw.judged);
+  await draw(a1);
+  await page.waitForTimeout(300);
+  ok(kind, '畳 split stroke: still pending after 300 ms', await page.evaluate(() => window.__kw.pending));
+  await draw(a2);
+  await page.waitForFunction(n => window.__kw.judged > n, n1, { timeout: 4000 }).catch(() => {});
+  await page.waitForTimeout(100);
+  s = await st();
+  ok(kind, '畳 split stroke accepted as one stroke', s.idx === 1 && s.last.ok && (await page.evaluate(() => window.__kw.judged)) === n1 + 1, JSON.stringify(s.last));
+  // wrong place → red
+  s = await judge([[8, 70], [8, 80], [8, 90], [8, 100]]);
+  ok(kind, '畳 wrong place rejected in red', !s.last.ok && s.idx === 1 && await redShown(), JSON.stringify(s.last));
+  await page.waitForTimeout(1100);
+  // demonstration frame times (▶ on the diagram)
+  const demoF = await frames(async () => {
+    await page.locator('[data-demo]').click();
+    await page.waitForTimeout(100);
+    await page.waitForFunction(() => !document.querySelector('.kw-diag')?.getAnimations({ subtree: true }).some(a => a.playState === 'running'), null, { timeout: 30000 }).catch(() => {});
+  });
+  perf.push({ kind, what: 'drawing 妻 (8 strokes)', n: drawF.length, p95: p95(drawF) }, { kind, what: 'demonstration 畳 (12 strokes)', n: demoF.length, p95: p95(demoF) });
+  results.push({ kind, kanji: '畳', id: tatami.id, strokes: T.length, result: issues.some(x => x.startsWith(kind) && x.includes('畳')) ? 'FAIL' : 'ok (overshoot 20 % accepted, undershoot 25 % rejected after grace, split stroke = one, wrong place red)' });
+
   // ================= storage unavailable =================
   await page.evaluate(() => { Object.defineProperty(window, 'localStorage', { get() { throw new Error('blocked'); } }); });
   await page.evaluate(() => { location.hash = '#/kanji/write/k300-01'; });
@@ -193,8 +269,7 @@ for (const [kind, width, height] of [['desktop', 1280, 900], ['phone', 375, 780]
     const P = await strokes();
     let bad = '';
     for (let i = 0; i < P.length; i++) {
-      await draw(human(P[i]));
-      const x = await st();
+      const x = await judge(human(P[i]));
       if (x.idx !== i + 1) { bad = `stroke ${i + 1}/${P.length} rejected: ${JSON.stringify(x.last)}`; break; }
     }
     const done = (await st()).done;
@@ -213,6 +288,7 @@ srv.close();
 
 const md = [`# Kanji writing QA — ${new Date().toISOString().slice(0, 16)}`, '', `Steps: ${steps} · issues: ${issues.length}`, '',
   '| viewport | kanji | id | strokes | result |', '|---|---|---|---|---|', ...results.map(r => `| ${r.kind} | ${r.kanji} | ${r.id} | ${r.strokes} | ${r.result} |`), '',
+  '| viewport | frame times | frames | p95 (ms) |', '|---|---|---|---|', ...perf.map(p => `| ${p.kind} | ${p.what} | ${p.n} | ${p.p95?.toFixed(1)} |`), '',
   ...(issues.length ? ['## Issues', ...issues.map(x => `- ${x}`)] : ['No issues.'])].join('\n');
 fs.writeFileSync(path.join(OUT, 'report.md'), md);
 console.log(md);

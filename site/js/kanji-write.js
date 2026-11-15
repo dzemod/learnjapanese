@@ -200,7 +200,17 @@ export function kanjiWriteView(root, scope = '', startId = '') {
       if (!e.isPrimary || cur.done || !cur.strokes || e.button > 0) return;
       e.preventDefault();
       cv.setPointerCapture?.(e.pointerId);
-      cur.live = [toPt(e)];
+      const p = toPt(e), pend = cur.pending;
+      if (pend) {
+        clearTimeout(pend.timer);
+        const last = pend.pieces.at(-1).at(-1);
+        // lifted for a moment and continued near the last point → the same stroke
+        if (performance.now() - pend.at <= STROKE.GRACE_MS && Math.hypot(p[0] - last[0], p[1] - last[1]) <= STROKE.JOIN_DIST) {
+          cur.pending = null; cur.pieces = pend.pieces; cur.live = [p]; draw(); return;
+        }
+        cur.pending = null; evaluate(pend.pieces);
+      }
+      cur.pieces = []; cur.live = [p];
       draw();
     });
     cv.addEventListener('pointermove', e => {
@@ -213,18 +223,37 @@ export function kanjiWriteView(root, scope = '', startId = '') {
     const up = e => {
       if (!cur.live || !e.isPrimary) return;
       const pts = cur.live; cur.live = null;
-      if (e.type === 'pointercancel') { draw(); return; }
+      if (e.type === 'pointercancel') { cur.pieces = []; draw(); return; }
       pts.push(toPt(e));
-      submit(pts);
+      // not judged yet: the learner may continue the stroke within GRACE_MS (shown in white meanwhile)
+      const pend = { pieces: [...(cur.pieces || []), pts], at: performance.now() };
+      cur.pieces = null; cur.pending = pend;
+      pend.timer = later(() => { if (cur.pending === pend) { cur.pending = null; evaluate(pend.pieces); } }, STROKE.GRACE_MS);
+      draw();
     };
     cv.addEventListener('pointerup', up);
     cv.addEventListener('pointercancel', up);
     cv.addEventListener('touchmove', e => e.preventDefault(), { passive: false }); // old iOS without touch-action support
   }
 
-  function submit(pts) {
-    const r = judgeStroke(pts, cur.strokes.map(s => s.pts), cur.idx);
-    window.__kwLast = { reason: r.reason || 'ok', ok: r.ok, idx: cur.idx, start: r.start, end: r.end, avg: r.avg };
+  /** Judge the pieces of one lift-and-continue stroke. All pieces together first; if that fails, the longest
+   *  prefix of pieces that is a correct stroke is accepted and the rest is judged as the next stroke. */
+  function evaluate(pieces) {
+    const expected = cur.strokes.map(s => s.pts);
+    const merged = pieces.flat();
+    let r = judgeStroke(merged, expected, cur.idx);
+    if (!r.ok && pieces.length > 1) {
+      for (let n = pieces.length - 1; n >= 1; n--) {
+        const head = pieces.slice(0, n).flat(), rh = judgeStroke(head, expected, cur.idx);
+        if (rh.ok) { submit(head, rh); if (!cur.done) evaluate(pieces.slice(n)); return; }
+      }
+    }
+    submit(merged, r);
+  }
+
+  function submit(pts, r) {
+    cur.judged = (cur.judged || 0) + 1;
+    window.__kwLast = { reason: r.reason || 'ok', ok: r.ok, idx: cur.idx, start: r.start, coverage: r.coverage, len: r.len, elen: r.elen, n: cur.judged };
     if (r.reason === 'tap') { draw(); return; }
     if (r.ok) {
       cur.user.push(pts); cur.idx++; cur.hint = false;
@@ -240,6 +269,7 @@ export function kanjiWriteView(root, scope = '', startId = '') {
 
   function finishEarly() {
     if (cur.done || !cur.strokes) return;
+    if (cur.pending) { const p = cur.pending; clearTimeout(p.timer); cur.pending = null; evaluate(p.pieces); if (cur.done) return; }
     // «✓» before the last stroke: the missing strokes are shown and counted as mistakes
     const left = cur.strokes.length - cur.idx;
     cur.mistakes += left;
@@ -323,13 +353,15 @@ export function kanjiWriteView(root, scope = '', startId = '') {
     if (S && !cur.done && cur.idx < S.length && (cur.isNew || cur.hint)) pathStroke(S[cur.idx], HINT, STROKE_W + 0.6);
     cur.user.forEach((p, i) => (p ? line(p, INK) : S && pathStroke(S[i], INK)));
     if (cur.wrong) line(cur.wrong.pts, RED, STROKE_W, 0.9);
+    cur.pending?.pieces.forEach(p => line(p, INK));
+    cur.pieces?.forEach(p => line(p, INK));
     if (cur.live) line(cur.live, INK);
   }
   function status_() {
     const el = $('[data-st]', body);
     if (!el) return;
     const n = cur.strokes?.length || cur.k.strokes;
-    const why = { shape: 'не та риска', order: 'не той порядок', direction: 'не той напрямок' };
+    const why = { shape: 'не та риска', order: 'не той порядок', direction: 'не той напрямок', long: 'задовга риска' };
     el.textContent = cur.done
       ? `Готово · помилок: ${cur.mistakes}. Оцініть, наскільки легко було.`
       : `Риска ${Math.min(cur.idx + 1, n)} / ${n} · помилок: ${cur.mistakes}${cur.wrong ? ` · ${why[cur.wrong.reason] || 'помилка'}` : ''}`;
@@ -345,6 +377,7 @@ export function kanjiWriteView(root, scope = '', startId = '') {
   window.__kw = { // read-only hook for tools/qa-kanji-write.mjs
     get id() { return cur?.k.id; }, get idx() { return cur?.idx; }, get done() { return cur?.done; }, get mistakes() { return cur?.mistakes; },
     get strokes() { return cur?.strokes?.map(s => s.pts); }, get last() { return window.__kwLast; }, STROKE,
+    get judged() { return cur?.judged || 0; }, get pending() { return !!cur?.pending; }, get wrongShown() { return !!cur?.wrong; },
   };
 
   load(nextId());
