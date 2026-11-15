@@ -35,7 +35,7 @@ const complex = ALL.filter(k => k.id.startsWith('k700')).sort((a, b) => b.stroke
 const TEST = [...new Set([pick('妻'), pick('畳'), pick('難'), pick('必'), pick('飛'), pick('療'), pick('震'), pick('違'), pick('際'), ...complex, pick('一'), pick('人'), pick('書'), pick('右'), pick('左')].filter(Boolean))];
 const ONLY = process.argv[2] ? process.argv[2].split(',') : null;
 
-const results = [], issues = [], perf = [];
+const results = [], issues = [], perf = [], snapFails = [];
 const p95 = a => { const b = [...a].sort((x, y) => x - y); return b.length ? b[Math.min(b.length - 1, Math.floor(b.length * 0.95))] : NaN; };
 // part of a stroke from fraction a to b of its length (b > 1 = extended along its last direction)
 function part(pts, a, b) {
@@ -99,6 +99,20 @@ for (const [kind, width, height] of [['desktop', 1280, 900], ['phone', 375, 780]
     await fn();
     return page.evaluate(() => { window.__qaF.on = false; return window.__qaF.d; });
   };
+  // snap state: accepted strokes must be the clean KanjiVG paths; learner ink only while drawing / fading
+  const snap = () => page.evaluate(() => {
+    const kw = window.__kw, ink = [...document.querySelectorAll('.kw-ink path')];
+    const cv = document.querySelector('.kw-canvas'), c = cv.getContext('2d');
+    const px = c.getImageData(0, 0, cv.width, cv.height).data;
+    let canvasInk = 0;
+    for (let i = 3; i < px.length; i += 16) if (px[i] > 0) canvasInk++;
+    return {
+      n: ink.length, idx: kw.idx,
+      clean: ink.every((p, i) => p.classList.contains('kw-clean') && p.getAttribute('d') === kw.paths[+p.dataset.i] && +p.dataset.i === i),
+      user: document.querySelectorAll('.kw-user').length, canvasInk,
+    };
+  });
+  const snapOk = x => x.n === x.idx && x.clean;
   // is a rejected (red) stroke on screen?
   const redShown = () => page.evaluate(() => !!window.__kw.wrongShown);
   const st = () => page.evaluate(() => ({ id: window.__kw.id, idx: window.__kw.idx, done: window.__kw.done, mistakes: window.__kw.mistakes, last: window.__kw.last }));
@@ -133,6 +147,9 @@ for (const [kind, width, height] of [['desktop', 1280, 900], ['phone', 375, 780]
   const redOrder = await redShown();
   ok(kind, 'wrong order rejected', s.idx === 0 && s.last.reason === 'order', JSON.stringify(s.last));
   ok(kind, 'wrong order shown in red', redOrder);
+  await page.waitForTimeout(800);
+  const redOp = await page.evaluate(() => { const g = document.querySelector('.kw-wrongs .kw-wrong'); return g ? +getComputedStyle(g).opacity : -1; });
+  ok(kind, 'red stroke fades out (opacity between 0 and 1 at ~800 ms)', redOp > 0.02 && redOp < 0.9, `opacity ${redOp}`);
   await shot('02-wrong-order');
   await page.waitForTimeout(1200);
   ok(kind, 'red stroke removed after ~1 s', !await redShown());
@@ -158,6 +175,15 @@ for (const [kind, width, height] of [['desktop', 1280, 900], ['phone', 375, 780]
     await page.waitForFunction(n => window.__kw.judged > n, n, { timeout: 4000 }).catch(() => {});
     s = await st();
     if (!ok(kind, `妻 stroke ${i + 1} accepted`, s.idx === i + 1, JSON.stringify(s.last))) break;
+    if (i === 1) { // the accepted stroke is drawn in (dashoffset moves to 0) while the learner's ink fades out
+      const sample = () => page.evaluate(i => {
+        const p = document.querySelector(`.kw-ink path[data-i="${i}"]`), u = document.querySelector('.kw-user');
+        return { off: p ? parseFloat(getComputedStyle(p).strokeDashoffset) : NaN, op: u ? +getComputedStyle(u).opacity : 0 };
+      }, i);
+      const a = await sample(); await page.waitForTimeout(150); const b = await sample();
+      ok(kind, '妻 accepted stroke animates in (dashoffset decreases)', a.off > 0 && b.off < a.off, `${a.off} → ${b.off}`);
+      ok(kind, '妻 learner ink fades out at the same time', a.op > 0 && b.op < a.op, `${a.op} → ${b.op}`);
+    }
     if (i === 3) await shot('04-drawing');
   }
   const scrollAfter = await page.evaluate(() => window.scrollY);
@@ -247,6 +273,24 @@ for (const [kind, width, height] of [['desktop', 1280, 900], ['phone', 375, 780]
   s = await judge([[8, 70], [8, 80], [8, 90], [8, 100]]);
   ok(kind, '畳 wrong place rejected in red', !s.last.ok && s.idx === 1 && await redShown(), JSON.stringify(s.last));
   await page.waitForTimeout(1100);
+  // deliberately crooked strokes (offset 3 units + slow wobble up to ±3 units): each accepted stroke → clean KanjiVG path, learner ink gone
+  await open(tatami);
+  const crooked = pts => resample(pts, Math.max(6, Math.round(pathLength(pts) / 2))).map(([x, y], i) => [x + 3 + 3 * Math.sin(i * 0.45), y + 2 + 2.6 * Math.cos(i * 0.35)]);
+  let crookBad = '';
+  for (let i = 0; i < T.length; i++) {
+    s = await judge(crooked(T[i]));
+    if (s.idx !== i + 1) { crookBad = `stroke ${i + 1} not accepted: ${JSON.stringify(s.last)}`; break; }
+    await page.waitForTimeout(760); // longest draw-in / fade (700 ms) + a frame
+    const x = await snap();
+    if (!snapOk(x) || x.user || x.canvasInk) { crookBad = `stroke ${i + 1}: ${JSON.stringify(x)}`; break; }
+  }
+  ok(kind, '畳 crooked strokes: each accepted stroke is the clean KanjiVG path, no learner ink left', !crookBad, crookBad);
+  const fin = await snap();
+  ok(kind, '畳 finished kanji = 12 clean KanjiVG paths', fin.n === T.length && fin.clean && !fin.user && !fin.canvasInk && (await st()).done, JSON.stringify(fin));
+  await shot('09-crooked-clean');
+  if ((await st()).done) await page.locator('.kw-rate [data-r="easy"]').click();
+  await page.evaluate(id => { const x = JSON.parse(localStorage.getItem('jp.kanjiWrite') || '{}'); delete x[id]; localStorage.setItem('jp.kanjiWrite', JSON.stringify(x)); }, tatami.id); // new again → demo shown
+  await open(tatami);
   // demonstration frame times (▶ on the diagram)
   const demoF = await frames(async () => {
     await page.locator('[data-demo]').click();
@@ -267,18 +311,25 @@ for (const [kind, width, height] of [['desktop', 1280, 900], ['phone', 375, 780]
   for (const k of TEST.slice(1).filter(k => !ONLY || ONLY.includes(k.kanji))) {
     await open(k);
     const P = await strokes();
-    let bad = '';
+    let bad = '', snapBad = '';
     for (let i = 0; i < P.length; i++) {
       const x = await judge(human(P[i]));
       if (x.idx !== i + 1) { bad = `stroke ${i + 1}/${P.length} rejected: ${JSON.stringify(x.last)}`; break; }
+      const y = await snap();
+      if (!snapOk(y)) { snapBad = `stroke ${i + 1}: ${JSON.stringify(y)}`; break; }
     }
     const done = (await st()).done;
+    await page.waitForTimeout(760);
+    const z = await snap();
+    if (!snapBad && (!snapOk(z) || z.user || z.canvasInk)) snapBad = `finished: ${JSON.stringify(z)}`;
+    ok(kind, `${k.kanji} (${k.id}) every accepted stroke replaced by the clean KanjiVG stroke`, !snapBad, snapBad);
+    if (snapBad) snapFails.push(`${kind} ${k.kanji} ${k.id}: ${snapBad}`);
     ok(kind, `${k.kanji} (${k.id}) all strokes accepted`, !bad && done, bad);
     // the canvas must be sized to its box (backing store = CSS width × dpr) — catches a stale-size bug
     ok(kind, `${k.kanji} canvas sized`, await page.locator('.kw-canvas').evaluate(c => Math.abs(c.width - c.getBoundingClientRect().width * Math.min(3, devicePixelRatio)) < 2));
     if (k === TEST[TEST.length - 1]) await shot('06-complex');
     if (done) await page.locator('.kw-rate [data-r="easy"]').click();
-    results.push({ kind, kanji: k.kanji, id: k.id, strokes: P.length, result: !bad && done ? 'ok' : bad });
+    results.push({ kind, kanji: k.kanji, id: k.id, strokes: P.length, result: !bad && done ? (snapBad ? 'snap: ' + snapBad : 'ok (clean strokes)') : bad });
   }
   ok(kind, 'no JS errors', !errs.length, errs.join(' / '));
   await ctx.close();
@@ -289,6 +340,7 @@ srv.close();
 const md = [`# Kanji writing QA — ${new Date().toISOString().slice(0, 16)}`, '', `Steps: ${steps} · issues: ${issues.length}`, '',
   '| viewport | kanji | id | strokes | result |', '|---|---|---|---|---|', ...results.map(r => `| ${r.kind} | ${r.kanji} | ${r.id} | ${r.strokes} | ${r.result} |`), '',
   '| viewport | frame times | frames | p95 (ms) |', '|---|---|---|---|', ...perf.map(p => `| ${p.kind} | ${p.what} | ${p.n} | ${p.p95?.toFixed(1)} |`), '',
+  `Kanji where the clean-stroke replacement failed: ${snapFails.length ? snapFails.join('; ') : 'none'}`, '',
   ...(issues.length ? ['## Issues', ...issues.map(x => `- ${x}`)] : ['No issues.'])].join('\n');
 fs.writeFileSync(path.join(OUT, 'report.md'), md);
 console.log(md);
