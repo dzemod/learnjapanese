@@ -8,6 +8,7 @@ import {
   saveOpts, state, prog, toggleStar, setStats, registerSetProvider, registerKanjiPayload, markKanjiPending, saveCustomNow, syncAll, onSync,
 } from './store.js';
 import { MODES, kunHTML } from './modes.js';
+import { parseLabels, spreadLabels } from './kvg-labels.js';
 
 const K = { base: null, loading: null, error: false };
 const BOOKS_FALLBACK = [];
@@ -219,7 +220,7 @@ function strokeOrder(box, ch) {
       <g class="so-grid"><line x1="54.5" y1="0" x2="54.5" y2="109"/><line x1="0" y1="54.5" x2="109" y2="54.5"/></g>
       <g class="so-ghost">${data.paths.map(d => `<path d="${esc(d)}"/>`).join('')}</g>
       <g class="so-ink">${data.paths.map(d => `<path d="${esc(d)}"/>`).join('')}</g>
-      <g class="so-num">${data.nums.map(n => `<text transform="${esc(n.tr)}">${esc(n.t)}</text>`).join('')}</g></svg>`;
+      <g class="so-num">${spreadLabels(parseLabels(data.nums)).map((n, i) => (n.ok ? `<text x="${n.x.toFixed(2)}" y="${n.y.toFixed(2)}">${esc(n.t)}</text>` : `<text transform="${esc(data.nums[i].tr)}">${esc(n.t)}</text>`)).join('')}</g></svg>`;
     let t = 200;
     const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
     $$('.so-ink path', box).forEach(p => {
