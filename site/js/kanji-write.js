@@ -4,6 +4,7 @@
 // Stroke data: KanjiVG through kanjiVG() of kanji.js (the same source as the stroke-order animation).
 import { $, $$, esc, I } from './util.js';
 import { books, kanjiVG } from './kanji.js';
+import { markStudied } from './store.js';
 import { kunHTML } from './modes.js';
 import {
   STROKE, judgeStroke, RATINGS, nextInterval, applyRating, counts, buildQueue, fmtInterval,
@@ -375,6 +376,7 @@ export function kanjiWriteView(root, scope = '', startId = '') {
     sched = loadSched();
     sched[cur.k.id] = applyRating(sched[cur.k.id], r, cur.mistakes);
     saveSched(sched);
+    markStudied(); // the study-day log (streak, «Сьогодні»)
     skipped = skipped.filter(x => x !== cur.k.id);
     load(nextId());
   }

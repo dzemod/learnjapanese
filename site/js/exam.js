@@ -4,7 +4,7 @@
 // Everything runs in the browser; the only things sent anywhere are the optional preset sync to GitHub and
 // questions the learner chooses to send to the AI helper (ai-helper.js → Puter.js in the browser).
 import { $, $$, esc, shuffle, furi, furiT, furiPlain, gtext, furiSay, speak, norm, toast, I, check as checkWord, today } from './util.js';
-import { state, getSets, markPresetsPending, registerPresetsPayload, syncAll } from './store.js';
+import { state, getSets, markPresetsPending, registerPresetsPayload, syncAll, markStudied } from './store.js';
 import { loadGrammar, grammarLessons } from './grammar.js';
 import { loadKanji, books as kanjiBooks, lessonWords } from './kanji.js';
 import { conjugate, explainConj, detectForm, FORMS, formsUpTo } from './conjugate.js';
@@ -491,7 +491,15 @@ function askContext(q, a) {
 
 // ---------- session ----------
 let S = null; // { conf, qs, i, res: [{ok, given}], start, deadline }
-const persist = () => ssave(K.session, S);
+const persist = () => { ssave(K.session, S); if (S?.answered) markStudied(); }; // an answer = a study day
+/** «Сьогодні»: an exam of saved mistakes (the same session as «Повторити мої помилки» in the setup). */
+export function startMistakesExam(qs, name = 'Сьогодні: мої помилки') {
+  const c = { ...DEFAULT, ...(load(K.presets + '.last', null) || {}) };
+  S = { conf: { ...c, name, timer: 0 }, qs: shuffle(qs), i: 0, res: [], start: Date.now(), deadline: 0, answered: null };
+  persist();
+  location.hash = '#/exam/run';
+}
+export const savedMistakeList = () => load(K.mistakes, []);
 
 export async function examView(root, sub) {
   root.innerHTML = '<div class="loading"><span class="sun pulse"></span></div>';

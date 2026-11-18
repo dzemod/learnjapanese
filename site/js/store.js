@@ -455,6 +455,9 @@ export function streak() {
   return n;
 }
 export const studiedToday = () => state.days.includes(today());
+/** The study-day log (localStorage jp.days, YYYY-MM-DD, last 800 days): a day counts when at least one item was
+ *  completed — a word answered (record), a kanji rated in the writing mode, an exam answer, a «Сьогодні» item. */
+export const studyDays = () => [...state.days];
 
 // ---------- Match best times ----------
 export const getBest = id => state.best[id] || null;
