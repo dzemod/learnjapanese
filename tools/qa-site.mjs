@@ -269,7 +269,7 @@ function pageCheck([fontsWanted, fontCacheOn]) {
       // checked with the same style and the same script mix. Same style + already-checked characters = same fonts.
       const key = [cs.fontFamily, cs.fontSize, cs.fontWeight, cs.fontStyle, cs.color, cs.letterSpacing, cyr, lat, jp, sym, CYR.test(txt), JP.test(txt)].join('|');
       const seenChars = fontCache.get(key) || new Set();
-      const fresh = [...new Set(full.replace(/s/g, ''))].filter(c => !seenChars.has(c));
+      const fresh = [...new Set(full.replace(/\s/g, ''))].filter(c => !seenChars.has(c));
       if (!fresh.length && fontCacheOn) { fontSkipped++; continue; }
       fresh.forEach(c => seenChars.add(c)); fontCache.set(key, seenChars);
       el.setAttribute('data-qaf', i++);
