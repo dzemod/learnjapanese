@@ -17,7 +17,10 @@ const LOG_KEY = 'jp.sensei';
 const KEEP = 20; // messages kept in the session
 const SEND = 10; // messages sent to the model (earlier turns + the new question)
 const MAX_INPUT = 1000; // characters
-const MAX_TOKENS = 900; // the prompt asks for ≈ 200 words
+const MAX_TOKENS = 'max'; // full answers: the highest output limit of the model (MODEL_MAX_OUTPUT in ai-helper.js: 128000)
+const TIMEOUT_MS = 240000; // a long answer takes time (no streaming); the loading state stays meanwhile
+const CONTINUE = 'Продовжи з того місця, де зупинився';
+const MSG_CUT = 'Відповідь обірвана через ліміт. Натисніть «Продовжити»';
 const MSG_SIGNIN = 'Щоб поговорити з Сенсеєм, увійдіть у безкоштовний акаунт Puter';
 const MSG_LONG = 'Повідомлення надто довге, скоротіть його';
 const STARTERS = ['Як краще вчити кану?', 'Що робити, якщо плутаю は і が?', 'Як не забути канджі?', 'Які фільми подивитися для практики?'];
@@ -32,8 +35,16 @@ function readLog() {
   if (mem) return mem;
   let saved = null;
   try { saved = JSON.parse(sessionStorage.getItem(LOG_KEY) || 'null'); } catch { /* blocked */ }
-  mem = (Array.isArray(saved) ? saved : []).filter(m => m && typeof m.t === 'string' && (m.r === 'u' || m.r === 'a')).slice(-KEEP);
+  mem = (Array.isArray(saved) ? saved : []).filter(m => m && typeof m.t === 'string' && (m.r === 'u' || m.r === 'a'))
+    .map(m => (m.cut ? { r: m.r, t: m.t, cut: true } : { r: m.r, t: m.t })).slice(-KEEP);
   return mem;
+}
+/** Reply text → HTML: line breaks kept (CSS pre-wrap), **bold** and Markdown "# heading" lines shown bold. */
+export const replyHTML = t => answerHTML(String(t).replace(/^#{1,6}[ \t]+(.+)$/gm, '**$1**'));
+/** Joins a continuation to the cut answer: no space inside a cut word, one space between sentences/words. */
+export function joinContinuation(prev, cont) {
+  if (/\s$/.test(prev) || /^[\s,.;:!?)»]/.test(cont)) return prev + cont;
+  return prev + (/[.!?:;»)]$/.test(prev) || /^[\p{Lu}«(]/u.test(cont) ? ' ' : '') + cont;
 }
 function writeLog(list) {
   mem = list.slice(-KEEP);
@@ -102,8 +113,12 @@ export function senseiView(root) {
   const counter = () => { const n = input.value.length; count.textContent = n > MAX_INPUT * 0.8 ? `${n} / ${MAX_INPUT}` : ''; count.classList.toggle('over', n > MAX_INPUT); };
   function draw() {
     const log = readLog();
-    list.innerHTML = log.map(m => `<div class="ss-msg ${m.r === 'u' ? 'me' : 'ai'}">${m.r === 'u' ? esc(m.t) : answerHTML(m.t)}</div>`).join('')
+    // a cut answer always carries the note; «Продовжити» on the last message (the one the model can continue)
+    const cutNote = (m, i) => (m.cut ? `<div class="ss-cut" role="note"><span>${MSG_CUT}</span>${i === log.length - 1 && !busy ? '<button type="button" class="btn primary sm ss-continue" data-continue>Продовжити</button>' : ''}</div>` : '');
+    list.innerHTML = log.map((m, i) => `<div class="ss-msg ${m.r === 'u' ? 'me' : 'ai'}${m.cut ? ' cut' : ''}">${m.r === 'u' ? esc(m.t) : replyHTML(m.t)}</div>${cutNote(m, i)}`).join('')
       + (busy ? '<div class="ss-msg ai ss-typing"><span class="spinner"></span> Сенсей пише…</div>' : '');
+    const more = $('[data-continue]', list);
+    if (more) more.onclick = continueAnswer;
     list.hidden = !log.length && !busy;
     $('.ss-starters', root).hidden = !!log.length;
     $('[data-new]', root).hidden = !log.length;
@@ -125,9 +140,9 @@ export function senseiView(root) {
     writeLog([...log, { r: 'u', t: q }]);
     input.value = ''; grow(); counter();
     draw();
-    const r = await chat(buildMessages(log, q), { signin: MSG_SIGNIN, maxTokens: MAX_TOKENS });
+    const r = await chat(buildMessages(log, q), { signin: MSG_SIGNIN, maxTokens: MAX_TOKENS, timeoutMs: TIMEOUT_MS });
     busy = false;
-    if (r.answer) writeLog([...readLog(), { r: 'a', t: r.answer }]);
+    if (r.answer) writeLog([...readLog(), r.cut ? { r: 'a', t: r.answer, cut: true } : { r: 'a', t: r.answer }]);
     else {
       // the question was not answered: take it back into the input, so nothing is lost
       writeLog(readLog().slice(0, -1));
@@ -136,6 +151,23 @@ export function senseiView(root) {
     }
     if (root.isConnected) { draw(); input.focus({ preventScroll: true }); } else redrawCurrent?.();
   };
+  // «Продовжити»: one follow-up request with the cut answer in context; the continuation is joined to that answer
+  async function continueAnswer() {
+    const log = readLog(), last = log[log.length - 1];
+    if (busy || !last || last.r !== 'a' || !last.cut) return;
+    error = ''; busy = true;
+    draw();
+    const r = await chat(buildMessages(log, CONTINUE), { signin: MSG_SIGNIN, maxTokens: MAX_TOKENS, timeoutMs: TIMEOUT_MS });
+    busy = false;
+    if (r.answer) {
+      const now = readLog(), i = now.lastIndexOf(last);
+      const merged = { r: 'a', t: joinContinuation(last.t, r.raw ?? r.answer) };
+      if (r.cut) merged.cut = true;
+      writeLog(i >= 0 ? [...now.slice(0, i), merged, ...now.slice(i + 1)] : [...now, merged]);
+    } else error = r.error || MSG_FAIL;
+    if (root.isConnected) draw(); else redrawCurrent?.();
+  }
+
   input.addEventListener('keydown', e => {
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && desktopKeys()) { e.preventDefault(); form.requestSubmit(); }
   });

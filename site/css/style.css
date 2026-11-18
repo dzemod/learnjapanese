@@ -1307,3 +1307,7 @@ body.kw-rating main { padding-bottom: 110px; }
 body .sensei, body .sensei * { font-family: var(--ss-font); }
 .ss-msg, .ss-input, .ss-chip { font-size: 1rem; line-height: 1.6; }
 .ss-chip { font-size: .92rem; }
+/* a reply stopped by the output limit: always marked, «Продовжити» asks for the rest */
+.ss-msg.cut { border-bottom: 1px dashed var(--red); }
+.ss-cut { justify-self: start; max-width: 88%; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: -4px; padding: 8px 12px; background: var(--red-bg); border: 1px solid rgba(200, 16, 46, .45); border-radius: 0; color: var(--text); font-size: .9rem; }
+.ss-cut .btn { border-radius: 0; }

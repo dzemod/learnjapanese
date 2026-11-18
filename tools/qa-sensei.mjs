@@ -42,7 +42,8 @@ export const MOCK = `(() => {
         if (M.hold) await M.hold;
         const r = M.queue.length ? M.queue.shift() : M.reply;
         if (r.reject) throw r.reject;
-        return { message: { role: 'assistant', content: r.parts || r.text } };
+        // normalized (OpenAI) shape: finish_reason "length" = stopped by the output limit
+        return { message: { role: 'assistant', content: r.parts || r.text }, finish_reason: r.finish || 'stop', normalized: true };
       },
     },
   };
@@ -262,6 +263,86 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.a
     ok((await p2.$$eval('.ss-msg', e => e.length)) === 2, T('works with sessionStorage blocked'));
     ok(!errs2.length, T('no errors with storage blocked'), errs2.join(' | '));
     await ctx2.close();
+  }
+
+  // ---------- full answers: a ≈ 1500-word reply, the output limit, «Продовжити» ----------
+  const LAST = 'Це останнє речення відповіді Сенсея.';
+  const para = i => `Пункт ${i}: частка は позначає тему речення, а が — підмет, на який падає наголос; порівняйте 私は学生です (わたしは がくせいです) і 私が学生です (わたしが がくせいです), щоб відчути різницю між темою та новою інформацією у кожному прикладі.`;
+  const SECTIONS = ['**Правило**', '## Чому так', '**Приклади**', '## Типові помилки', '**Порада для практики**'];
+  const BIG = SECTIONS.map((h, s) => `${h}\n${Array.from({ length: 11 }, (_, i) => para(s * 11 + i + 1)).join('\n')}`).join('\n\n') + `\n\n${LAST}`;
+  const bigWords = BIG.split(/\s+/).filter(Boolean).length;
+  const CUT = 'Частка は позначає тему, а частка が позначає підмет. Наприклад, у реченні 私は学生です тема — це я, і далі ми говоримо про мене. Коли ж ми хочемо підкреслити, хто саме є студентом, ми каже';
+  const CONT = 'мо 私が学生です: саме я, а не хтось інший. Це і є головна різниця.';
+  for (const [width, height] of [[320, 568], [390, 844]]) {
+    const T = s => `${width}px full answers: ${s}`;
+    const ctx = await browser.newContext({ viewport: { width, height }, hasTouch: true, isMobile: true, locale: 'uk-UA' });
+    await mockPuter(ctx, { signedIn: true, reply: { text: BIG } });
+    const page = await ctx.newPage();
+    const errs = [];
+    page.on('pageerror', e => errs.push(String(e)));
+    await page.goto(URL_ + '#/sensei', { waitUntil: 'networkidle' });
+    await page.fill('.ss-input', 'Поясни детально різницю між は і が');
+    await page.click('.ss-send');
+    await page.waitForSelector('.ss-msg.ai:not(.ss-typing)');
+    const call = await page.evaluate(() => window.__pm.calls.at(-1));
+    ok(call.options.max_tokens === 128000 && call.options.normalize === true && call.options.model === 'claude-haiku-5-5', T('highest output limit of the model requested'), JSON.stringify(call.options));
+    const r = await page.evaluate(last => {
+      const list = document.querySelector('.ss-list'), msg = [...list.querySelectorAll('.ss-msg.ai')].pop();
+      const atBottom = list.scrollTop + list.clientHeight >= list.scrollHeight - 1; // scrolled to the new reply by itself
+      list.scrollIntoView({ block: 'end' }); // the box on screen, scrolled to its bottom
+      const walker = document.createTreeWalker(msg, NodeFilter.SHOW_TEXT); let node = null; for (let n; (n = walker.nextNode());) if (n.textContent.includes(last)) node = n;
+      const rg = document.createRange(); const at = node.textContent.indexOf(last); rg.setStart(node, at); rg.setEnd(node, at + last.length);
+      const rects = [...rg.getClientRects()], L = list.getBoundingClientRect();
+      const inBox = rects.every(c => c.top >= L.top - 0.5 && c.bottom <= L.bottom + 0.5 && c.left >= L.left - 0.5 && c.right <= L.right + 0.5);
+      const onScreen = rects.every(c => c.top >= 0 && c.bottom <= innerHeight + 0.5);
+      const cs = getComputedStyle(msg);
+      return { atBottom, inBox, onScreen, grows: msg.scrollHeight <= msg.clientHeight + 1 && cs.maxHeight === 'none' && cs.overflow === 'visible', pre: cs.whiteSpace,
+        heads: [...msg.querySelectorAll('b')].map(b => b.textContent), text: msg.textContent, docW: Math.max(document.documentElement.scrollWidth, innerWidth), cut: !!document.querySelector('.ss-cut') };
+    }, LAST);
+    ok(bigWords >= 1500 && r.text.endsWith(LAST) && r.text.length === BIG.replace(/^#{1,6}[ \t]+/gm, '').replace(/\*\*/g, '').length, T('≈1500-word reply rendered in full'), `${bigWords} words`);
+    ok(r.atBottom, T('chat box scrolls to the bottom when the reply arrives'));
+    ok(r.inBox && r.onScreen, T('last sentence visible at the bottom of the box'));
+    ok(r.grows, T('reply box grows with its content'));
+    ok(r.pre === 'pre-wrap' && r.text.includes('\n'), T('line breaks kept'));
+    ok(['Правило', 'Чому так', 'Приклади', 'Типові помилки', 'Порада для практики'].every(h => r.heads.includes(h)) && !r.text.includes('##') && !r.text.includes('**'), T('headings shown bold (** and ##)'), r.heads.join('|'));
+    ok(r.docW <= width, T('no horizontal scroll'), String(r.docW));
+    ok(!r.cut, T('complete answer has no cut note'));
+    await page.screenshot({ path: path.join(OUT, `long-${width}.png`) });
+
+    // stopped by the output limit → note + «Продовжити»; each click = one follow-up request
+    await page.evaluate(([cut, cont]) => { window.__pm.queue.push({ text: cut, finish: 'length' }); }, [CUT, CONT]);
+    await page.fill('.ss-input', 'А коротше?');
+    await page.click('.ss-send');
+    await page.waitForSelector('.ss-cut');
+    ok((await page.textContent('.ss-cut span')) === 'Відповідь обірвана через ліміт. Натисніть «Продовжити»' && (await page.isVisible('.ss-cut [data-continue]')), T('cut answer: note and «Продовжити»'));
+    ok((await page.$$('.ss-msg.ai.cut')).length === 1, T('cut answer marked'));
+    await page.reload({ waitUntil: 'networkidle' });
+    await page.waitForSelector('.ss-cut [data-continue]');
+    ok(true, T('note survives a reload'));
+    await page.evaluate(cont => { window.__pm.signedIn = true; window.__pm.queue.push({ text: cont.slice(0, 20), finish: 'length' }, { text: cont.slice(20), finish: 'stop' }); }, CONT); // the mock restarts with the page
+    const n0 = await page.evaluate(() => window.__pm.calls.length);
+    await page.click('[data-continue]');
+    await page.waitForFunction(() => !document.querySelector('.ss-typing'));
+    await page.waitForSelector('.ss-cut [data-continue]');
+    const c1 = await page.evaluate(() => ({ n: window.__pm.calls.length, last: window.__pm.calls.at(-1) }));
+    ok(c1.n === n0 + 1, T('«Продовжити» sends one follow-up request'), `${c1.n - n0}`);
+    const m = c1.last.messages;
+    ok(m.at(-1).role === 'user' && m.at(-1).content === 'Продовжи з того місця, де зупинився' && m.at(-2).role === 'assistant' && m.at(-2).content === CUT && m[0].role === 'system' && m.length <= 11, T('follow-up has the cut answer in context'), JSON.stringify(m.slice(-2)).slice(0, 200));
+    ok((await page.$$('.ss-cut')).length === 1, T('still cut → the note stays'));
+    await page.click('[data-continue]');
+    await page.waitForFunction(() => !document.querySelector('.ss-typing'));
+    const c2 = await page.evaluate(() => window.__pm.calls.length);
+    const lastMsg = await page.$eval('.ss-list .ss-msg.ai:last-of-type', e => e.textContent);
+    ok(c2 === n0 + 2, T('second click: one more request'));
+    ok(lastMsg === CUT + CONT && !(await page.$('.ss-cut')), T('continuation joined to the answer, note gone'), lastMsg.slice(-80));
+    // an older cut answer keeps its note (without the button) after the next question
+    await page.evaluate(cut => { window.__pm.queue.push({ text: cut, finish: 'length' }, { text: 'Наступна відповідь.' }); }, CUT);
+    await page.fill('.ss-input', 'Ще приклад'); await page.click('.ss-send'); await page.waitForSelector('.ss-cut');
+    await page.fill('.ss-input', 'Дякую'); await page.click('.ss-send');
+    await page.waitForFunction(() => !document.querySelector('.ss-typing') && document.querySelectorAll('.ss-msg.ai').length >= 4);
+    ok((await page.$$('.ss-cut')).length === 1 && !(await page.$('.ss-cut [data-continue]')), T('older cut answer: note stays, no button'));
+    ok(!errs.length, T('no page errors'), errs.join(' | '));
+    await ctx.close();
   }
   await browser.close();
   srv.close();
