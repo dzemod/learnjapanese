@@ -6,6 +6,12 @@
 //   node tools/qa-site.mjs [words,grammar,kanji,exam,ts,translate,other] [--no-shots] [--limit N]
 //   ts = exam «Переклад речень» (realistic answers + verdict checks, all 1254 items self-checked in the browser);
 //   translate = Перекладач (ja and uk sentences, word details, examples, history, dialogs; needs internet for MyMemory).
+//   kanji --quick       20 kanji (every 50th) + 2 lessons' modes, desktop + phone, ≈ 4 min → qa/quick/ (after each change)
+//   kanji --batch N     kanji (N-1)*100+1 … N*100 → qa/kanji/bNN/; all batches + merged report: node tools/qa-kanji-full.mjs (before a release)
+//   fonttest            self-test: a test page with broken fonts must be reported (desktop): QA_VIEW=d node tools/qa-site.mjs fonttest
+//   Font check: once per text style (family, size, weight, style, colour, spacing) + script mix + new characters, cached
+//   per route (QA_FONT_CACHE=0 checks every text). The estimated time is printed at the start (learned in qa/.timing.json).
+//   QA_PORT=<port> (default 5190) — to run two QA processes at once.
 //   QA_VIEW=d|m — only desktop (1920) or only mobile (375); default both in parallel (needs more memory).
 //   The page is reopened every QA_RECYCLE steps (default 150) and the report is saved as the run goes,
 //   so a long run uses little memory and an interrupted run still leaves a partial report.
@@ -22,7 +28,7 @@ import { fileURLToPath } from 'url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SITE = path.join(ROOT, 'site');
-const OUT = path.join(ROOT, 'qa', process.env.QA_OUT || '');
+const OUT = path.join(ROOT, 'qa', process.env.QA_OUT || (process.argv.includes('--quick') ? 'quick' : process.argv.includes('--batch') ? `kanji/b${String(process.argv[process.argv.indexOf('--batch') + 1]).padStart(2, '0')}` : ''));
 const require = createRequire(process.env.QA_MODULES ? path.join(process.env.QA_MODULES, 'x.js') : import.meta.url);
 const { chromium } = require('playwright-core');
 
@@ -63,15 +69,40 @@ for (const s of sets) {
 plan.words.push({ name: 'new-set', hash: '#/new' });
 plan.grammar.push({ name: 'grammar', hash: '#/grammar' });
 for (const l of grammar) plan.grammar.push({ name: `grammar-${l.lesson}`, hash: `#/grammar/${l.lesson}` });
-plan.kanji.push({ name: 'kanji', hash: '#/kanji' });
-for (const b of kanji) for (const l of b.lessons) {
-  plan.kanji.push({ name: `kanji-${l.id}`, hash: `#/kanji/${l.id}` });
-  for (const k of l.kanji) plan.kanji.push({ name: `kcard-${k.id}`, hash: `#/kanji/${l.id}/${k.id}`, act: k === l.kanji[0] ? ['click:.modal [data-edit]', 'back', 'click:.modal [data-exedit]'] : [] });
-  for (const m of MODES) {
-    plan.kanji.push({ name: `kmode-${l.id}-${m}`, hash: `#/set/${l.id}/${m}`, act: modeActs(m) });
-    plan.kanji.push({ name: `kmode-${l.id}-w-${m}`, hash: `#/set/${l.id}-w/${m}`, act: modeActs(m) });
+// Kanji: full = every kanji (≈ 2 660 steps per viewport); --batch N = kanji (N-1)*100+1 … N*100 (10 batches,
+// each its own command and report, see tools/qa-kanji-full.mjs); --quick = 20 kanji spread over both books + 2 lessons' modes.
+// A lesson's pages (lesson, 12 study modes, writing-mode lesson) go to the batch that holds its first kanji.
+const KBATCH = args.includes('--batch') ? +args[args.indexOf('--batch') + 1] : 0;
+const QUICK = args.includes('--quick');
+const KSIZE = 100;
+{
+  let idx = 0;
+  const inRange = i => (QUICK ? i % 50 === 0 : !KBATCH || (i >= (KBATCH - 1) * KSIZE && i < KBATCH * KSIZE));
+  const quickModes = new Set([kanji[0].lessons[0].id, kanji[1]?.lessons[0].id]);
+  const head = !KBATCH || KBATCH === 1;
+  if (head) plan.kanji.push({ name: 'kanji', hash: '#/kanji' }, { name: 'kwrite', hash: '#/kanji/write', kw: true });
+  for (const b of kanji) {
+    if (head) plan.kanji.push({ name: `kwrite-${b.id}`, hash: `#/kanji/write/${b.id}`, kw: true });
+    for (const l of b.lessons) {
+      const first = idx, picked = l.kanji.map((k, j) => inRange(first + j));
+      idx += l.kanji.length;
+      const lessonHere = QUICK ? picked.some(Boolean) : inRange(first);
+      if (lessonHere) plan.kanji.push({ name: `kanji-${l.id}`, hash: `#/kanji/${l.id}` });
+      l.kanji.forEach((k, j) => { if (picked[j]) plan.kanji.push({ name: `kcard-${k.id}`, hash: `#/kanji/${l.id}/${k.id}`, act: j === 0 || QUICK ? ['click:.modal [data-edit]', 'back', 'click:.modal [data-exedit]'] : [] }); });
+      if (QUICK ? quickModes.has(l.id) : lessonHere) {
+        for (const m of MODES) {
+          plan.kanji.push({ name: `kmode-${l.id}-${m}`, hash: `#/set/${l.id}/${m}`, act: modeActs(m) });
+          plan.kanji.push({ name: `kmode-${l.id}-w-${m}`, hash: `#/set/${l.id}-w/${m}`, act: modeActs(m) });
+        }
+        plan.kanji.push({ name: `kwrite-${l.id}`, hash: `#/kanji/write/${l.id}`, kw: true, act: ['click:[data-hint]', 'click:[data-skip]'] });
+      }
+      // writing mode for one kanji: stroke data must load, the right kanji is shown, stroke count = book, hint works
+      l.kanji.forEach((k, j) => { if (picked[j]) plan.kanji.push({ name: `kwrite-${k.id}`, hash: `#/kanji/write/${l.id}/${k.id}`, kw: k.kanji, strokes: k.strokes, act: ['click:[data-hint]'] }); });
+    }
   }
 }
+// font self-test (desktop only): a test page with deliberately broken fonts must be reported, also with the font cache
+plan.fonttest = [{ name: 'fonttest', fonttest: true }];
 plan.exam.push({ name: 'exam', hash: '#/exam' });
 for (const t of EXAM_TYPES) plan.exam.push({ name: `exam-${t}`, exam: t });
 plan.exam.push({ name: 'exam-mine', exam: 'w', mine: true });
@@ -106,7 +137,7 @@ function modeActs(m) {
 }
 
 // ---------- in-page checks ----------
-function pageCheck(fontsWanted) {
+function pageCheck([fontsWanted, fontCacheOn]) {
   const W = innerWidth;
   const out = [];
   const CYR = /[\u0400-\u04FF]/, LAT = /[A-Za-z]/, JP = /[\u3000-\u303F\u3040-\u30FF\u3400-\u9FFF\uF900-\uFAFF\uFF01-\uFF5E\uFF66-\uFF9F]/;
@@ -216,6 +247,10 @@ function pageCheck(fontsWanted) {
 
   // text samples for the font check (tag elements with their own text)
   const texts = [];
+  // kept on the page while the route stays the same (the action steps of one route share it)
+  if (!window.__qaFC || window.__qaFC.hash !== location.hash) window.__qaFC = { hash: location.hash, map: new Map() };
+  const fontCache = window.__qaFC.map;
+  let fontSkipped = 0;
   if (fontsWanted) {
     let i = 0;
     for (const el of vis) {
@@ -228,13 +263,21 @@ function pageCheck(fontsWanted) {
       if (!cyr && !lat && !jp) continue;
       // symbols Manrope has no glyph for (★ ← → ◊ ①, combining accents…) legitimately come from Noto Serif JP
       const sym = /[^\u0000-ɏЀ-ӿ -⁯№\s]/.test(full.replace(/[　-ヿ㐀-鿿豈-﫿＀-￯]/g, ''));
-      el.setAttribute('data-qaf', i++);
       const cs = getComputedStyle(el);
+      // Font cache: the font a browser draws a character with depends only on the character and the style
+      // (family, size, weight, style, colour) — so a text is checked only if it brings a character not yet
+      // checked with the same style and the same script mix. Same style + already-checked characters = same fonts.
+      const key = [cs.fontFamily, cs.fontSize, cs.fontWeight, cs.fontStyle, cs.color, cs.letterSpacing, cyr, lat, jp, sym, CYR.test(txt), JP.test(txt)].join('|');
+      const seenChars = fontCache.get(key) || new Set();
+      const fresh = [...new Set(full.replace(/s/g, ''))].filter(c => !seenChars.has(c));
+      if (!fresh.length && fontCacheOn) { fontSkipped++; continue; }
+      fresh.forEach(c => seenChars.add(c)); fontCache.set(key, seenChars);
+      el.setAttribute('data-qaf', i++);
       texts.push({ el: label(el), x: txt.slice(0, 50), cyr, lat, jp, sym, ls: cs.letterSpacing, ff: cs.fontFamily.slice(0, 40), ownCyr: CYR.test(txt), ownJp: JP.test(txt) });
     }
   }
   const loaded = [...document.fonts].filter(f => f.status === 'loaded').map(f => f.family.replace(/"/g, ''));
-  return { issues: out, texts, loaded: [...new Set(loaded)] };
+  return { issues: out, texts, loaded: [...new Set(loaded)], fontSkipped };
 }
 
 // ---------- runner ----------
@@ -271,9 +314,8 @@ async function fontCheck(P, texts) {
   const res = [];
   const { root } = await P.cdp.send('DOM.getDocument', { depth: 0 });
   const { nodeIds } = await P.cdp.send('DOM.querySelectorAll', { nodeId: root.nodeId, selector: '[data-qaf]' });
-  for (const id of nodeIds) {
-    const { attributes } = await P.cdp.send('DOM.getAttributes', { nodeId: id });
-    const idx = +attributes[attributes.indexOf('data-qaf') + 1];
+  // both lists are in document order → the n-th node is texts[n] (no getAttributes round trip)
+  for (const [idx, id] of nodeIds.entries()) {
     const t = texts[idx];
     if (!t) continue;
     let fonts = [];
@@ -294,9 +336,9 @@ async function fontCheck(P, texts) {
 const safe = s => s.replace(/[^a-z0-9-]+/gi, '_').slice(0, 90);
 async function check(P, name, group, full = true) {
   await settle(P.page);
-  const r = await P.page.evaluate(pageCheck, !!P.cdp);
+  const r = await P.page.evaluate(pageCheck, [!!P.cdp, process.env.QA_FONT_CACHE !== '0']);
   let issues = r.issues;
-  if (P.cdp) issues = issues.concat(await fontCheck(P, r.texts));
+  if (P.cdp) { issues = issues.concat(await fontCheck(P, r.texts)); report.fontChecked = (report.fontChecked || 0) + r.texts.length; report.fontSkipped = (report.fontSkipped || 0) + r.fontSkipped; }
   if (P.cdp && name === 'home' && !['Manrope', 'Noto Serif JP'].every(f => r.loaded.includes(f))) issues.push({ t: 'fonts-not-loaded', d: r.loaded.join(', ') });
   for (const e of P.errs.splice(0)) issues.push({ t: 'error', d: e });
   // exam instructions carry no hint in brackets (e.g. the form name): task line of a question, section task of the paper
@@ -306,6 +348,7 @@ async function check(P, name, group, full = true) {
     report.shots++;
   }
   report.steps++;
+  doneSteps[P.kind]++;
   const hash = await P.page.evaluate(() => location.hash);
   for (const i of issues) report.issues.push({ v: P.kind, step: name, group, hash, ...i });
 }
@@ -458,7 +501,56 @@ async function tsSelfcheck(P, group) {
   for (const d of bad.out) report.issues.push({ v: P.kind, step: 'ts-selfcheck', group, t: 'ts-selfcheck', d });
 }
 
+// Broken fonts that must be caught: (1) a whole text in Courier New, (2) twelve texts of one style — eleven fine,
+// the last one with a letter the site fonts lack (Ѣ → system fallback; same style and script mix, so only the
+// character cache can let it through), (3) Japanese forced into a font without kana, (4) a clean control text.
+async function fontSelfTest(P, group) {
+  if (!P.cdp) return;
+  await go(P, '#/'); await settle(P.page);
+  await P.page.evaluate(() => {
+    const box = document.createElement('section');
+    box.id = 'qa-fonttest';
+    box.innerHTML = '<p class="ft-courier" style="font-family:Courier New">Зламаний шрифт</p>'
+      + Array.from({ length: 11 }, () => '<p class="ft-same">Привіт, світе</p>').join('') + '<p class="ft-same ft-rare">Привѣт, свѢте</p>'
+      + '<p class="ft-jp" style="font-family:Manrope">ひらがな カタカナ</p><p class="ft-ok">Усе гаразд</p>';
+    document.querySelector('#app').prepend(box);
+  });
+  const before = report.issues.length;
+  await check(P, 'fonttest', group);
+  const got = report.issues.slice(before).filter(i => i.t.startsWith('font'));
+  const want = { courier: /ft-courier/, rare: /ft-rare/, japanese: /ft-jp/ };
+  const res = Object.entries(want).map(([k, re]) => [k, got.some(i => re.test(i.el))]);
+  const falsePos = got.filter(i => /ft-ok/.test(i.el) || (/ft-same/.test(i.el) && !/ft-rare/.test(i.el)));
+  console.log('font self-test:', res.map(([k, ok]) => `${k} ${ok ? 'caught' : 'MISSED'}`).join(', '), '· false alarms', falsePos.length);
+  // the expected findings are not problems of the site: replace them by a pass/fail line
+  report.issues.splice(before, report.issues.length - before, ...report.issues.slice(before).filter(i => !i.t.startsWith('font') && i.t !== 'error'));
+  for (const [k, ok] of res) if (!ok) report.issues.push({ v: P.kind, step: 'fonttest', group, t: 'fonttest-missed', d: k });
+  for (const i of falsePos) report.issues.push({ v: P.kind, step: 'fonttest', group, t: 'fonttest-false-alarm', el: i.el, d: i.d });
+  report.fonttest = Object.fromEntries(res);
+}
+
+// writing mode: wait for the stroke data (or the «no data» message); for one kanji the shown kanji must be the requested one
+async function kwReady(P, step, group) {
+  const st = await P.page.waitForFunction(() => {
+    if (document.querySelector('.kw-done')) return 'done';
+    if (document.querySelector('.kw-pad .so-missing')) return 'missing';
+    return document.querySelector('.kw-diag svg path, .kw-hint path') || (document.querySelector('.kw-canvas') && document.querySelector('.kw-diag[hidden]')) ? 'ok' : false;
+  }, null, { timeout: 20000 }).then(h => h.jsonValue(), () => 'timeout');
+  if (st === 'missing' || st === 'timeout') report.issues.push({ v: P.kind, step: step.name, group, t: 'kw-' + st, d: typeof step.kw === 'string' ? step.kw : step.hash });
+  if (typeof step.kw === 'string') {
+    const shown = await P.page.evaluate(() => [...document.querySelectorAll('.kw-ex-list ruby')].map(r => r.textContent).join(' '));
+    report.kwChecked = (report.kwChecked || 0) + 1;
+    const n = await P.page.$eval('.kw-diag svg path', ps => ps.length);
+    if (st === 'ok' && step.strokes && n && n !== step.strokes) report.issues.push({ v: P.kind, step: step.name, group, t: 'kw-stroke-count', d: `${step.kw}: KanjiVG ${n}, book ${step.strokes}` });
+    if (st === 'ok' && shown && !shown.includes(step.kw) && !shown.includes('◯')) report.issues.push({ v: P.kind, step: step.name, group, t: 'kw-wrong-kanji', d: step.kw, x: shown.slice(0, 60) });
+  }
+}
+
 async function runAll(P) {
+  const t0 = Date.now();
+  try { await runGroups(P); } finally { viewSec[P.kind] = (Date.now() - t0) / 1000; }
+}
+async function runGroups(P) {
   for (const g of groups) {
     let n = 0;
     for (const step of plan[g] || []) {
@@ -466,9 +558,11 @@ async function runAll(P) {
       if (++n > LIMIT) break;
       try {
         if (step.selfcheck) { await tsSelfcheck(P, g); continue; }
+        if (step.fonttest) { await fontSelfTest(P, g); continue; }
         if (step.exam) { await runExam(P, step, g); continue; }
         await go(P, step.hash);
-        const big = !/^(kcard|mode|kmode)-/.test(step.name);
+        const big = !/^(kcard|mode|kmode|kwrite)-/.test(step.name);
+        if (step.kw) await kwReady(P, step, g);
         await check(P, step.name, g, big);
         for (const [i, a] of (step.act || []).entries()) {
           const did = await act(P, a);
@@ -477,23 +571,47 @@ async function runAll(P) {
           await check(P, `${step.name}~${i + 1}`, g, false);
         }
       } catch (e) { report.issues.push({ v: P.kind, step: step.name, group: g, t: 'runner', d: e.message.slice(0, 200) }); }
-      if (n % 50 === 0) { console.log(P.kind, g, n, '/', plan[g].length, 'issues', report.issues.length); writeReport(false); }
+      if (n % 50 === 0) { console.log(P.kind, g, n, '/', plan[g].length, 'issues', report.issues.length, '· left ≈', eta(P.kind)); writeReport(false); }
       if (++P.used >= RECYCLE) await recycle(P);
     }
   }
 }
 
 const RECYCLE = +process.env.QA_RECYCLE || 150;
+// ---------- time estimate: seconds per step per viewport and group, learned from previous runs (qa/.timing.json) ----------
+const TIMING_F = path.join(ROOT, 'qa', '.timing.json');
+const DEFAULT_SPS = { d: 3, m: 1.2 };
+let timing = {};
+try { timing = JSON.parse(fs.readFileSync(TIMING_F, 'utf8')); } catch {}
+const sps = (v, g) => timing[`${v}/${g}`]?.sps ?? DEFAULT_SPS[v];
+const stepCount = g => Math.min(LIMIT, (plan[g] || []).filter(s => !ONLY_STEPS || ONLY_STEPS.has(s.name)).reduce((n, s) => n + 1 + (s.act || []).length + (s.exam ? 60 : 0), 0));
+const fmtMin = sec => (sec < 90 ? `${Math.round(sec)} с` : sec < 5400 ? `${Math.round(sec / 60)} хв` : `${(sec / 3600).toFixed(1)} год`);
+const runStart = Date.now();
+const doneSteps = { d: 0, m: 0 }, viewSec = {};
+function eta(v) { // remaining time of this viewport from its own speed so far
+  const total = groups.reduce((n, g) => n + stepCount(g), 0), done = doneSteps[v];
+  return done ? fmtMin(((Date.now() - runStart) / 1000 / done) * (total - done)) : '?';
+}
 async function recycle(P) {
   await P.page.context().close().catch(() => {});
   Object.assign(P, await makePage(P.kind), { used: 0 });
 }
 {
 const views = process.env.QA_VIEW ? process.env.QA_VIEW.split(',') : ['d', 'm'];
+{
+  const per = views.map(v => groups.reduce((t, g) => t + stepCount(g) * sps(v, g), 0));
+  const est = process.env.QA_VIEW ? per.reduce((a, b) => a + b, 0) : Math.max(...per);
+  console.log(`QA: ${groups.join(',')}${QUICK ? ' (quick)' : KBATCH ? ` (batch ${KBATCH})` : ''} · ${groups.reduce((n, g) => n + stepCount(g), 0)} checks per viewport · ${views.join('+')} · estimated time ≈ ${fmtMin(est)}${Object.keys(timing).length ? '' : ' (first run: rough guess)'}`);
+}
 if (process.env.QA_VIEW) { for (const v of views) { const P = Object.assign(await makePage(v), { used: 0 }); await runAll(P); await P.page.context().close().catch(() => {}); } }
 else { const [D, M] = [Object.assign(await makePage('d'), { used: 0 }), Object.assign(await makePage('m'), { used: 0 })]; await Promise.all([runAll(D), runAll(M)]); }
 await browser.close();
 srv.close();
+if (!ONLY_STEPS && LIMIT === Infinity) {
+  for (const v of views) { const n = doneSteps[v]; if (n > 20 && viewSec[v]) for (const g of groups) timing[`${v}/${g}`] = { sps: +(viewSec[v] / n).toFixed(3), at: new Date().toISOString() }; }
+  try { fs.writeFileSync(TIMING_F, JSON.stringify(timing, null, 1)); } catch {}
+}
+report.seconds = Math.round((Date.now() - runStart) / 1000);
 
 writeReport(true);
 }
@@ -504,7 +622,7 @@ fs.mkdirSync(OUT, { recursive: true });
 fs.writeFileSync(path.join(OUT, 'report.json'), JSON.stringify(report, null, 1));
 const byType = {};
 for (const i of report.issues) (byType[i.t] ||= []).push(i);
-let md = `# QA report ${report.finished}\n\nGroups: ${groups.join(', ')} · steps: ${report.steps} · screenshots: ${report.shots} · issues: ${report.issues.length}\n`;
+let md = `# QA report ${report.finished}\n\nGroups: ${groups.join(', ')}${QUICK ? ' (quick)' : KBATCH ? ` (batch ${KBATCH})` : ''} · steps: ${report.steps} · screenshots: ${report.shots} · issues: ${report.issues.length}${report.seconds ? ` · time: ${fmtMin(report.seconds)}` : ''}${report.fontChecked != null ? ` · font checks: ${report.fontChecked} (cached: ${report.fontSkipped})` : ''}${report.kwChecked ? ` · writing-mode kanji: ${report.kwChecked}` : ''}\n`;
 for (const [t, list] of Object.entries(byType)) {
   md += `\n## ${t} (${list.length})\n`;
   const uniq = new Map();
