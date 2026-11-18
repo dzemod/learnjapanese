@@ -1209,6 +1209,7 @@ textarea.ask-input { width: 100%; min-height: 84px; resize: vertical; font-famil
 .kw-ex[open] .kw-chev { transform: rotate(180deg); }
 .kw-ex-t { font-size: 1.15rem; font-weight: 700; }
 .kw-ex-first { color: var(--muted); overflow-wrap: anywhere; }
+.kw-ex-first ruby { margin-inline-end: .3em; } /* a reading wider than the word overhangs it: keep it off the « · translation» */
 .kw-ex ruby { font-family: var(--jp); font-size: 1.1rem; color: var(--text); }
 .kw-ex rt { font-size: .6rem; color: var(--muted); }
 .kw-ex-list { display: grid; gap: 8px; padding: 0 16px 14px; border-top: 1px solid var(--border); padding-top: 12px; }
