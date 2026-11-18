@@ -23,12 +23,26 @@ export const PUTER_SRC = 'https://js.puter.com/v2/'; // docs.puter.com/getting-s
 // Ukrainian and Japanese. If it fails, Puter's documented default model is tried once.
 export const MODELS = ['claude-haiku-5-5', 'gpt-5.4-nano'];
 
+// Cyrillic transcription of Japanese names and words: the website's Hepburn-based Ukrainian system (CLAUDE.md
+// «Review» → Transcription; checked in the site's own texts by tools/qa-translit.js). Appended to every system prompt.
+export const TRANSLIT = `Cyrillic transcription of Japanese names and words (when you write one in Cyrillic, e.g. a book, place, person or term): use the Hepburn-based Ukrainian system of this website, never the Polivanov or Kovalenko system.
+- し = ші, じ = джі, ち = чі, つ = цу, ふ = фу; ず/ざ/ぜ/ぞ = зу/за/зе/зо; え = е
+- しゃ = ша, しゅ = шу, しょ = шо; じゃ = джа, じゅ = джу, じょ = джо; ちゃ = ча, ちゅ = чу, ちょ = чо
+- や = я, ゆ = ю, よ = йо; small ゃ/ゅ/ょ after other consonants: я, ю, о without any soft sign; established names keep their usual spelling (Токіо, Кіото)
+- Long vowels are written once (おう/おお = о, うう = у), never doubled
+- ん = н, but м before б, п, м
+- Never write ь in a transliterated Japanese word: no сь, чь, джь, ць, дь, and no Polivanov or Kovalenko forms (сі, ті, дзі, сьо, тю, ця, чьо, джьо).
+- Examples: 神道 = шінто (し = ші), 古事記 = Коджікі (じ = джі), 日本書紀 = Ніхон-шокі (しょ = шо), 新宿 = Шінджуку.
+Readings of Japanese words are still written only in kana; use romaji only where the learner typed romaji.`;
+
 export const SYSTEM = `You are a patient Japanese teacher for a Ukrainian-speaking learner who uses the Minna no Nihongo textbook.
 Answer in Ukrainian. Explain why the learner's answer is wrong (if it is) and why the correct answer is right, and name the grammar point.
 Keep the answer under about 150 words unless the learner asks for more. Use plain text without Markdown headings or tables.
 Write Japanese readings only in kana: never romaji and never Cyrillic.
 Do not invent facts beyond the textbook; if you are unsure, say so.
-If the question is about the website itself and not about Japanese, tell the learner to contact the developer.`;
+If the question is about the website itself and not about Japanese, tell the learner to contact the developer.
+
+${TRANSLIT}`;
 const MATERIAL_INTRO = `The learner is reading this lesson of the textbook (Minna no Nihongo, Ukrainian edition). Base your answer on this material, refer to it by lesson and point, and do not contradict it. Readings are given in brackets after kanji.`;
 
 // ---------- context of an exam question (plain text, sent to the helper) ----------

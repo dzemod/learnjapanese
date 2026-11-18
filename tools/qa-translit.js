@@ -33,7 +33,9 @@ const hits = [];
 for (const f of FILES) {
   const text = fs.readFileSync(path.join(ROOT, f), 'utf8');
   text.split('\n').forEach((line, i) => {
-    const at = (w, why) => hits.push(`${f}:${i + 1}  «${w}» — ${why}`);
+    // the AI prompt rule (ai-helper.js TRANSLIT) names the wrong forms on purpose, on this one line only
+    if (f === 'site/js/ai-helper.js' && /no Polivanov or Kovalenko forms \(/.test(line)) return;
+    const at =(w, why) => hits.push(`${f}:${i + 1}  «${w}» — ${why}`);
     for (const m of line.matchAll(oldRe)) at(m[0], 'стара система (Коваленко) → див. tools/transcribe-hepburn.js');
     for (const m of line.matchAll(wordRe)) {
       const w = m[0].toLowerCase();

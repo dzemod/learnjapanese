@@ -52,6 +52,19 @@ export const mockPuter = async (ctx, init = {}) => {
   await ctx.route(/^https:\/\/js\.puter\.com\/v2\//, route => route.fulfill({ status: 200, contentType: 'text/javascript; charset=utf-8', body: MOCK }));
 };
 
+// Transliteration check of a reply: Cyrillic words written next to Japanese — «神道 (шінто)» or «шінто (神道)» —
+// must follow the Hepburn-based Ukrainian system (ai-helper.js TRANSLIT): no soft sign, no Polivanov/Kovalenko forms.
+const JA_RUN = '[\\u3040-\\u30ff\\u3400-\\u9fff\\uff66-\\uff9f々ー]+';
+const CYR_RUN = '[А-ЩЬЮЯІЇЄҐа-щьюяіїєґ’-]+(?: [А-ЩЬЮЯІЇЄҐа-щьюяіїєґ’-]+)?';
+const PAIR = new RegExp(`${JA_RUN}\\s*[(（](${CYR_RUN})[)）]|(${CYR_RUN})\\s*[(（]${JA_RUN}[)）]`, 'g');
+export const BAD_FORMS = ['ь', 'сь', 'чь', 'джь', 'ць', 'дь', 'тю', 'сьо', 'чьо', 'джьо', 'сі', 'ті', 'дзі', 'ці'];
+export function transliterated(text) { return [...String(text).matchAll(PAIR)].map(m => (m[1] || m[2]).toLowerCase()); }
+export function translitIssues(text) {
+  const out = [];
+  for (const w of transliterated(text)) for (const bad of BAD_FORMS) if (w.includes(bad)) out.push(`${w}: ${bad}`);
+  return out;
+}
+
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
   const srv = await serve();
   const URL_ = `http://localhost:${srv.address().port}/`;
@@ -120,6 +133,30 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.a
     const c1 = (await pm()).last;
     ok(c1.messages[0].role === 'system' && c1.messages[0].content.startsWith('You are Сенсей, a patient and warm Japanese mentor'), T('system prompt sent'));
     ok(c1.messages.at(-1).role === 'user' && c1.messages.at(-1).content === 'Як краще вчити кану?', T('question is the last message'));
+    // transliteration rule in the prompt (Hepburn-based Ukrainian, no soft sign)
+    const sys = c1.messages[0].content;
+    for (const s of ['Never write ь in a transliterated Japanese word', 'し = ші, じ = джі, ち = чі, つ = цу, ふ = фу', 'しゃ = ша, しゅ = шу, しょ = шо; じゃ = джа, じゅ = джу, じょ = джо',
+      'ちゃ = ча, ちゅ = чу, ちょ = чо', '神道 = шінто', '古事記 = Коджікі', '日本書紀 = Ніхон-шокі', 'ん = н, but м before б, п, м', 'Long vowels are written once'])
+      ok(sys.includes(s), T(`prompt: ${s}`));
+    if (!phone) {
+      // a reply with し じ ち つ しょ ちょ じょ: Polivanov / soft-sign forms are caught, Hepburn-based ones pass
+      const GOOD = '神道 (шінто), 古事記 (Коджікі), 日本書紀 (Ніхон-шокі), 一 (ічі), 津 (цу), 富士 (Фуджі), ちょうちん (чочін), 城 (джо), 中華 (чука).';
+      const BAD = { 'сінто': '神道', 'Кодзікі': '古事記', 'Ніхон сьокі': '日本書紀', 'ічі': null, 'іті': '一', 'ці': '津', 'чьочін': 'ちょうちん', 'джьо': '城', 'тюка': '中華', 'Шьо': '書', 'Фудзі': '富士' };
+      const caught = Object.entries(BAD).filter(([, ja]) => ja).map(([w, ja]) => [w, translitIssues(`${ja} (${w})`).length > 0, translitIssues(`${w} (${ja})`).length > 0]);
+      ok(caught.every(([, a, b]) => a && b), T('Polivanov / soft-sign forms are caught'), JSON.stringify(caught.filter(([, a, b]) => !a || !b)));
+      for (const bad of ['ь', 'сь', 'чь', 'джь', 'тю', 'сьо', 'чьо', 'джьо']) ok(translitIssues(`書 (а${bad}о)`).length > 0, T(`form «${bad}» is caught`));
+      await page.evaluate(t => { window.__pm.queue.push({ text: t }); }, GOOD);
+      await page.fill('.ss-input', 'Які книжки про шінто?');
+      await page.click('.ss-send');
+      await page.waitForFunction(() => document.querySelectorAll('.ss-msg.ai:not(.ss-typing)').length === 2);
+      const shown = await page.$eval('.ss-msg.ai:not(.ss-typing):last-of-type', e => e.textContent);
+      const words = transliterated(shown);
+      ok(words.length === 9 && !translitIssues(shown).length, T('Hepburn-based reply passes'), translitIssues(shown).join('; ') || String(words.length));
+      ok(['шо', 'чо', 'джо', 'ші', 'джі', 'чі', 'цу'].every(f => words.some(w => w.includes(f))), T('reply has шо, чо, джо, ші, джі, чі, цу'));
+      await page.evaluate(() => { sessionStorage.setItem('jp.sensei', JSON.stringify(JSON.parse(sessionStorage.getItem('jp.sensei')).slice(0, 2))); });
+      await page.reload({ waitUntil: 'networkidle' });
+      await page.waitForSelector('.ss-msg');
+    }
     ok(await page.$$eval('.ss-chip', b => b.every(x => !x.offsetParent)), T('starters hidden once the chat has messages'));
     await page.fill('.ss-input', '');
 
