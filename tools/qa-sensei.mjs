@@ -88,7 +88,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.a
     ok(page.url().endsWith('#/sensei'), T('tab opens #/sensei'));
     ok(await page.waitForFunction(() => getComputedStyle(document.querySelector('.tabs-nav [data-tab="sensei"]')).backgroundColor === 'rgb(200, 16, 46)', null, { timeout: 2000 }).then(() => true, () => false), T('active tab red'));
     ok((await page.textContent('.ss-sub')).trim() === 'Запитай про навчання чи Японію', T('subtitle'));
-    ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), T('no horizontal scroll'));
+    ok(await page.evaluate(w => Math.max(document.documentElement.scrollWidth, innerWidth) <= w, width), T('no horizontal scroll'));
 
     // starters fill the textarea without sending
     ok((await page.$$eval('.ss-chip', b => b.map(x => x.textContent))).join('|') === STARTERS.join('|'), T('starter questions'));
