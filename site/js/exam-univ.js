@@ -257,7 +257,7 @@ export function paperResult(root, ctx) {
   ctx.wireRefs(root, b => { const m = b.closest('.ex-mistake'); if (!m) return ''; const { row, sec } = rowOf(m); return askContext(row, sec, ctx); });
   $$('.ex-mistake', root).forEach(el => {
     const { row, sec } = rowOf(el);
-    addAskButton(el, () => askContext(row, sec, ctx));
+    addAskButton(el, () => askContext(row, sec, ctx), null, undefined, { mistake: true });
   });
   mountAskBlock($('.exam', root));
   $('[data-again]', root).onclick = () => ctx.again();

@@ -685,7 +685,7 @@ function runView(root, api) {
     wireRefs(root, () => askContext(q, S.answered));
     const next = () => { S.res[S.i] = S.answered; S.answered = null; S.i++; persist(); draw(); window.scrollTo(0, 0); };
     $('[data-next]', root).onclick = next;
-    addAskButton($('.ex-feedback', root), () => askContext(q, S.answered), $('[data-next]', root));
+    addAskButton($('.ex-feedback', root), () => askContext(q, S.answered), $('[data-next]', root), undefined, { mistake: !S.answered?.ok });
     $('[data-next]', root).focus({ preventScroll: true });
     $('.ex-feedback', root).scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   };
@@ -746,7 +746,7 @@ function runView(root, api) {
     $('[data-flag]', root).onclick = () => { S.answered.flag = true; persist(); addSavedMistake(q); feedbackSent(q); toast('Додано до помилок — їх можна повторити окремо'); };
     const next = () => { S.res[S.i] = S.answered; S.answered = null; S.i++; persist(); draw(); window.scrollTo(0, 0); };
     $('[data-next]', root).onclick = next;
-    addAskButton($('.ex-feedback', root), () => askContext(q, S.answered), $('[data-next]', root));
+    addAskButton($('.ex-feedback', root), () => askContext(q, S.answered), $('[data-next]', root), undefined, { mistake: !S.answered?.ok });
     $('[data-next]', root).focus({ preventScroll: true });
     $('.ex-feedback', root).scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
@@ -802,7 +802,7 @@ function runView(root, api) {
     $('[data-flag]', root).onclick = () => { S.answered.flag = true; persist(); addSavedMistake(q); feedbackWT(q); toast('Додано до помилок — їх можна повторити окремо'); };
     const next = () => { S.res[S.i] = S.answered; S.answered = null; S.i++; persist(); draw(); window.scrollTo(0, 0); };
     $('[data-next]', root).onclick = next;
-    addAskButton($('.ex-feedback', root), () => askContext(q, S.answered), $('[data-next]', root));
+    addAskButton($('.ex-feedback', root), () => askContext(q, S.answered), $('[data-next]', root), undefined, { mistake: !S.answered?.ok });
     $('[data-next]', root).focus({ preventScroll: true });
     $('.ex-feedback', root).scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
@@ -960,7 +960,7 @@ function resultView(root) {
   </div>`;
   wireRefs(root, b => { const m = b.closest('.ex-mistake'); return m ? askContext(wrong[+m.dataset.i].q, wrong[+m.dataset.i].r) : ''; });
   $$('[data-say-c]', root).forEach(b => (b.onclick = () => speak(wrong[+b.closest('.ex-mistake').dataset.i]?.q.say)));
-  $$('.ex-mistake', root).forEach(el => { const { q, r } = wrong[+el.dataset.i]; addAskButton(el, () => askContext(q, r)); });
+  $$('.ex-mistake', root).forEach(el => { const { q, r } = wrong[+el.dataset.i]; addAskButton(el, () => askContext(q, r), null, undefined, { mistake: true }); });
   mountAskBlock($('.exam', root));
   $('[data-repeat]', root)?.addEventListener('click', () => {
     S = { conf: { ...S.conf, name: (S.conf.name || 'Екзамен') + ' — помилки', timer: 0 }, qs: shuffle(wrong.map(x => x.q)), i: 0, res: [], start: Date.now(), deadline: 0, answered: null };

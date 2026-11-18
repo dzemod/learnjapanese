@@ -261,11 +261,28 @@ function widget(el, { context = '', question = '', bottom = false, logKey = EXAM
 }
 
 /** The small button after an exam answer; opens the panel with the context right below it. getContext runs on the first click. */
-export function addAskButton(parent, getContext, before = null, question = WHY) {
+// ---------- «Поясни мою помилку» → Сенсей ----------
+// The question is filled into Сенсей's input (not sent); «Повернутися до екзамену» stays visible (jp.examReturn,
+// the key exam.js returnButton reads). Сенсей reads and removes SENSEI_PREFILL once.
+export const SENSEI_PREFILL = 'jp.sensei.prefill';
+const EXPLAIN = 'Поясни, будь ласка, мою помилку в екзамені: чому моя відповідь неправильна, як правильно і яке правило з підручника тут діє.';
+export const mistakeQuestion = context => `${EXPLAIN}\n\n${String(context || '').slice(0, MAX_CONTEXT)}`;
+export function openSenseiWith(text) {
+  try {
+    sessionStorage.setItem(SENSEI_PREFILL, JSON.stringify({ mode: 'ask', text: String(text).slice(0, MAX_INPUT) }));
+    sessionStorage.setItem('jp.examReturn', JSON.stringify({ at: Date.now(), lesson: null, ask: '' }));
+  } catch { /* storage blocked: Сенсей opens with an empty input */ }
+  location.hash = '#/sensei';
+}
+
+/** opts.mistake: also «Поясни мою помилку — Сенсей» (opens the Сенсей tab with the question filled in). */
+export function addAskButton(parent, getContext, before = null, question = WHY, { mistake = false } = {}) {
   const slot = document.createElement('div');
   slot.className = 'ask-zone ask-slot';
-  slot.innerHTML = '<button type="button" class="btn ghost sm ask-open" aria-expanded="false">Чому так? Запитати ШІ</button><div class="ask-panel" hidden></div>';
+  slot.innerHTML = `<div class="ask-btns"><button type="button" class="btn ghost sm ask-open" aria-expanded="false">Чому так? Запитати ШІ</button>${mistake ? '<button type="button" class="btn ghost sm ask-sensei" data-sensei>Поясни мою помилку — Сенсей</button>' : ''}</div><div class="ask-panel" hidden></div>`;
   const btn = $('.ask-open', slot), panel = $('.ask-panel', slot);
+  const toSensei = $('[data-sensei]', slot);
+  if (toSensei) toSensei.onclick = () => openSenseiWith(mistakeQuestion(getContext()));
   let input = null;
   btn.onclick = () => {
     panel.hidden = !panel.hidden;
