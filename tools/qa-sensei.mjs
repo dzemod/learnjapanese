@@ -138,6 +138,11 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.a
     for (const s of ['Never write ь in a transliterated Japanese word', 'し = ші, じ = джі, ち = чі, つ = цу, ふ = фу', 'しゃ = ша, しゅ = шу, しょ = шо; じゃ = джа, じゅ = джу, じょ = джо',
       'ちゃ = ча, ちゅ = чу, ちょ = чо', '神道 = шінто', '古事記 = Коджікі', '日本書紀 = Ніхон-шокі', 'ん = н, but м before б, п, м', 'Long vowels are written once'])
       ok(sys.includes(s), T(`prompt: ${s}`));
+    const lengthLimit = [/200 words/, /\d+\s*(words?|sentences?|paragraphs?|characters?|tokens?|lines?|слів|слова|речень|символів|рядків)(?![a-zа-яіїєґ])/i, /\b(under|at most|no more than|maximum of|up to|within)\s+(about\s+)?\d/i];
+    ok(lengthLimit.every(re => !re.test(sys)), T('prompt has no numeric length limit'), lengthLimit.filter(re => re.test(sys)).join(' '));
+    ok(lengthLimit.every(re => re.test('Keep most answers under about 200 words.')) && lengthLimit[1].test('не більше 3 речень'), T('length-limit detector works'));
+    ok(sys.includes('Give complete, detailed explanations. Cover the topic fully: the rule, the reason behind it, examples with readings and translation, common mistakes, and a practice tip. Use short sections with bold headings when the answer has several parts.'), T('prompt asks for full answers'));
+    ok(sys.includes('Stay on learning Japanese, the language, and Japan.'), T('prompt keeps the topic rule'));
     if (!phone) {
       // a reply with し じ ち つ しょ ちょ じょ: Polivanov / soft-sign forms are caught, Hepburn-based ones pass
       const GOOD = '神道 (шінто), 古事記 (Коджікі), 日本書紀 (Ніхон-шокі), 一 (ічі), 津 (цу), 富士 (Фуджі), ちょうちん (чочін), 城 (джо), 中華 (чука).';
