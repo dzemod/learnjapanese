@@ -128,7 +128,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.a
     await page.waitForSelector('.ss-msg.ai:not(.ss-typing)');
     const m1 = await msgs();
     ok(m1.length === 2 && m1[0][1] === 'Як краще вчити кану?' && m1[1][1].includes('щодня'), T('question and mocked reply in the list'), JSON.stringify(m1));
-    ok(await page.$eval('.ss-msg.ai b', b => b.textContent === 'щодня').catch(() => false), T('**bold** rendered'));
+    ok(await page.$eval('.ss-msg.ai strong', b => b.textContent === 'щодня').catch(() => false), T('**bold** rendered'));
     ok((await pm()).calls === 1, T('no second request while pending'), String((await pm()).calls));
     ok(!(await page.isDisabled('.ss-send')), T('send enabled again'));
     const c1 = (await pm()).last;
@@ -286,28 +286,62 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.a
     await page.waitForSelector('.ss-msg.ai:not(.ss-typing)');
     const call = await page.evaluate(() => window.__pm.calls.at(-1));
     ok(call.options.max_tokens === 128000 && call.options.normalize === true && call.options.model === 'claude-haiku-5-5', T('highest output limit of the model requested'), JSON.stringify(call.options));
+    await page.waitForTimeout(900); // smooth scroll to the new reply
     const r = await page.evaluate(last => {
       const list = document.querySelector('.ss-list'), msg = [...list.querySelectorAll('.ss-msg.ai')].pop();
-      const atBottom = list.scrollTop + list.clientHeight >= list.scrollHeight - 1; // scrolled to the new reply by itself
-      list.scrollIntoView({ block: 'end' }); // the box on screen, scrolled to its bottom
+      const top = msg.getBoundingClientRect().top, bar = document.querySelector('.topbar').getBoundingClientRect().bottom;
+      const startShown = top >= bar - 1 && top < innerHeight; // the page scrolled to the start of the new reply
+      // no inner scroll box anywhere in the chat: every element shows its whole content
+      const innerScroll = [list, ...list.querySelectorAll('*')].filter(e => /(auto|scroll)/.test(getComputedStyle(e).overflowY) || e.scrollHeight > e.clientHeight + 1 && getComputedStyle(e).overflowY !== 'visible').map(e => e.className || e.tagName);
       const walker = document.createTreeWalker(msg, NodeFilter.SHOW_TEXT); let node = null; for (let n; (n = walker.nextNode());) if (n.textContent.includes(last)) node = n;
+      node.parentElement.scrollIntoView({ block: 'end' }); // the page scrolls to the end of the reply
       const rg = document.createRange(); const at = node.textContent.indexOf(last); rg.setStart(node, at); rg.setEnd(node, at + last.length);
-      const rects = [...rg.getClientRects()], L = list.getBoundingClientRect();
-      const inBox = rects.every(c => c.top >= L.top - 0.5 && c.bottom <= L.bottom + 0.5 && c.left >= L.left - 0.5 && c.right <= L.right + 0.5);
-      const onScreen = rects.every(c => c.top >= 0 && c.bottom <= innerHeight + 0.5);
+      const onScreen = [...rg.getClientRects()].every(c => c.top >= 0 && c.bottom <= innerHeight + 0.5 && c.right <= innerWidth + 0.5);
       const cs = getComputedStyle(msg);
-      return { atBottom, inBox, onScreen, grows: msg.scrollHeight <= msg.clientHeight + 1 && cs.maxHeight === 'none' && cs.overflow === 'visible', pre: cs.whiteSpace,
-        heads: [...msg.querySelectorAll('b')].map(b => b.textContent), text: msg.textContent, docW: Math.max(document.documentElement.scrollWidth, innerWidth), cut: !!document.querySelector('.ss-cut') };
+      return { startShown, innerScroll, onScreen, grows: cs.maxHeight === 'none' && cs.overflow === 'visible',
+        h2: [...msg.querySelectorAll('h2')].map(b => b.textContent), h3: [...msg.querySelectorAll('h3')].map(b => b.textContent),
+        paras: msg.querySelectorAll('p').length, brs: msg.querySelectorAll('br').length,
+        text: msg.textContent, docW: Math.max(document.documentElement.scrollWidth, innerWidth), cut: !!document.querySelector('.ss-cut') };
     }, LAST);
-    ok(bigWords >= 1500 && r.text.endsWith(LAST) && r.text.length === BIG.replace(/^#{1,6}[ \t]+/gm, '').replace(/\*\*/g, '').length, T('≈1500-word reply rendered in full'), `${bigWords} words`);
-    ok(r.atBottom, T('chat box scrolls to the bottom when the reply arrives'));
-    ok(r.inBox && r.onScreen, T('last sentence visible at the bottom of the box'));
-    ok(r.grows, T('reply box grows with its content'));
-    ok(r.pre === 'pre-wrap' && r.text.includes('\n'), T('line breaks kept'));
-    ok(['Правило', 'Чому так', 'Приклади', 'Типові помилки', 'Порада для практики'].every(h => r.heads.includes(h)) && !r.text.includes('##') && !r.text.includes('**'), T('headings shown bold (** and ##)'), r.heads.join('|'));
+    ok(bigWords >= 1500 && r.text.endsWith(LAST) && Array.from({ length: 55 }, (_, i) => `Пункт ${i + 1}:`).every(p => r.text.includes(p)), T('≈1500-word reply rendered in full'), `${bigWords} words`);
+    ok(r.startShown, T('page scrolls to the start of the new reply'));
+    ok(!r.innerScroll.length, T('no inner scroll box / scrollbar'), r.innerScroll.join(', '));
+    ok(r.onScreen, T('last sentence visible after scrolling the page to the end'));
+    ok(r.grows, T('reply grows with its content'));
+    ok(r.paras >= 6 && r.brs >= 50, T('paragraphs and line breaks kept'), `${r.paras} p, ${r.brs} br`);
+    ok(['Чому так', 'Типові помилки'].every(h => r.h2.includes(h)) && ['Правило', 'Приклади', 'Порада для практики'].every(h => r.h3.includes(h)) && !/[#*]/.test(r.text), T('## → h2, **title** line → h3, no raw # or *'), `${r.h2.join('|')} / ${r.h3.join('|')}`);
     ok(r.docW <= width, T('no horizontal scroll'), String(r.docW));
     ok(!r.cut, T('complete answer has no cut note'));
     await page.screenshot({ path: path.join(OUT, `long-${width}.png`) });
+
+    // Markdown subset → tags; no raw markers; one font stack for Cyrillic and Japanese in a paragraph
+    const MD = '## Heading\n### Subheading\nТекст з **bold** і *italic* та `код`.\n--\n- item one\n- item two\n\n1. перший\n2. другий\n---\nАбзац: слово 日本語 (にほんご) і українська -- в одному рядку.\n**Порада:**\nОстанній абзац.';
+    await page.evaluate(t => { window.__pm.queue.push({ text: t }); }, MD);
+    await page.fill('.ss-input', 'Покажи форматування'); await page.click('.ss-send');
+    await page.waitForFunction(() => !document.querySelector('.ss-typing') && [...document.querySelectorAll('.ss-msg.ai')].pop().querySelector('h2'));
+    const md = await page.evaluate(() => {
+      const msg = [...document.querySelectorAll('.ss-msg.ai')].pop(), q = s => [...msg.querySelectorAll(s)].map(e => e.textContent);
+      const p = [...msg.querySelectorAll('p')].find(e => /日本語/.test(e.textContent)), ff = e => getComputedStyle(e).fontFamily;
+      const els = ['p', 'h2', 'h3', 'li', 'strong', 'em'].map(s => msg.querySelector(s));
+      return { h2: q('h2'), h3: q('h3'), hr: q('hr').length, ul: q('ul > li'), ol: q('ol > li'), strong: q('strong'), em: q('em'), code: q('code'), text: msg.textContent,
+        pFont: ff(p), pSize: getComputedStyle(p).fontSize, pLine: getComputedStyle(p).lineHeight, same: els.every(e => e && ff(e) === ff(p)), pText: p.textContent, kids: p.children.length };
+    });
+    await page.evaluate(() => { const m = [...document.querySelectorAll('.ss-msg.ai')].pop(); m.style.scrollMarginTop = document.querySelector('.topbar').offsetHeight + 12 + 'px'; m.scrollIntoView({ block: 'start' }); });
+    await page.screenshot({ path: path.join(OUT, `markdown-${width}.png`) });
+    ok(md.h2.join() === 'Heading' && md.h3.join() === 'Subheading,Порада', T('## → h2, ### → h3'), `${md.h2} / ${md.h3}`);
+    ok(md.hr >= 1 && md.ul.join('|') === 'item one|item two' && md.ol.join('|') === 'перший|другий', T('-- → hr, - → ul, 1. → ol'), JSON.stringify(md));
+    ok(md.strong.includes('bold') && md.em.includes('italic') && md.code.includes('код'), T('**bold** → strong, *italic* → em, `code` → code'));
+    ok(!/[#*`]|--/.test(md.text) && md.pText.includes('українська — в одному'), T('no raw #, --, * in the text'), md.text);
+    ok(/^"?Manrope"?, "?Noto Sans JP"?/.test(md.pFont) && md.same && md.kids === 0, T('Cyrillic and Japanese in one paragraph: one font stack'), md.pFont);
+    ok(md.pSize === '16px' && Math.abs(parseFloat(md.pLine) - 16 * 1.65) < 0.2, T('16 px, line height 1.65 on phones'), `${md.pSize} ${md.pLine}`);
+    // the model's text is never trusted: tags come out as text
+    const XSS = '<script>window.__xss = 1</script><img src=x onerror="window.__xss = 2"> **ok** <b onclick="x">b</b>';
+    await page.evaluate(t => { window.__pm.queue.push({ text: t }); }, XSS);
+    await page.fill('.ss-input', 'XSS'); await page.click('.ss-send');
+    await page.waitForFunction(() => !document.querySelector('.ss-typing') && /window\.__xss/.test([...document.querySelectorAll('.ss-msg.ai')].pop().textContent));
+    await page.waitForTimeout(300);
+    const xss = await page.evaluate(() => { const m = [...document.querySelectorAll('.ss-msg.ai')].pop(); return { tags: [...m.querySelectorAll('script, img, b, [onclick], [onerror]')].length, flag: window.__xss, text: m.textContent }; });
+    ok(xss.tags === 0 && xss.flag === undefined && xss.text.includes('<script>window.__xss = 1</script>') && xss.text.includes('<img src=x onerror='), T('script / img onerror shown as escaped text'), JSON.stringify(xss));
 
     // stopped by the output limit → note + «Продовжити»; each click = one follow-up request
     await page.evaluate(([cut, cont]) => { window.__pm.queue.push({ text: cut, finish: 'length' }); }, [CUT, CONT]);

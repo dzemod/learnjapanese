@@ -121,23 +121,23 @@ for (const [width, height, phone] of [[320, 568, true], [390, 844, true], [1280,
   const words = LONG_REPLY.split(/\s+/).length;
   const r = await page.evaluate(() => {
     const list = document.querySelector('.ss-list'), msg = [...list.querySelectorAll('.ss-msg.ai')].pop();
-    list.scrollTop = list.scrollHeight; // the box's own scroll, to the bottom
     const cs = getComputedStyle(msg), L = list.getBoundingClientRect(), M = msg.getBoundingClientRect();
-    // the last line of the reply: rect of its last character
+    // the last line of the reply: rect of its last character, after the PAGE scrolls to it (no inner scroll box)
     const walker = document.createTreeWalker(msg, NodeFilter.SHOW_TEXT); let last = null; for (let n; (n = walker.nextNode());) if (n.textContent.trim()) last = n;
+    last.parentElement.scrollIntoView({ block: 'end' });
     const rg = document.createRange(); const end = last.textContent.trimEnd().length; rg.setStart(last, end - 1); rg.setEnd(last, end);
-    const C = rg.getBoundingClientRect();
+    const C = rg.getBoundingClientRect(), L2 = list.getBoundingClientRect();
     const clipped = [...msg.querySelectorAll('*'), msg].some(e => e.scrollWidth > e.clientWidth + 1 && !/(auto|scroll)/.test(getComputedStyle(e).overflowX));
     return { overflowMsg: cs.overflow, heightMsg: cs.height, maxH: cs.maxHeight, wrap: cs.overflowWrap, wb: cs.wordBreak, listOverflow: getComputedStyle(list).overflowY,
-      lastIn: C.bottom <= L.bottom + 0.5 && C.top >= L.top - 0.5 && C.right <= L.right + 0.5 && C.left >= L.left - 0.5,
-      msgInList: M.left >= L.left - 0.5 && M.right <= L.right + 0.5, clipped, listScroll: list.scrollHeight > list.clientHeight,
+      lastIn: C.bottom <= innerHeight + 0.5 && C.top >= 0 && C.right <= L2.right + 0.5 && C.left >= L2.left - 0.5,
+      msgInList: M.left >= L.left - 0.5 && M.right <= L.right + 0.5, clipped, listScroll: list.scrollHeight > list.clientHeight + 1,
       docW: Math.max(document.documentElement.scrollWidth, innerWidth), text: msg.textContent };
   });
   ok(r.text.includes('ОСТАННІЙ РЯДОК ВІДПОВІДІ.') && words >= 250, T('whole reply rendered'), `${words} words`);
   ok(r.overflowMsg === 'visible' && r.maxH === 'none', T('reply box: no overflow hidden / max-height'), `${r.overflowMsg} ${r.maxH}`);
   ok(r.wrap === 'anywhere' && r.wb === 'break-word', T('long words wrap'), `${r.wrap} ${r.wb}`);
-  ok(r.listOverflow === 'auto' && r.listScroll, T('long reply scrolls inside the chat box'));
-  ok(r.lastIn, T('last line visible after scrolling to the bottom of the box'));
+  ok(r.listOverflow === 'visible' && !r.listScroll, T('no inner scroll box: the page scrolls'), `${r.listOverflow} ${r.listScroll}`);
+  ok(r.lastIn, T('last line visible after scrolling the page'));
   ok(r.msgInList && !r.clipped, T('nothing clipped at the right edge'));
   ok(r.docW <= width, T('no horizontal page scroll'), `${r.docW}`);
   await page.locator('.ss-list').scrollIntoViewIfNeeded();
@@ -164,7 +164,7 @@ for (const [width, height, phone] of [[390, 844, true], [1280, 800, false]]) {
     const ai = document.querySelector('.ss-msg.ai'), me = document.querySelector('.ss-msg.me');
     return { ai: f('.ss-msg.ai'), me: f('.ss-msg.me'), input: f('.ss-input'), chip: getComputedStyle(document.querySelector('.ss-chip')).fontFamily, title: f('.sensei h1'), eyebrow: f('.sensei .eyebrow'),
       serif: [...new Set(all.filter(x => /serif/i.test(x.replace(/sans-serif/gi, ''))))],
-      size: [getComputedStyle(ai).fontSize, getComputedStyle(ai).lineHeight], kids: ai.children.length };
+      size: [getComputedStyle(ai).fontSize, getComputedStyle(ai).lineHeight], kids: (ai.querySelector('p') || ai).children.length };
   });
   ok(/^"?Manrope"?, "?Noto Sans JP"?/.test(fam.ai), T('reply stack: Manrope, Noto Sans JP'), fam.ai);
   ok([fam.me, fam.input, fam.chip, fam.title, fam.eyebrow].every(x => x === fam.ai), T('same stack for input, bubbles, starters, title'), JSON.stringify(fam));
