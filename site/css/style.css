@@ -836,12 +836,13 @@ body[data-view="grammar"] main, body[data-view="kanji"] main { max-width: 1040px
 /* ==========================================================================
    Exam tab
    ========================================================================== */
-.tabs-nav { grid-template-columns: repeat(5, auto); }
+.tabs-nav { grid-template-columns: repeat(6, auto); }
 .tabs-nav a { font-size: .82rem; gap: 5px; padding: 0 4px; min-width: 0; }
 @media (min-width: 760px) { .tabs-nav { min-width: 560px; } .tabs-nav a { font-size: .9rem; padding: 0 8px; } }
 @media (max-width: 600px) { .tn-jp { display: none; } .tabs-nav a { font-size: .76rem; letter-spacing: -.01em; } }
 body[data-tab="exam"] .tabs-nav [data-tab="exam"],
-body[data-tab="translate"] .tabs-nav [data-tab="translate"] { background: var(--red); color: #fff; }
+body[data-tab="translate"] .tabs-nav [data-tab="translate"],
+body[data-tab="sensei"] .tabs-nav [data-tab="sensei"] { background: var(--red); color: #fff; }
 body[data-view="exam"] main { max-width: 860px; }
 .ex-setup .sec-title { margin-top: 18px; }
 .ex-setup .sec-title:first-child { margin-top: 0; }
@@ -1252,3 +1253,30 @@ textarea.ask-input { width: 100%; min-height: 84px; resize: vertical; font-famil
 .kw-r.easy { color: #3ba7e8; }
 body.kw-rating main { padding-bottom: 110px; }
 @media (min-width: 600px) { .kw-rate { left: 50%; right: auto; width: 560px; transform: translateX(-50%); border: 1px solid var(--border-2); border-bottom: 0; } .kw-diag { width: 120px; height: 120px; } }
+
+/* ==========================================================================
+   Сенсей tab (#/sensei): chat with the AI mentor — sharp corners, red accent
+   ========================================================================== */
+@media (max-width: 480px) { .tabs-nav { grid-template-columns: repeat(3, 1fr); } } /* 6 tabs: two rows of three on phones */
+.sensei { display: grid; gap: 12px; }
+.ss-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+.ss-head h1 { margin: 0; }
+.ss-sub { margin: 4px 0 0; }
+.ss-new { border-radius: 0; flex: none; }
+.ss-bar { display: flex; align-items: flex-end; gap: 8px; padding: 8px; background: #141012; border: 1px solid var(--red); border-radius: 0; box-shadow: 0 6px 24px rgba(0, 0, 0, .45); }
+.ss-bar:focus-within { box-shadow: 0 0 0 1px var(--red), 0 6px 24px rgba(0, 0, 0, .45); }
+.ss-input { flex: 1; min-width: 0; resize: none; min-height: 40px; max-height: 140px; padding: 9px 10px; background: transparent; border: 0; border-radius: 0; color: var(--text); font: inherit; font-size: 1rem; line-height: 1.4; outline: none; }
+.ss-input::placeholder { color: var(--muted); }
+.ss-send { flex: none; border-radius: 0; min-height: 40px; padding: 0 14px; }
+.ss-send:disabled { opacity: .6; cursor: progress; }
+.ss-meta { display: flex; justify-content: space-between; gap: 10px; min-height: 1.2em; font-size: .88rem; }
+.ss-count.over { color: var(--red); }
+.ss-starters { display: flex; flex-wrap: wrap; gap: 8px; }
+.ss-chip { padding: 8px 12px; background: var(--panel); border: 1px solid var(--border-2); border-radius: 0; color: var(--text); font: inherit; font-size: .9rem; text-align: left; cursor: pointer; }
+.ss-chip:hover { border-color: var(--red); }
+.ss-list { display: grid; gap: 10px; align-content: start; max-height: min(60vh, 560px); overflow-y: auto; overscroll-behavior: contain; padding: 12px; background: var(--panel); border: 1px solid var(--border); border-radius: 0; }
+.ss-msg { max-width: 88%; padding: 10px 12px; border-radius: 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.5; }
+.ss-msg.me { justify-self: end; background: var(--red-bg); border: 1px solid rgba(200, 16, 46, .45); }
+.ss-msg.ai { justify-self: start; background: var(--panel-2); border-left: 3px solid var(--red); }
+.ss-typing { color: var(--muted); }
+.ss-note { margin: 0; }

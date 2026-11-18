@@ -1,4 +1,4 @@
-// «Запитай ШІ»: the AI helper shared by the Exam tab and the Grammar tab.
+// «Запитай ШІ»: the AI helper shared by the Exam tab and the Grammar tab; its chat() is also the client of «Сенсей».
 //   Exam: «Чому так? Запитати ШІ» after an answer (addAskButton) and the «Запитай ШІ» block at the bottom (mountAskBlock).
 //   Grammar: the same block at the bottom of every lesson, with the lesson's textbook material as reference.
 // Runs fully in the browser on Puter.js (https://docs.puter.com): every learner signs in to their own free Puter
@@ -13,7 +13,7 @@ const MAX_INPUT = 1000; // characters: the learner's question + the exam questio
 const MAX_CONTEXT = 800; // leaves room for the question
 const MAX_OUTPUT_TOKENS = 700; // the prompt asks for ≈150 words; this only stops runaway answers
 const TIMEOUT_MS = 45000;
-const MSG_FAIL = 'Не вдалося отримати відповідь, спробуйте ще раз';
+export const MSG_FAIL = 'Не вдалося отримати відповідь, спробуйте ще раз';
 const MSG_SIGNIN = 'Щоб отримати пояснення, увійдіть у безкоштовний акаунт Puter';
 const WHY = 'Поясни, будь ласка, чому правильна саме ця відповідь.';
 
@@ -124,31 +124,40 @@ export function replyText(r) {
 const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))]);
 
 // ---------- request ----------
-/** question + context (exam question) go in the user message; material (lesson text) goes into the system prompt. */
-async function request(question, context, material = '') {
+/**
+ * The one Puter.js client of the site (Exam, Grammar, Сенсей): loads Puter.js, signs in on the click, tries MODELS in
+ * turn. messages = [{ role: 'system'|'user'|'assistant', content }]; earlier turns of a conversation may be included.
+ * Resolves to { answer } or { error: Ukrainian message } (signin = the message for a cancelled sign-in).
+ * Real errors go to the console as code + message only.
+ */
+export async function chat(messages, { signin = MSG_SIGNIN, maxTokens = MAX_OUTPUT_TOKENS } = {}) {
   let puter;
   try { puter = await loadPuter(); } catch (e) { console.error('ask:', errInfo(e)); return { error: MSG_FAIL }; }
   // Sign-in opens Puter's popup, so it runs here, right after the click on «Надіслати».
   try {
     if (!puter.auth.isSignedIn()) await puter.auth.signIn();
-  } catch (e) { console.warn('ask: Puter sign-in did not finish:', errInfo(e)); return { error: MSG_SIGNIN }; }
-  if (!puter.auth.isSignedIn()) return { error: MSG_SIGNIN };
-  const messages = [
-    { role: 'system', content: material ? `${SYSTEM}\n\n${MATERIAL_INTRO}\n\n${material}` : SYSTEM },
-    { role: 'user', content: context ? `${context}\n\nЗапитання учня: ${question}` : question },
-  ];
+  } catch (e) { console.warn('ask: Puter sign-in did not finish:', errInfo(e)); return { error: signin }; }
+  if (!puter.auth.isSignedIn()) return { error: signin };
   for (const model of MODELS) {
     try {
-      const r = await withTimeout(puter.ai.chat(messages, false, { model, max_tokens: MAX_OUTPUT_TOKENS }), TIMEOUT_MS);
+      const r = await withTimeout(puter.ai.chat(messages, false, { model, max_tokens: maxTokens }), TIMEOUT_MS);
       const answer = replyText(r);
       if (answer) return { answer };
       console.error('ask: empty answer from', model);
     } catch (e) {
       console.error('ask: Puter AI failed with', model, '-', errInfo(e));
-      if (isAuthError(e)) return { error: MSG_SIGNIN };
+      if (isAuthError(e)) return { error: signin };
     }
   }
   return { error: MSG_FAIL };
+}
+
+/** Exam / Grammar: question + context (exam question) in the user message; material (lesson text) in the system prompt. */
+function request(question, context, material = '') {
+  return chat([
+    { role: 'system', content: material ? `${SYSTEM}\n\n${MATERIAL_INTRO}\n\n${material}` : SYSTEM },
+    { role: 'user', content: context ? `${context}\n\nЗапитання учня: ${question}` : question },
+  ]);
 }
 
 // ---------- widgets ----------
@@ -158,7 +167,7 @@ const widgets = new Set();
 const syncAll = () => widgets.forEach(w => (w.el.isConnected ? w.sync() : widgets.delete(w)));
 
 /** Escaped text; only **bold** of the model's plain text becomes markup. Line breaks are kept by CSS. */
-const answerHTML = t => esc(t).replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>');
+export const answerHTML = t => esc(t).replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>');
 const msgHTML = m => `<div class="ask-msg ${m.r === 'u' ? 'me' : 'ai'}">${m.r === 'u' ? esc(m.t) : answerHTML(m.t)}</div>`;
 
 /**

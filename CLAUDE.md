@@ -71,6 +71,12 @@
 - Grammar UI: the same block at the bottom of every lesson (`grammar.js`, before the pager), select «Про що запитання»: «Увесь урок» or one point (a `#/grammar/<l>/<pointId>` link preselects it). The material of the choice (`askTopics`: lesson, point title, textbook blocks with translations, «Детальніше»; furigana as 漢字(かな); caps 6000 / 9000 characters — every point/lesson fits) is appended to the system prompt (`MATERIAL_INTRO`), not counted in the 1000. History per lesson: sessionStorage `jp.ask.grammar.<n>`. Exam → grammar: a reference link saves the question's context in `jp.examReturn` (`{ at, lesson, ask }`, exam.js `wireRefs(root, askOf)`); the lesson's block shows it (exam prefill «Поясни, будь ласка…») while «Повернутися до екзамену» is active.
 - Tests: `node tools/qa-ask.mjs` (static checks + scan of `site/` and `api/` for Google/Gemini keys), `node tools/qa-ask-ui.mjs` (browser, 1920 + 375 px, Puter.js replaced by a mock: sign-in cancelled/blocked/ok, answers, errors, fallback, script missing; grammar lessons 1, 26, 50, exam → grammar). Neither calls Puter.
 
+## Сенсей tab — `site/js/sensei.js` (#/sensei)
+- Chat with an AI mentor (`SENSEI_SYSTEM` in sensei.js, sent with every request). Client = `chat(messages, { signin })` of `ai-helper.js` (the one Puter.js client; `request()` of Exam/Grammar calls it) — never a second client.
+- Conversation in sessionStorage `jp.sensei` (last 20 messages, memory fallback), the last 10 (earlier turns + the new question) go to the model. Limit 1000 characters. Starters fill the input only. Enter sends on desktop (hover + fine pointer), Shift+Enter = new line; on phones Enter = new line.
+- Errors: sign-in cancelled «Щоб поговорити з Сенсеєм, увійдіть у безкоштовний акаунт Puter», failure = `MSG_FAIL`, too long «Повідомлення надто довге, скоротіть його»; a failed question goes back into the input.
+- Tests: `node tools/qa-sensei.mjs` (mocked Puter, desktop 1280 + phone 390); `qa-ask.mjs` checks that sensei.js uses only the shared helper.
+
 ## Progress of the textbook import (update after each batch)
 - Grammar: ALL lessons 1–50 done (exam bank 1–50). PDF page maps: skill `textbook-pages`.
 - Kanji: kanji-300 COMPLETE (15 lessons, 300 kanji, 873 words). kanji-700 COMPLETE (32 lessons, 700 kanji, 1615 words; strokes of 509–700 verified with KanjiVG — 療 震 捜 have no KanjiVG file). Page maps: skill `textbook-pages`.
@@ -81,7 +87,7 @@
 
 ## Project
 - Plain HTML/CSS/JS, no build step: `site/index.html`, `site/css/style.css`, `site/js/*.js` (ES modules).
-  - Top tabs: Слова (`#/`) · Граматика · Канджі.
+  - Top tabs: Слова (`#/`) · Граматика · Канджі · Екзамен · Перекладач · Сенсей (phones: two rows of three).
 - `site/api/save-set.js` — Vercel serverless function; commits a whole edited set into `site/data/sets.json` via the GitHub API (env `GITHUB_TOKEN`, `APP_PASSWORD`; see SETUP.md). Any set can be edited (textbook sets keep `source: "textbook"`); textbook sets cannot be deleted through it.
 - Editing on the site: inline edit / add / delete on the set page, edit buttons inside every study mode, bulk edit at `#/set/<id>/edit` (reorder + edit all), undo toast, per-word history (last 5 versions, browser only). Edited sets are kept as a local copy (`jp.custom.newSets`) until the redeployed sets.json matches, so nothing is lost if saving fails.
 - Card ids must never change when editing — learning progress is keyed by `setId/cardId`.

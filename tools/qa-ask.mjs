@@ -45,10 +45,13 @@ for (const phrase of ['patient Japanese teacher', 'Minna no Nihongo', 'Answer in
   ok(src.includes(phrase), `system prompt: ${phrase}`);
 ok(/sessionStorage\.getItem[^\n]*\}\s*catch/.test(src) && /sessionStorage\.setItem[^\n]*\}\s*catch/.test(src), 'sessionStorage in try/catch');
 ok(/aria-live="polite"/.test(src) && /MAX_INPUT = 1000/.test(src), 'aria-live answer area, 1000-character limit');
-// Puter.js only where the helper is: not in the page; only the exam modules and the grammar lesson use the helper
+// Puter.js only where the helper is: not in the page; only the exam modules, the grammar lesson and Сенсей use the helper
 ok(!/puter/i.test(fs.readFileSync(path.join(ROOT, 'site/index.html'), 'utf8')), 'index.html does not load Puter.js');
 const users = fs.readdirSync(path.join(ROOT, 'site/js')).filter(f => f !== 'ai-helper.js' && /ai-helper\.js|puter/i.test(fs.readFileSync(path.join(ROOT, 'site/js', f), 'utf8')));
-ok(users.every(f => f.startsWith('exam') || f === 'grammar.js') && users.includes('grammar.js') && users.includes('exam.js'), 'the exam modules and grammar.js use the one shared helper', users.join(', '));
+ok(users.every(f => f.startsWith('exam') || f === 'grammar.js' || f === 'sensei.js') && users.includes('grammar.js') && users.includes('exam.js') && users.includes('sensei.js'), 'the exam modules, grammar.js and sensei.js use the one shared helper', users.join(', '));
+// Сенсей: no second AI client — Puter only through chat() of ai-helper.js
+const senseiSrc = fs.readFileSync(path.join(ROOT, 'site/js/sensei.js'), 'utf8');
+ok(!/puter\.|PUTER_SRC|js\.puter\.com/.test(senseiSrc) && /import \{[^}]*\bchat\b[^}]*\} from '\.\/ai-helper\.js'/.test(senseiSrc), 'sensei.js uses chat() of the shared helper, no own Puter client');
 ok(!fs.existsSync(path.join(ROOT, 'site/js/exam-ask.js')), 'no second copy: exam-ask.js is gone');
 ok(src.includes('`${SYSTEM}\\n\\n${MATERIAL_INTRO}\\n\\n${material}`'), 'lesson material goes into the system prompt after the rules');
 ok(/logKey: `jp\.ask\.grammar\.\$\{n\}`/.test(fs.readFileSync(path.join(ROOT, 'site/js/grammar.js'), 'utf8')), 'grammar: own history per lesson');
