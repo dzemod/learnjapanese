@@ -1327,3 +1327,9 @@ body .sensei, body .sensei * { font-family: var(--ss-font); }
 .ss-msg.ai code { padding: 0 .3em; background: var(--panel-2); border: 1px solid var(--border); font-size: .92em; }
 .ss-msg.ai.ss-typing { color: var(--muted); }
 .ss-msg.ai.cut { border-bottom: 1px dashed var(--red); padding-bottom: .5em; }
+.ss-msg.ai blockquote { margin: 0 0 .9em; padding: .1em 0 .1em 1em; border-left: 3px solid rgba(200, 16, 46, .6); color: var(--muted); }
+.ss-msg.ai blockquote p { margin: 0; }
+/* tables wrap inside the reply width: no inner scrollbar */
+.ss-msg.ai table { width: 100%; margin: 0 0 1em; border-collapse: collapse; table-layout: fixed; }
+.ss-msg.ai th, .ss-msg.ai td { padding: .4em .5em; border: 1px solid var(--border); text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+.ss-msg.ai th { background: var(--panel-2); font-weight: 700; }

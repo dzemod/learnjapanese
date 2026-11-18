@@ -2,7 +2,8 @@
 // HTML-escaped first, then only these forms become markup:
 //   "# " / "## " → <h2>, "### "… → <h3>; a line of -- / --- / *** / ___ / — → <hr>; "- ", "* ", "• " → <ul>;
 //   "1. " / "1) " → <ol>; **bold** → <strong>; *italic* → <em>; `code` → <code> (underscores stay text: snake_case);
-//   blank line → new paragraph, single line break → <br>.
+//   "> " → <blockquote>; "| a | b |" rows (with |---| under the header) → <table>; blank line → new paragraph,
+//   single line break → <br>. Headings may come without the space ("###Title").
 // Leftover markers are removed: stray * and #, "--" inside a sentence becomes a dash. No library.
 
 const escHTML = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
@@ -22,27 +23,46 @@ export function inline(escaped) {
 }
 
 const HR = /^\s*(?:-{2,}|\*{3,}|_{3,}|—{1,}|–{2,})\s*$/;
-const H = /^\s*(#{1,6})\s+(.*?)\s*#*\s*$/;
+const H = /^\s*(#{1,6})\s*(\S.*?)\s*#*\s*$/; // models also write "###Heading" without the space
 const UL = /^\s*[-*•]\s+(.*)$/;
 const OL = /^\s*(\d{1,3})[.)]\s+(.*)$/;
+const QUOTE = /^\s*>\s?(.*)$/;
+const ROW = /^\s*\|.*\|\s*$/;
+const SEP = /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/; // |---|:---:|
+const cells = l => l.trim().replace(/^\||\|$/g, '').split('|').map(c => c.trim());
+/** Last pass on a paragraph line: markers that must never show (a leading #, > or |). */
+const bare = l => l.replace(/^\s*(?:#{1,6}|>)\s*/, '').replace(/^\s*\|\s*|\s*\|\s*$/g, '').replace(/\s*\|\s*/g, ' · ');
 
 /** Text of a reply → HTML (block structure + inline markup), safe to put into innerHTML. */
 export function renderReply(text) {
   const lines = String(text ?? '').replace(/\r\n?/g, '\n').split('\n');
   const out = [];
-  let para = [], list = null; // list = { tag, items, start }
-  const flushPara = () => { if (para.length) out.push(`<p>${para.map(l => inline(escHTML(l.trim()))).join('<br>')}</p>`); para = []; };
+  let para = [], list = null, quote = [], table = []; // list = { tag, items, start }
+  const flushPara = () => { if (para.length) out.push(`<p>${para.map(l => inline(escHTML(bare(l).trim()))).join('<br>')}</p>`); para = []; };
+  const flushQuote = () => { if (quote.length) out.push(`<blockquote><p>${quote.map(l => inline(escHTML(bare(l).trim()))).join('<br>')}</p></blockquote>`); quote = []; };
+  const flushTable = () => {
+    if (!table.length) return;
+    const rows = table.filter(r => !SEP.test(r)).map(cells);
+    const head = table.length > 1 && SEP.test(table[1]) ? rows.shift() : null;
+    const td = (c, tag) => `<${tag}>${inline(escHTML(c))}</${tag}>`;
+    out.push(`<table>${head ? `<thead><tr>${head.map(c => td(c, 'th')).join('')}</tr></thead>` : ''}<tbody>${rows.map(r => `<tr>${r.map(c => td(c, 'td')).join('')}</tr>`).join('')}</tbody></table>`);
+    table = [];
+  };
   const flushList = () => {
     if (!list) return;
     const start = list.tag === 'ol' && list.start !== 1 ? ` start="${list.start}"` : '';
     out.push(`<${list.tag}${start}>${list.items.map(i => `<li>${inline(escHTML(i.trim()))}</li>`).join('')}</${list.tag}>`);
     list = null;
   };
-  const flush = () => { flushPara(); flushList(); };
+  const flush = () => { flushPara(); flushList(); flushQuote(); flushTable(); };
   for (const line of lines) {
     let m;
     if (!line.trim()) { flush(); continue; }
+    if (ROW.test(line) || (table.length && SEP.test(line))) { if (!table.length) flush(); table.push(line); continue; }
+    flushTable();
     if (HR.test(line)) { flush(); out.push('<hr>'); continue; }
+    if ((m = line.match(QUOTE))) { flushPara(); flushList(); if (m[1].trim()) quote.push(m[1]); continue; }
+    flushQuote();
     if ((m = line.match(H))) {
       flush();
       const body = inline(escHTML(m[2])).replace(/<\/?strong>/g, ''); // a heading is bold already
