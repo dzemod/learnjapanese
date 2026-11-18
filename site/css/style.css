@@ -1300,3 +1300,10 @@ body.kw-rating main { padding-bottom: 110px; }
 @media (prefers-reduced-motion: reduce) {
   .ss-fig, .sensei.thinking .ss-stage::after { animation: none !important; }
 }
+/* Сенсей: one sans-serif stack for the whole tab — Manrope (Latin + Ukrainian Cyrillic, like the rest of the site),
+   Noto Sans JP only for the Japanese characters Manrope lacks (Google's Noto Sans JP faces are split by unicode-range;
+   Cyrillic never reaches it because Manrope has it). Same size and line height for both scripts; no serif anywhere. */
+.sensei { --ss-font: "Manrope", "Noto Sans JP", system-ui, sans-serif; --jp: var(--ss-font); }
+body .sensei, body .sensei * { font-family: var(--ss-font); }
+.ss-msg, .ss-input, .ss-chip { font-size: 1rem; line-height: 1.6; }
+.ss-chip { font-size: .92rem; }

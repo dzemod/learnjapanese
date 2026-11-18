@@ -59,7 +59,7 @@ export function senseiView(root) {
       <div class="ss-art" style="--ar:${ART.w}/${ART.h}; --bar-l:${PALMS.left.x}%; --bar-r:${100 - PALMS.right.x}%; --bar-b:${100 - Math.min(PALMS.left.y, PALMS.right.y)}%">
         <picture class="ss-fig"><source type="image/webp" srcset="${ART.webp}"><img src="${ART.png}" alt="Сенсей, наставник з японської" width="${ART.w}" height="${ART.h}" decoding="async"></picture>
         <form class="ss-bar" autocomplete="off" novalidate>
-          <textarea class="ss-input" rows="1" aria-label="Ваше запитання Сенсею" placeholder="Ваше запитання…"></textarea>
+          <textarea class="ss-input" rows="1" aria-label="Ваше запитання Сенсею" placeholder="Запитання…"></textarea>
           <button class="btn primary ss-send" type="submit">Надіслати</button>
         </form>
       </div>

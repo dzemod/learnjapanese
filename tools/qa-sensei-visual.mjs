@@ -145,6 +145,52 @@ for (const [width, height, phone] of [[320, 568, true], [390, 844, true], [1280,
   await ctx.close();
 }
 
+// fonts: one sans-serif stack in the whole tab; in a mixed line the Cyrillic is drawn by Manrope, the Japanese by
+// Noto Sans JP (checked with the fonts Chrome really used, CSS.getPlatformFontsForNode); no serif font anywhere
+const MIXED = 'Слово 日本語 (にほんご) означає «японська мова», а 漢字 — «ієрогліфи»: їжак, ґанок, є.';
+for (const [width, height, phone] of [[390, 844, true], [1280, 800, false]]) {
+  const T = s => `${width}px fonts: ${s}`;
+  const { ctx, page } = await open({ width, height, phone });
+  await page.evaluate(t => { window.__pm.reply = { text: t }; }, MIXED);
+  await page.fill('.ss-input', 'Що означає 日本語?');
+  await page.click('.ss-send');
+  await page.waitForSelector('.ss-msg.ai:not(.ss-typing)');
+  await page.evaluate(() => document.fonts.ready);
+  await page.waitForTimeout(400);
+  await page.evaluate(() => document.fonts.ready);
+  const fam = await page.evaluate(() => {
+    const f = s => getComputedStyle(document.querySelector(s)).fontFamily;
+    const all = [...document.querySelectorAll('.sensei, .sensei *')].map(e => getComputedStyle(e).fontFamily);
+    const ai = document.querySelector('.ss-msg.ai'), me = document.querySelector('.ss-msg.me');
+    return { ai: f('.ss-msg.ai'), me: f('.ss-msg.me'), input: f('.ss-input'), chip: getComputedStyle(document.querySelector('.ss-chip')).fontFamily, title: f('.sensei h1'), eyebrow: f('.sensei .eyebrow'),
+      serif: [...new Set(all.filter(x => /serif/i.test(x.replace(/sans-serif/gi, ''))))],
+      size: [getComputedStyle(ai).fontSize, getComputedStyle(ai).lineHeight], kids: ai.children.length };
+  });
+  ok(/^"?Manrope"?, "?Noto Sans JP"?/.test(fam.ai), T('reply stack: Manrope, Noto Sans JP'), fam.ai);
+  ok([fam.me, fam.input, fam.chip, fam.title, fam.eyebrow].every(x => x === fam.ai), T('same stack for input, bubbles, starters, title'), JSON.stringify(fam));
+  ok(!fam.serif.length, T('no serif font in the tab'), fam.serif.join(' | '));
+  ok(fam.kids === 0, T('mixed line is one text run (same size and line height for both scripts)'), `${fam.kids} · ${fam.size}`);
+  const cdp = await ctx.newCDPSession(page);
+  await cdp.send('DOM.enable'); await cdp.send('CSS.enable');
+  const { root } = await cdp.send('DOM.getDocument', { depth: 0 });
+  const used = async sel => { const { nodeId } = await cdp.send('DOM.querySelector', { nodeId: root.nodeId, selector: sel }); return (await cdp.send('CSS.getPlatformFontsForNode', { nodeId })).fonts; };
+  const fonts = await used('.ss-msg.ai');
+  const glyphs = name => fonts.filter(f => f.familyName.toLowerCase().startsWith(name)).reduce((n, f) => n + f.glyphCount, 0);
+  const cyrLat = [...MIXED].filter(c => /[A-Za-zА-ЯҐЄІЇа-яґєії0-9.,:;()«»—-]/.test(c)).length;
+  const ja = [...MIXED].filter(c => /[぀-ヿ一-鿿]/.test(c)).length;
+  ok(fonts.every(f => /^(manrope|noto sans jp)/i.test(f.familyName)), T('only Manrope and Noto Sans JP draw the reply'), fonts.map(f => `${f.familyName}:${f.glyphCount}`).join(', '));
+  ok(glyphs('manrope') >= cyrLat, T('every Cyrillic/Latin letter drawn by Manrope'), `${glyphs('manrope')} < ${cyrLat}`);
+  ok(glyphs('noto sans jp') === ja, T('Japanese drawn by Noto Sans JP'), `${glyphs('noto sans jp')} vs ${ja}`);
+  // every text of the tab: no serif font actually used
+  const { nodeIds } = await cdp.send('DOM.querySelectorAll', { nodeId: root.nodeId, selector: '.sensei *' });
+  const serifUsed = new Set();
+  for (const id of nodeIds) { try { for (const f of (await cdp.send('CSS.getPlatformFontsForNode', { nodeId: id })).fonts) if (/serif|mincho|times|georgia/i.test(f.familyName.replace(/sans/i, '')) && !/sans/i.test(f.familyName)) serifUsed.add(f.familyName); } catch {} }
+  ok(!serifUsed.size, T('no serif font drawn in the tab'), [...serifUsed].join(', '));
+  await page.locator('.ss-list').scrollIntoViewIfNeeded();
+  await page.screenshot({ path: path.join(SHOTS, `sensei-${width}-fonts.png`) });
+  await ctx.close();
+}
+
 // reduced motion: no breathing, no pulse
 for (const [width, height, phone] of [[390, 844, true], [1280, 800, false]]) {
   const { ctx, page } = await open({ width, height, phone, reduced: true });
