@@ -1274,8 +1274,8 @@ body.kw-rating main { padding-bottom: 110px; }
 .ss-starters { display: flex; flex-wrap: wrap; gap: 8px; }
 .ss-chip { padding: 8px 12px; background: var(--panel); border: 1px solid var(--border-2); border-radius: 0; color: var(--text); font: inherit; font-size: .9rem; text-align: left; cursor: pointer; }
 .ss-chip:hover { border-color: var(--red); }
-.ss-list { display: grid; gap: 10px; align-content: start; max-height: min(60vh, 560px); overflow-y: auto; overscroll-behavior: contain; padding: 12px; background: var(--panel); border: 1px solid var(--border); border-radius: 0; }
-.ss-msg { max-width: 88%; padding: 10px 12px; border-radius: 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.5; }
+.ss-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; align-content: start; max-height: min(60vh, 560px); overflow-y: auto; overscroll-behavior: contain; padding: 12px; background: var(--panel); border: 1px solid var(--border); border-radius: 0; }
+.ss-msg { max-width: 88%; min-width: 0; height: auto; max-height: none; overflow: visible; padding: 10px 12px; border-radius: 0; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; line-height: 1.5; } /* the whole reply, wrapped; a long chat scrolls in .ss-list */
 .ss-msg.me { justify-self: end; background: var(--red-bg); border: 1px solid rgba(200, 16, 46, .45); }
 .ss-msg.ai { justify-self: start; background: var(--panel-2); border-left: 3px solid var(--red); }
 .ss-typing { color: var(--muted); }
