@@ -137,11 +137,14 @@ function lev(a, b) {
   return prev[n];
 }
 /** Tolerant check. side = the language the answer is written in ('uk' | 'ja'). */
+/** ず = づ, じ = ぢ for comparison: romaji "zu"/"ji" (and most IMEs) give ず/じ, the textbook writes 片づけます, 鼻血 はなぢ. */
+export const zuFold = s => String(s || '').replace(/づ/g, 'ず').replace(/ぢ/g, 'じ');
 export function check(input, card, side) {
   const n = norm(input);
   if (!n) return { ok: false };
   const vs = answerVariants(card, side);
   if (vs.has(n) || vs.has(n.replace(/ /g, ''))) return { ok: true };
+  if (side !== 'uk') { const f = zuFold(n); for (const v of vs) if (zuFold(v) === f || zuFold(v) === f.replace(/ /g, '')) return { ok: true, zu: true }; }
   if (side === 'uk') for (const v of vs) if (v.length >= 5 && lev(n, v) <= 1) return { ok: true, typo: true };
   return { ok: false };
 }
