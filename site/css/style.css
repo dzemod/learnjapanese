@@ -1274,10 +1274,10 @@ body.kw-rating main { padding-bottom: 110px; }
 .ss-starters { display: flex; flex-wrap: wrap; gap: 8px; }
 .ss-chip { padding: 8px 12px; background: var(--panel); border: 1px solid var(--border-2); border-radius: 0; color: var(--text); font: inherit; font-size: .9rem; text-align: left; cursor: pointer; }
 .ss-chip:hover { border-color: var(--red); }
-.ss-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; align-content: start; max-height: min(60vh, 560px); overflow-y: auto; overscroll-behavior: contain; padding: 12px; background: var(--panel); border: 1px solid var(--border); border-radius: 0; }
-.ss-msg { max-width: 88%; min-width: 0; height: auto; max-height: none; overflow: visible; padding: 10px 12px; border-radius: 0; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; line-height: 1.5; } /* the whole reply, wrapped; a long chat scrolls in .ss-list */
-.ss-msg.me { justify-self: end; background: var(--red-bg); border: 1px solid rgba(200, 16, 46, .45); }
-.ss-msg.ai { justify-self: start; background: var(--panel-2); border-left: 3px solid var(--red); }
+.ss-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; align-content: start; } /* no inner scroll box: the page scrolls */
+.ss-msg { min-width: 0; height: auto; max-height: none; overflow: visible; border-radius: 0; overflow-wrap: anywhere; word-break: break-word; }
+.ss-msg.me { justify-self: end; max-width: min(88%, 560px); padding: 10px 12px; white-space: pre-wrap; background: var(--red-bg); border: 1px solid rgba(200, 16, 46, .45); }
+.ss-msg.ai { justify-self: start; width: 100%; max-width: 720px; padding: 0; background: none; border: 0; }
 .ss-typing { color: var(--muted); }
 .ss-note { margin: 0; }
 /* the sensei: figure centred at the top, input bar across the palms (positions from PALMS in sensei.js) */
@@ -1305,9 +1305,25 @@ body.kw-rating main { padding-bottom: 110px; }
    Cyrillic never reaches it because Manrope has it). Same size and line height for both scripts; no serif anywhere. */
 .sensei { --ss-font: "Manrope", "Noto Sans JP", system-ui, sans-serif; --jp: var(--ss-font); }
 body .sensei, body .sensei * { font-family: var(--ss-font); }
-.ss-msg, .ss-input, .ss-chip { font-size: 1rem; line-height: 1.6; }
+.ss-msg, .ss-input, .ss-chip { font-size: 16px; line-height: 1.65; }
+@media (min-width: 760px) { .ss-msg, .ss-input { font-size: 17px; } }
 .ss-chip { font-size: .92rem; }
 /* a reply stopped by the output limit: always marked, «Продовжити» asks for the rest */
 .ss-msg.cut { border-bottom: 1px dashed var(--red); }
 .ss-cut { justify-self: start; max-width: 88%; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: -4px; padding: 8px 12px; background: var(--red-bg); border: 1px solid rgba(200, 16, 46, .45); border-radius: 0; color: var(--text); font-size: .9rem; }
 .ss-cut .btn { border-radius: 0; }
+/* the reply as reading text: headings, paragraphs, lists, dividers (from reply-md.js); one font, one size for both scripts */
+.ss-msg.ai > :first-child { margin-top: 0; }
+.ss-msg.ai > :last-child { margin-bottom: 0; }
+.ss-msg.ai p { margin: 0 0 .8em; }
+.ss-msg.ai h2 { margin: 1.3em 0 .55em; padding-bottom: .3em; font-size: 1.32em; line-height: 1.3; font-weight: 700; /* a weight both fonts serve (Noto Sans JP: 400 500 700) */ border-bottom: 1px solid rgba(200, 16, 46, .6); }
+.ss-msg.ai h3 { margin: 1.1em 0 .4em; font-size: 1.1em; line-height: 1.35; font-weight: 700; }
+.ss-msg.ai ul, .ss-msg.ai ol { margin: 0 0 .9em; padding-left: 1.4em; }
+.ss-msg.ai li { margin: 0 0 .4em; padding-left: .15em; }
+.ss-msg.ai li::marker { color: var(--red); }
+.ss-msg.ai hr { height: 0; margin: 1.1em 0; border: 0; } /* a short gap */
+.ss-msg.ai strong { font-weight: 700; }
+.ss-msg.ai em { font-style: italic; }
+.ss-msg.ai code { padding: 0 .3em; background: var(--panel-2); border: 1px solid var(--border); font-size: .92em; }
+.ss-msg.ai.ss-typing { color: var(--muted); }
+.ss-msg.ai.cut { border-bottom: 1px dashed var(--red); padding-bottom: .5em; }

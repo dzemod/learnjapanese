@@ -3,7 +3,8 @@
 // Conversation: sessionStorage `jp.sensei` (last KEEP messages, memory fallback); the last SEND messages go to the model.
 // Nothing is kept on our server.
 import { $, esc, modal } from './util.js';
-import { chat, loadPuter, answerHTML, MSG_FAIL, TRANSLIT } from './ai-helper.js';
+import { chat, loadPuter, MSG_FAIL, TRANSLIT } from './ai-helper.js';
+import { renderReply } from './reply-md.js';
 
 // ---------- the illustration: input bar on the outstretched hands ----------
 // sensei-cutout.(webp|png) = the figure cropped from reference/sensei (tools/make-sensei-cutout.mjs), 538 × 471 px.
@@ -39,8 +40,8 @@ function readLog() {
     .map(m => (m.cut ? { r: m.r, t: m.t, cut: true } : { r: m.r, t: m.t })).slice(-KEEP);
   return mem;
 }
-/** Reply text → HTML: line breaks kept (CSS pre-wrap), **bold** and Markdown "# heading" lines shown bold. */
-export const replyHTML = t => answerHTML(String(t).replace(/^#{1,6}[ \t]+(.+)$/gm, '**$1**'));
+/** Reply text → HTML: the safe Markdown subset of reply-md.js (headings, lists, dividers, bold, italic, code). */
+export const replyHTML = t => renderReply(t);
 /** Joins a continuation to the cut answer: no space inside a cut word, one space between sentences/words. */
 export function joinContinuation(prev, cont) {
   if (/\s$/.test(prev) || /^[\s,.;:!?)»]/.test(cont)) return prev + cont;
@@ -111,7 +112,14 @@ export function senseiView(root) {
 
   const grow = () => { input.style.height = 'auto'; input.style.height = Math.min(input.scrollHeight, 140) + 'px'; };
   const counter = () => { const n = input.value.length; count.textContent = n > MAX_INPUT * 0.8 ? `${n} / ${MAX_INPUT}` : ''; count.classList.toggle('over', n > MAX_INPUT); };
-  function draw() {
+  // The page scrolls (no inner scroll box): a new question shows «Сенсей пише…», a new reply is shown from its start
+  // (below the sticky top bar). Other redraws keep the scroll position.
+  function reveal(el, block) {
+    if (!el) return;
+    el.style.scrollMarginTop = ($('.topbar')?.offsetHeight || 0) + 12 + 'px';
+    el.scrollIntoView({ block, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  }
+  function draw(scroll = '') {
     const log = readLog();
     // a cut answer always carries the note; «Продовжити» on the last message (the one the model can continue)
     const cutNote = (m, i) => (m.cut ? `<div class="ss-cut" role="note"><span>${MSG_CUT}</span>${i === log.length - 1 && !busy ? '<button type="button" class="btn primary sm ss-continue" data-continue>Продовжити</button>' : ''}</div>` : '');
@@ -126,7 +134,8 @@ export function senseiView(root) {
     send.textContent = busy ? 'Надсилаю…' : 'Надіслати';
     status.innerHTML = error ? `<span class="ask-err">${esc(error)}</span>` : '';
     root.querySelector('.sensei').classList.toggle('thinking', busy);
-    list.scrollTop = list.scrollHeight;
+    if (scroll === 'typing') reveal($('.ss-typing', list), 'nearest');
+    if (scroll === 'reply') reveal([...list.querySelectorAll('.ss-msg.ai')].pop(), 'start');
   }
 
   form.onsubmit = async e => {
@@ -139,7 +148,7 @@ export function senseiView(root) {
     const log = readLog();
     writeLog([...log, { r: 'u', t: q }]);
     input.value = ''; grow(); counter();
-    draw();
+    draw('typing');
     const r = await chat(buildMessages(log, q), { signin: MSG_SIGNIN, maxTokens: MAX_TOKENS, timeoutMs: TIMEOUT_MS });
     busy = false;
     if (r.answer) writeLog([...readLog(), r.cut ? { r: 'a', t: r.answer, cut: true } : { r: 'a', t: r.answer }]);
@@ -149,14 +158,15 @@ export function senseiView(root) {
       if (!input.value) { input.value = q; grow(); counter(); }
       error = r.error || MSG_FAIL;
     }
-    if (root.isConnected) { draw(); input.focus({ preventScroll: true }); } else redrawCurrent?.();
+    // desktop: back to the input; phones: no focus (the keyboard would cover the reply and scroll to the bar)
+    if (root.isConnected) { draw(r.answer ? 'reply' : ''); if (desktopKeys()) input.focus({ preventScroll: true }); } else redrawCurrent?.();
   };
   // «Продовжити»: one follow-up request with the cut answer in context; the continuation is joined to that answer
   async function continueAnswer() {
     const log = readLog(), last = log[log.length - 1];
     if (busy || !last || last.r !== 'a' || !last.cut) return;
     error = ''; busy = true;
-    draw();
+    draw('typing');
     const r = await chat(buildMessages(log, CONTINUE), { signin: MSG_SIGNIN, maxTokens: MAX_TOKENS, timeoutMs: TIMEOUT_MS });
     busy = false;
     if (r.answer) {
