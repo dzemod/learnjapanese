@@ -5,6 +5,7 @@ import {
   mostMissed, saveOpts, backupData, restoreBackup, setsExport, localChangeCount, streak, syncAll, onSync,
 } from './store.js';
 import { MODES, faceHTML, metaHTML } from './modes.js';
+import { todayPanel } from './today.js';
 import { mountWordForm, openWordModal, afterSave } from './edit.js';
 
 const setUrl = id => `#/set/${encodeURIComponent(id)}`;
@@ -42,19 +43,19 @@ function wireSync(root, redraw) {
 export function homeView(root) {
   const draw = () => {
     const sets = getSets();
-    const st = streak();
+
     const changes = localChangeCount();
     const lessonNo = s => { const m = /^mnn-(\d+)$/.exec(s.id); return m ? +m[1] : 999; };
     const mine = sets.filter(isMine), book = sets.filter(s => !isMine(s)).sort((a, b) => lessonNo(a) - lessonNo(b));
     root.innerHTML = `<div class="home fade-in">
       ${state.loadError ? `<div class="alert">Не вдалося завантажити <code>data/sets.json</code>. Якщо ви відкрили файл напряму, запустіть локальний сервер: <code>npx serve site</code>.</div>` : ''}
+      <div class="today-slot"></div>
       <section class="hero">
         <div>
           <p class="eyebrow" lang="ja">日本語の単語</p>
           <h1>Слова</h1>
           <p class="muted">${pl(sets.length, UROK)} · ${pl(sets.reduce((n, s) => n + s.cards.length, 0), SLOVO)}</p>
         </div>
-        <div class="streak-card ${st ? 'on' : ''}"><span class="streak-sun"></span><div><b>${st}</b><span>днів поспіль</span></div></div>
       </section>
       <div class="home-tools">
         <label class="search">${I.search}<input type="search" placeholder="Пошук уроків і слів…" aria-label="Пошук"></label>
@@ -81,6 +82,7 @@ export function homeView(root) {
     </div>`;
 
     const groups = $('.groups', root);
+    todayPanel($('.today-slot', root));
     const card = s => {
       const x = setStats(s);
       return `<a class="set-card" href="${setUrl(s.id)}">

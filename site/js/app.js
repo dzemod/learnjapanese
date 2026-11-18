@@ -9,6 +9,7 @@ import { loadGrammar, grammarHome, grammarLesson } from './grammar.js';
 import { examView, returnButton } from './exam.js';
 import { translateView } from './translate.js';
 import { senseiView } from './sensei.js';
+import { todaySessionView } from './today.js';
 
 const app = $('#app');
 let cleanup = null;
@@ -63,6 +64,7 @@ async function route() {
   else if (parts[0] === 'kanji') out(parts[1] ? kanjiLessonView(app, parts[1], parts[2]) : kanjiHome(app));
   else if (parts[0] === 'translate') out(translateView(app, parts.slice(1).join('/')));
   else if (parts[0] === 'sensei') out(senseiView(app, parts[1] || ''));
+  else if (parts[0] === 'today') { await todaySessionView(app); if (my !== routeNo) return; }
   else if (parts[0] === 'exam') { const v = await examView(app, parts[1]); if (my === routeNo) out(v); }
   else if (parts[0] === 'set' && parts[1] && isKanjiSet(parts[1]) && (!parts[2] || ['add', 'edit'].includes(parts[2]))) {
     location.replace('#/kanji/' + encodeURIComponent(parts[1].replace(/-w$/, ''))); return;
