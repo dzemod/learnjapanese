@@ -326,7 +326,8 @@ async function fontCheck(P, texts) {
     if (other.length) res.push({ t: 'font-other', el: t.el, d: other.join(', '), x: t.x });
     if ((t.cyr || t.lat) && !man) res.push({ t: 'font-noUI', el: t.el, d: fonts.join(', '), x: t.x });
     if ((t.cyr || t.lat) && !t.jp && !t.sym && noto) res.push({ t: 'font-jp-on-uk', el: t.el, d: fonts.join(', '), x: t.x });
-    if (t.jp && !noto) res.push({ t: 'font-noJP', el: t.el, d: fonts.join(', '), x: t.x });
+    // own text: Japanese deeper inside (e.g. <s><span lang=ja>) is checked through the element that holds it
+    if (t.ownJp && !noto) res.push({ t: 'font-noJP', el: t.el, d: fonts.join(', '), x: t.x });
     if (t.ownCyr && t.ownJp && t.ls !== 'normal' && parseFloat(t.ls) !== 0) res.push({ t: 'letterspacing-mixed', el: t.el, d: t.ls, x: t.x });
   }
   await P.page.evaluate(() => document.querySelectorAll('[data-qaf]').forEach(e => e.removeAttribute('data-qaf')));
