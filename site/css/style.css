@@ -1375,3 +1375,7 @@ body .sensei, body .sensei * { font-family: var(--ss-font); }
 .today-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .today-btns .wide { grid-column: 1 / -1; }
 .today-rate { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; border: 1px solid var(--border-2); }
+/* progress sync block (home page, «Резервна копія і дані») */
+.sync-progress { margin: 14px 0; padding: 12px 14px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; }
+.sp-title { margin: 0 0 6px; font-size: 1rem; }
+.sp-status { margin: 8px 0; }

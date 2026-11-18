@@ -6,6 +6,7 @@ import {
 } from './store.js';
 import { MODES, faceHTML, metaHTML } from './modes.js';
 import { todayPanel } from './today.js';
+import { syncBlockHTML, mountSyncBlock } from './sync-progress.js';
 import { mountWordForm, openWordModal, afterSave } from './edit.js';
 
 const setUrl = id => `#/set/${encodeURIComponent(id)}`;
@@ -71,7 +72,8 @@ export function homeView(root) {
       </section>
       <section class="panel data-panel">
         <h2 class="sec-title">Резервна копія і дані</h2>
-        <p class="muted">Прогрес і позначки ★ зберігаються лише в цьому браузері. Час від часу робіть резервну копію.</p>
+        <p class="muted">Прогрес і позначки ★ зберігаються в цьому браузері. Увімкніть синхронізацію, щоб мати їх на всіх пристроях, або час від часу робіть резервну копію.</p>
+        ${syncBlockHTML()}
         ${changes ? `<p class="note">Локальних змін, яких ще немає в <code>sets.json</code>: ${changes}.</p>` : ''}
         <div class="btn-row">
           <button class="btn ghost" data-exp>${I.download}<span>Зберегти резервну копію</span></button>
@@ -83,6 +85,7 @@ export function homeView(root) {
 
     const groups = $('.groups', root);
     todayPanel($('.today-slot', root));
+    mountSyncBlock(root);
     const card = s => {
       const x = setStats(s);
       return `<a class="set-card" href="${setUrl(s.id)}">

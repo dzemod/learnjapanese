@@ -10,6 +10,7 @@ import { examView, returnButton } from './exam.js';
 import { translateView } from './translate.js';
 import { senseiView } from './sensei.js';
 import { todaySessionView } from './today.js';
+import { initProgressSync } from './sync-progress.js';
 
 const app = $('#app');
 let cleanup = null;
@@ -134,6 +135,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.se
   if (Object.keys(state.custom.pending).length) syncAll({ interactive: false });
   window.addEventListener('hashchange', route);
   route();
+  initProgressSync(); // progress sync between devices (sync-progress.js; only if the learner turned it on)
 })();
 
 // Sound: header toggle 🔊/🔇 (remembered on this device) and a floating Stop while speech plays.

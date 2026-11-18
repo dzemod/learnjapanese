@@ -99,7 +99,8 @@ const refShort = r => (r.kind === 'g' ? `Урок ${r.lesson}${r.point && gLesso
 function refBtn(r, label) { return r ? `<button type="button" class="ex-ref" data-ref='${esc(JSON.stringify(r))}'>${I.back.replace('M19 12H5M11 6l-6 6 6 6', 'M5 12h14M13 6l6 6-6 6')}<span>${gtext(label || refText(r))}</span></button>` : ''; }
 // «Додати до помилок»: questions kept on this device to repeat later (setup → «Повторити збережені помилки»)
 const savedMistakes = () => load(K.mistakes, []);
-function addSavedMistake(q) { save(K.mistakes, [q, ...savedMistakes().filter(x => x.uid !== q.uid)].slice(0, 100)); }
+// savedAt / clearedAt: progress sync (sync-merge.js) keeps a cleared list cleared on every device
+function addSavedMistake(q) { save(K.mistakes, [{ ...q, savedAt: Date.now() }, ...savedMistakes().filter(x => x.uid !== q.uid)].slice(0, 100)); }
 /** askOf(button) → the AI helper's context of the question the link belongs to; the grammar page's «Запитай ШІ»
  *  shows it while «Повернутися до екзамену» is active (ai-helper.js examQuestionFor). */
 function wireRefs(root, askOf = null) {
@@ -601,7 +602,7 @@ function setupView(root) {
     $('.ex-setup', root).addEventListener('change', e => { if (e.target.name === 'kanji' || e.target.name === 'univ' || e.target.closest('.ex-types') || ['from', 'to', 'kfrom', 'kto', 'krand', 'mine'].includes(e.target.name)) { read(); draw(); } });
     $('[data-drop]', root)?.addEventListener('click', () => { S = null; persist(); draw(); });
     $('[data-saved]', root)?.addEventListener('click', () => { S = { conf: { ...c, name: 'Мої помилки', timer: 0 }, qs: shuffle(savedMistakes()), i: 0, res: [], start: Date.now(), deadline: 0, answered: null }; persist(); location.hash = '#/exam/run'; });
-    $('[data-saved-clear]', root)?.addEventListener('click', () => { if (confirm('Очистити збережені помилки?')) { save(K.mistakes, []); draw(); } });
+    $('[data-saved-clear]', root)?.addEventListener('click', () => { if (confirm('Очистити збережені помилки?')) { save(K.mistakes, []); save(K.mistakes + '.clearedAt', Date.now()); draw(); } });
     $$('[data-load]', root).forEach(b => (b.onclick = () => { c = { ...DEFAULT, ...presets().find(p => p.name === b.dataset.load) }; draw(); toast(`Завантажено: ${c.name}`); }));
     $$('[data-del]', root).forEach(b => (b.onclick = () => { if (confirm(`Видалити пресет «${b.dataset.del}»?`)) { deletePreset(b.dataset.del); draw(); } }));
     $('[data-save]', root).onclick = () => {

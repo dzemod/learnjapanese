@@ -130,6 +130,19 @@ const errInfo = e => {
 const AUTH_CODES = /auth|sign|token|unauthori[sz]ed|permission|forbidden|401|403/i;
 const isAuthError = e => AUTH_CODES.test(String(e?.error?.code || e?.code || (typeof e?.error === 'string' ? e.error : '') || e?.status || ''));
 
+/**
+ * Puter.js for other features of the site (progress sync, sync-progress.js): the same script and sign-in as chat().
+ * interactive: open Puter's sign-in popup if needed (only from a click). Resolves to puter, or null when not signed in.
+ * Throws only when Puter.js cannot be loaded.
+ */
+export async function puterReady({ interactive = false } = {}) {
+  const puter = await loadPuter();
+  if (puter.auth.isSignedIn()) return puter;
+  if (!interactive) return null;
+  try { await puter.auth.signIn(); } catch (e) { console.warn('Puter sign-in did not finish:', errInfo(e)); return null; }
+  return puter.auth.isSignedIn() ? puter : null;
+}
+
 /** Text of a ChatResponse: message.content is a string or (for some providers) a list of parts. */
 export function replyText(r, keepStart = false) {
   const c = r?.message?.content;

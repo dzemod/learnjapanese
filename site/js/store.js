@@ -458,6 +458,12 @@ export const studiedToday = () => state.days.includes(today());
 /** The study-day log (localStorage jp.days, YYYY-MM-DD, last 800 days): a day counts when at least one item was
  *  completed — a word answered (record), a kanji rated in the writing mode, an exam answer, a «Сьогодні» item. */
 export const studyDays = () => [...state.days];
+/** After progress sync wrote merged data into localStorage: take it into memory (the next save writes from memory). */
+export function reloadProgressFromStorage() {
+  state.progress = load(K.progress, {});
+  state.days = load(K.days, []);
+  state.best = load(K.best, {});
+}
 
 // ---------- Match best times ----------
 export const getBest = id => state.best[id] || null;
