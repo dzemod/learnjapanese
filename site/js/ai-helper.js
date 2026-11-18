@@ -22,6 +22,9 @@ export const PUTER_SRC = 'https://js.puter.com/v2/'; // docs.puter.com/getting-s
 // million tokens ≈ 0.03–0.05 ¢ per answer, so the free monthly allowance of a Puter account lasts long) and writes good
 // Ukrainian and Japanese. If it fails, Puter's documented default model is tried once.
 export const MODELS = ['claude-haiku-5-5', 'gpt-5.4-nano'];
+// Highest output limit each model allows on Puter: `max_tokens` of https://api.puter.com/puterai/chat/models/details
+// (checked 2026-11-18: claude-haiku-5-5 → 128000, gpt-5.4-nano → 128000). chat(…, { maxTokens: 'max' }) uses it.
+export const MODEL_MAX_OUTPUT = { 'claude-haiku-5-5': 128000, 'gpt-5.4-nano': 128000 };
 
 // Cyrillic transcription of Japanese names and words: the website's Hepburn-based Ukrainian system (CLAUDE.md
 // «Review» → Transcription; checked in the site's own texts by tools/qa-translit.js). Appended to every system prompt.
@@ -128,11 +131,19 @@ const AUTH_CODES = /auth|sign|token|unauthori[sz]ed|permission|forbidden|401|403
 const isAuthError = e => AUTH_CODES.test(String(e?.error?.code || e?.code || (typeof e?.error === 'string' ? e.error : '') || e?.status || ''));
 
 /** Text of a ChatResponse: message.content is a string or (for some providers) a list of parts. */
-export function replyText(r) {
+export function replyText(r, keepStart = false) {
   const c = r?.message?.content;
-  if (typeof c === 'string') return c.trim();
-  if (Array.isArray(c)) return c.map(p => (typeof p === 'string' ? p : p?.text || '')).join('').trim();
-  return typeof r === 'string' ? r.trim() : '';
+  const t = typeof c === 'string' ? c : Array.isArray(c) ? c.map(p => (typeof p === 'string' ? p : p?.text || '')).join('') : typeof r === 'string' ? r : '';
+  return keepStart ? t.trimEnd() : t.trim(); // a continuation keeps its leading space (word boundary)
+}
+
+/**
+ * Did the model stop because of the output limit? Requests ask for Puter's normalized (OpenAI) format, where a length
+ * stop is finish_reason "length" (Anthropic max_tokens is mapped to it); the native shapes are accepted too.
+ */
+export function stoppedForLength(r) {
+  const reasons = [r?.finish_reason, r?.stop_reason, r?.message?.finish_reason, r?.message?.stop_reason, r?.choices?.[0]?.finish_reason, r?.incomplete_details?.reason];
+  return reasons.some(x => x === 'length' || x === 'max_tokens' || x === 'max_output_tokens');
 }
 
 const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))]);
@@ -141,10 +152,11 @@ const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeo
 /**
  * The one Puter.js client of the site (Exam, Grammar, Сенсей): loads Puter.js, signs in on the click, tries MODELS in
  * turn. messages = [{ role: 'system'|'user'|'assistant', content }]; earlier turns of a conversation may be included.
- * Resolves to { answer } or { error: Ukrainian message } (signin = the message for a cancelled sign-in).
+ * Resolves to { answer, cut } (cut = stopped by the output limit) or { error: Ukrainian message } (signin = the
+ * message for a cancelled sign-in). maxTokens: a number or 'max' (MODEL_MAX_OUTPUT of the model in use).
  * Real errors go to the console as code + message only.
  */
-export async function chat(messages, { signin = MSG_SIGNIN, maxTokens = MAX_OUTPUT_TOKENS } = {}) {
+export async function chat(messages, { signin = MSG_SIGNIN, maxTokens = MAX_OUTPUT_TOKENS, timeoutMs = TIMEOUT_MS } = {}) {
   let puter;
   try { puter = await loadPuter(); } catch (e) { console.error('ask:', errInfo(e)); return { error: MSG_FAIL }; }
   // Sign-in opens Puter's popup, so it runs here, right after the click on «Надіслати».
@@ -154,9 +166,10 @@ export async function chat(messages, { signin = MSG_SIGNIN, maxTokens = MAX_OUTP
   if (!puter.auth.isSignedIn()) return { error: signin };
   for (const model of MODELS) {
     try {
-      const r = await withTimeout(puter.ai.chat(messages, false, { model, max_tokens: maxTokens }), TIMEOUT_MS);
+      const max_tokens = maxTokens === 'max' ? MODEL_MAX_OUTPUT[model] : maxTokens;
+      const r = await withTimeout(puter.ai.chat(messages, false, { model, max_tokens, normalize: true }), timeoutMs);
       const answer = replyText(r);
-      if (answer) return { answer };
+      if (answer) return { answer, raw: replyText(r, true), cut: stoppedForLength(r) };
       console.error('ask: empty answer from', model);
     } catch (e) {
       console.error('ask: Puter AI failed with', model, '-', errInfo(e));
