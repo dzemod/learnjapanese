@@ -334,6 +334,24 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.a
     ok(!/[#*`]|--/.test(md.text) && md.pText.includes('українська — в одному'), T('no raw #, --, * in the text'), md.text);
     ok(/^"?Manrope"?, "?Noto Sans JP"?/.test(md.pFont) && md.same && md.kids === 0, T('Cyrillic and Japanese in one paragraph: one font stack'), md.pFont);
     ok(md.pSize === '16px' && Math.abs(parseFloat(md.pLine) - 16 * 1.65) < 0.2, T('16 px, line height 1.65 on phones'), `${md.pSize} ${md.pLine}`);
+    // how chat models really format (found on the live site): "###Title" without a space, "#Title", * bullets, nested
+    // items, "> quote", a table with |---|, "***" — nothing raw may stay visible
+    const REAL = ['## Різниця між は і が', '', 'Частка **は** позначає *тему*, а **が** — *підмет*.', '', '---', '', '### 1. Тема (は)',
+      '* **私は学生です** (わたしは がくせいです) — Я студент.', '* Друге речення', '  * вкладений пункт', '', '--', '', '###Без пробілу', '#Ще один', '',
+      '1. **Перше:** пояснення', '2. Друге', '', '> Цитата з поясненням', '', '| Частка | Роль |', '|---|---|', '| は | тема |', '| が | підмет |', '',
+      '**Порада:** читайте вголос', '', '***', 'Кінець *відповіді*.'].join('\n');
+    await page.evaluate(t => { window.__pm.queue.push({ text: t }); }, REAL);
+    await page.fill('.ss-input', 'Як пишуть моделі'); await page.click('.ss-send');
+    await page.waitForFunction(() => !document.querySelector('.ss-typing') && [...document.querySelectorAll('.ss-msg.ai')].pop().querySelector('table'));
+    const real = await page.evaluate(() => {
+      const m = [...document.querySelectorAll('.ss-msg.ai')].pop(), q = s => [...m.querySelectorAll(s)].map(e => e.textContent.trim());
+      return { raw: m.innerText.match(/#|\*|(^|\n)\s*-{2,}|\||(^|\n)\s*>/g) || [], h2: q('h2'), h3: q('h3'), hr: q('hr').length, quote: q('blockquote'), th: q('th'), td: q('td'), ul: q('ul > li').length, ol: q('ol > li').length,
+        scroll: [m, ...m.querySelectorAll('*')].filter(e => e.scrollWidth > e.clientWidth + 1 || (e.scrollHeight > e.clientHeight + 1 && getComputedStyle(e).overflowY !== 'visible')).map(e => e.tagName), docW: Math.max(document.documentElement.scrollWidth, innerWidth) };
+    });
+    ok(!real.raw.length, T('real model formatting: no raw #, *, --, |, >'), JSON.stringify(real.raw));
+    ok(real.h2.includes('Різниця між は і が') && real.h2.includes('Ще один') && real.h3.includes('1. Тема (は)') && real.h3.includes('Без пробілу') && real.hr >= 2, T('headings with and without a space, dividers'), JSON.stringify(real));
+    ok(real.quote.includes('Цитата з поясненням') && real.th.join() === 'Частка,Роль' && real.td.join() === 'は,тема,が,підмет' && real.ul === 3 && real.ol === 2, T('blockquote, table, lists'), JSON.stringify(real));
+    ok(!real.scroll.length && real.docW <= width, T('real reply: no inner scrollbar, no page scroll'), `${real.scroll} ${real.docW}`);
     // the model's text is never trusted: tags come out as text
     const XSS = '<script>window.__xss = 1</script><img src=x onerror="window.__xss = 2"> **ok** <b onclick="x">b</b>';
     await page.evaluate(t => { window.__pm.queue.push({ text: t }); }, XSS);
