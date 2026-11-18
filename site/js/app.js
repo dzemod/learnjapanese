@@ -62,7 +62,7 @@ async function route() {
   else if (parts[0] === 'kanji' && parts[1] === 'write') out(kanjiWriteView(app, parts[2] || '', parts[3] || ''));
   else if (parts[0] === 'kanji') out(parts[1] ? kanjiLessonView(app, parts[1], parts[2]) : kanjiHome(app));
   else if (parts[0] === 'translate') out(translateView(app, parts.slice(1).join('/')));
-  else if (parts[0] === 'sensei') senseiView(app);
+  else if (parts[0] === 'sensei') out(senseiView(app));
   else if (parts[0] === 'exam') { const v = await examView(app, parts[1]); if (my === routeNo) out(v); }
   else if (parts[0] === 'set' && parts[1] && isKanjiSet(parts[1]) && (!parts[2] || ['add', 'edit'].includes(parts[2]))) {
     location.replace('#/kanji/' + encodeURIComponent(parts[1].replace(/-w$/, ''))); return;

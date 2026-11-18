@@ -5,6 +5,14 @@
 import { $, esc, modal } from './util.js';
 import { chat, loadPuter, answerHTML, MSG_FAIL } from './ai-helper.js';
 
+// ---------- the illustration: input bar on the outstretched hands ----------
+// sensei-cutout.(webp|png) = the figure cropped from reference/sensei (tools/make-sensei-cutout.mjs), 538 × 471 px.
+// Palm centres measured from the skin pixels of the cutout, in % of the image box (x from the left, y from the top).
+// The bar runs from the left palm to the right palm; its lower edge rests on the palms.
+const ART = { w: 538, h: 471, webp: 'assets/sensei/sensei-cutout.webp', png: 'assets/sensei/sensei-cutout.png' };
+const PALMS = { left: { x: 11.9, y: 68.6 }, right: { x: 88.1, y: 68.7 } };
+const BAR_MIN_PX = 260; // a bar on the hands narrower than this goes directly below the hands (full width)
+
 const LOG_KEY = 'jp.sensei';
 const KEEP = 20; // messages kept in the session
 const SEND = 10; // messages sent to the model (earlier turns + the new question)
@@ -45,11 +53,15 @@ export function senseiView(root) {
       <div><p class="eyebrow" lang="ja">先生</p><h1>Сенсей</h1><p class="muted ss-sub">Запитай про навчання чи Японію</p></div>
       <button type="button" class="btn ghost sm ss-new" data-new>Нова розмова</button>
     </header>
-    <div class="ss-stage-slot"></div>
-    <form class="ss-bar" autocomplete="off" novalidate>
-      <textarea class="ss-input" rows="1" aria-label="Ваше запитання Сенсею" placeholder="Запитайте Сенсея…"></textarea>
-      <button class="btn primary ss-send" type="submit">Надіслати</button>
-    </form>
+    <div class="ss-stage">
+      <div class="ss-art" style="--ar:${ART.w}/${ART.h}; --bar-l:${PALMS.left.x}%; --bar-r:${100 - PALMS.right.x}%; --bar-b:${100 - Math.min(PALMS.left.y, PALMS.right.y)}%">
+        <picture class="ss-fig"><source type="image/webp" srcset="${ART.webp}"><img src="${ART.png}" alt="Сенсей, наставник з японської" width="${ART.w}" height="${ART.h}" decoding="async"></picture>
+        <form class="ss-bar" autocomplete="off" novalidate>
+          <textarea class="ss-input" rows="1" aria-label="Ваше запитання Сенсею" placeholder="Ваше запитання…"></textarea>
+          <button class="btn primary ss-send" type="submit">Надіслати</button>
+        </form>
+      </div>
+    </div>
     <div class="ss-meta"><span class="ss-status" role="status" aria-live="polite"></span><span class="muted small ss-count"></span></div>
     <div class="ss-starters" aria-label="Приклади запитань">${STARTERS.map(q => `<button type="button" class="ss-chip" data-q="${esc(q)}">${esc(q)}</button>`).join('')}</div>
     <div class="ss-list" aria-live="polite" aria-label="Розмова"></div>
@@ -59,6 +71,30 @@ export function senseiView(root) {
   const status = $('.ss-status', root), count = $('.ss-count', root);
   let error = '';
   loadPuter(); // preload, so the sign-in popup can open right on the first click
+
+  // bar on the hands while it is wide enough, otherwise directly below them; without the image: plain bar
+  const stage = $('.ss-stage', root), art = $('.ss-art', root), img = $('.ss-fig img', root);
+  const place = () => {
+    if (!root.isConnected) return;
+    const onHands = !stage.classList.contains('no-img') && art.clientWidth * (100 - PALMS.left.x - (100 - PALMS.right.x)) / 100 >= BAR_MIN_PX;
+    stage.classList.toggle('below', !onHands);
+    const home = onHands ? art : stage; // on the hands: inside the image box; below: after it, full width
+    if (form.parentElement !== home) {
+      const focused = document.activeElement === input;
+      home.append(form);
+      if (focused) input.focus({ preventScroll: true });
+    }
+  };
+  img.addEventListener('error', () => { stage.classList.add('no-img'); place(); }, { once: true });
+  if (img.complete && !img.naturalWidth && img.src) stage.classList.add('no-img');
+  const ro = new ResizeObserver(place);
+  ro.observe(art);
+  place();
+  // phones: keep the bar above the on-screen keyboard while typing
+  const vv = window.visualViewport;
+  const keepVisible = () => { if (document.activeElement === input) form.scrollIntoView({ block: 'nearest' }); };
+  vv?.addEventListener('resize', keepVisible);
+  input.addEventListener('focus', () => setTimeout(keepVisible, 300));
 
   const grow = () => { input.style.height = 'auto'; input.style.height = Math.min(input.scrollHeight, 140) + 'px'; };
   const counter = () => { const n = input.value.length; count.textContent = n > MAX_INPUT * 0.8 ? `${n} / ${MAX_INPUT}` : ''; count.classList.toggle('over', n > MAX_INPUT); };
@@ -111,5 +147,5 @@ export function senseiView(root) {
   });
   redrawCurrent = draw;
   draw(); counter();
-  return { root, input, form, redraw: draw };
+  return () => { ro.disconnect(); vv?.removeEventListener('resize', keepVisible); };
 }
