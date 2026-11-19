@@ -1580,3 +1580,24 @@ button.kb-c:hover { outline: 2px solid var(--text); outline-offset: 1px; }
 #netbar { position: fixed; left: 50%; top: calc(env(safe-area-inset-top) + 8px); transform: translateX(-50%); z-index: 65; max-width: calc(100% - 32px); padding: 8px 14px; border-radius: 999px; background: var(--panel-3); border: 1px solid var(--amber); color: var(--text); font-size: .85rem; font-weight: 600; text-align: center; box-shadow: 0 8px 24px rgba(0, 0, 0, .5); }
 .install-slot { margin: 6px 0 12px; }
 .install-slot .btn { margin-right: 8px; }
+
+/* reading practice (read.js) */
+.drill-entry + .drill-entry { margin-top: -10px; }
+.rd-setup .ex-range { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.rd-setup .ex-range .input { width: 80px; }
+.rd-wait { display: flex; align-items: center; gap: 10px; }
+.rd-top { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px 14px; }
+.rd-text { font-family: var(--jp); }
+.rd-s + .rd-s { margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--border); }
+.rd-ja { font-size: 1.35rem; line-height: 2.2; margin: 0; line-break: strict; word-break: normal; overflow-wrap: anywhere; }
+.rd-w { border-radius: 6px; cursor: pointer; }
+.rd-w:hover, .rd-w:focus-visible { background: var(--red-bg); outline: none; }
+.rd-w.c-p, .rd-w.c-x { color: #C9C2B8; }
+.rd-w ruby rt { font-size: .5em; color: var(--muted); }
+.no-furi rt { visibility: hidden; }
+.rd-tools { display: flex; gap: 8px; align-items: center; margin-top: 4px; }
+.rd-uk { margin: 6px 0 0; color: var(--muted); font-family: var(--ui); }
+.rd-end { margin: 6px 0 24px; }
+.rd-word { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.rd-big { font-family: var(--jp); font-size: 2rem; font-weight: 700; }
+.rd-mean { font-size: 1.1rem; margin: 8px 0 2px; }

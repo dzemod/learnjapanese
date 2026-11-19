@@ -6,7 +6,7 @@ import { conjugate } from './conjugate.js';
 const KANJI = /[㐀-鿿々〆]/;
 const hira = s => String(s || '').replace(/[ァ-ヶ]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60));
 /** Card text → lookup key: no ～, [な], (…), spaces. */
-export const cleanKey = s => String(s || '').replace(/\[[^\]]*\]|\([^)]*\)|（[^）]*）|［[^］]*］/g, '').replace(/[～〜~\s　・]/g, '').trim();
+export const cleanKey = s => String(s || '').replace(/\[[^\]]*\]|\([^)]*\)|（[^）]*）|［[^］]*］/g, '').replace(/[～〜~\s　・]/g, '').replace(/[。！？!?.]+$/, '').trim(); // cards like «すみません。»
 
 /**
  * sets: [{ id, title, source, cards: [{ id, japanese, reading, ukrainian, verbGroup }] }]  (internal card format)

@@ -48,7 +48,7 @@ ok(/aria-live="polite"/.test(src) && /MAX_INPUT = 1000/.test(src), 'aria-live an
 // Puter.js only where the helper is: not in the page; only the exam modules, the grammar lesson, Сенсей, progress sync and kanji associations use the helper
 ok(!/puter/i.test(fs.readFileSync(path.join(ROOT, 'site/index.html'), 'utf8')), 'index.html does not load Puter.js');
 const users = fs.readdirSync(path.join(ROOT, 'site/js')).filter(f => f !== 'ai-helper.js' && /ai-helper\.js|puter/i.test(fs.readFileSync(path.join(ROOT, 'site/js', f), 'utf8')));
-ok(users.every(f => f.startsWith('exam') || ['grammar.js', 'sensei.js', 'sync-progress.js', 'kanji-assoc.js'].includes(f)) && users.includes('grammar.js') && users.includes('exam.js') && users.includes('sensei.js'), 'the exam modules, grammar.js, sensei.js, sync-progress.js and kanji-assoc.js use the one shared helper', users.join(', '));
+ok(users.every(f => f.startsWith('exam') || ['grammar.js', 'sensei.js', 'sync-progress.js', 'kanji-assoc.js', 'read.js'].includes(f)) && users.includes('grammar.js') && users.includes('exam.js') && users.includes('sensei.js'), 'the exam modules, grammar.js, sensei.js, sync-progress.js and kanji-assoc.js use the one shared helper', users.join(', '));
 // Сенсей: no second AI client — Puter only through chat() of ai-helper.js
 const senseiSrc = fs.readFileSync(path.join(ROOT, 'site/js/sensei.js'), 'utf8');
 ok(!/puter\.|PUTER_SRC|js\.puter\.com/.test(senseiSrc) && /import \{[^}]*\bchat\b[^}]*\} from '\.\/ai-helper\.js'/.test(senseiSrc), 'sensei.js uses chat() of the shared helper, no own Puter client');

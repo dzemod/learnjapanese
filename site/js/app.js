@@ -15,6 +15,7 @@ import { todaySessionView } from './today.js';
 import { initProgressSync } from './sync-progress.js';
 import { achievementsView, initAchievements } from './achievements.js';
 import { drillView } from './drill.js';
+import { readView } from './read.js';
 import { weekView } from './week-view.js';
 import { initPWA } from './pwa.js';
 
@@ -76,6 +77,7 @@ async function route() {
   else if (parts[0] === 'sensei') out(senseiView(app, parts[1] || ''));
   else if (parts[0] === 'achievements') out(achievementsView(app));
   else if (parts[0] === 'week') { await weekView(app, parts[1] || '0'); if (my !== routeNo) return; }
+  else if (parts[0] === 'read') readView(app);
   else if (parts[0] === 'drill') out(drillView(app, parts[1] || ''));
   else if (parts[0] === 'today') { await todaySessionView(app); if (my !== routeNo) return; }
   else if (parts[0] === 'exam') { const v = await examView(app, parts[1]); if (my === routeNo) out(v); }
