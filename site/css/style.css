@@ -1074,6 +1074,9 @@ body[data-view="translate"] main { max-width: 900px; }
 .tr-hist-item [lang="ja"] { font-family: var(--jp); }
 .tr-hist-lang { flex: none; font-size: .7rem; font-weight: 700; color: var(--muted); min-width: 26px; }
 .tr-hist-clear { justify-self: start; margin-top: 4px; }
+.link-btn { padding: 0; border: 0; background: none; color: #ff8a9b; font: inherit; cursor: pointer; }
+.link-btn:hover { color: #fff; text-decoration: underline; }
+.tr-wsrc a { color: var(--muted); } .tr-wsrc a:hover { color: var(--text); }
 /* ---------- Перекладач, redesign 2026-11: two panes, try chips, sentence stage, tabs, sentence map, politeness meter ---------- */
 .tr-hero { position: relative; overflow: hidden; }
 .tr-hero > div { position: relative; z-index: 1; }

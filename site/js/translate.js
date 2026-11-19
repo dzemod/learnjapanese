@@ -11,6 +11,7 @@ import { getSets } from './store.js';
 import { loadKanji, books as kanjiBooks } from './kanji.js';
 import { loadGrammar, grammarLessons } from './grammar.js';
 import { addToLessonModal, toMasu } from './add-word.js';
+import { dictExact, dictSearch, groupOfPos } from './dict.js';
 import { ensureTokenizer, tokenize, onTokProgress, tokState, tokProgressText } from './tokenizer.js';
 import { analyzeText, literal, pointRef, toHira } from './analyzer.js';
 import { buildIndex, lookupWord, kanjiParts } from './wordindex.js';
@@ -77,6 +78,10 @@ function meaningHTML(b, idx) {
     h += `<p class="tr-mean"><b>${esc(m.uk)}</b>${m.approx ? ' <span class="check-badge" title="Знайдено за читанням у кані — перевірте, чи це те саме слово">можливо</span>' : ''}</p>
       <p class="muted small">з моїх слів: <a href="${esc(m.href)}">${esc(m.src)}</a>${m.japanese && m.japanese !== b.base ? ` · <span lang="ja">${esc(m.japanese)}</span>` : ''}</p>`;
     if (m.alts?.length) h += `<p class="muted small">Інші значення: ${m.alts.map(a => `<a href="${esc(a.href)}">${esc(a.uk)}</a>`).join('; ')}</p>`;
+  } else if (b.dict?.uk) {
+    h += `<p class="tr-mean"><b>${esc(b.dict.uk)}</b> <span class="check-badge" title="Переклад зі Словника, зроблений автоматично — перевіряйте">перевірити</span></p><p class="muted small">Немає в моїх словах · зі Словника: <a href="#/dict/w/${esc(b.dict.id)}">${jpWithReading(b.dict.head, b.dict.kana)}</a></p>`;
+  } else if (b.dict) {
+    h += `<p class="tr-mean"><b lang="en">${esc(b.dict.en)}</b></p><p class="muted small">Немає в моїх словах · значення англійською зі Словника: <a href="#/dict/w/${esc(b.dict.id)}">${jpWithReading(b.dict.head, b.dict.kana)}</a></p>`;
   } else if (b.jm) {
     h += `<p class="tr-mean"><b lang="en">${esc(b.jm.g)}</b></p><p class="muted small">Немає в моїх словах · значення англійською з JMdict (${jpWithReading(b.jm.k?.split('|')[0] || b.jm.r, b.jm.r)})</p>`;
   } else if (!['particle', 'copula', 'copneg', 'aux', 'punct'].includes(b.cls)) {
@@ -192,6 +197,18 @@ function trySentences() {
   return [...j.map(b => ({ t: cleanInput(b.ex), l: 'ja' })), ...(u ? [{ t: u.uk, l: 'uk' }] : [])];
 }
 
+function dictHTML(items) {
+  if (!items.length) return '';
+  return `<h2 class="sec-title">У словнику</h2><div class="tr-wlist">${items.map((it, i) => {
+    const head = (it.kanji || it.kana).split('|')[0], kana = it.kana.split('|')[0];
+    return `<div class="tr-wrow">
+      <a class="tr-wjp" lang="ja" href="#/dict/w/${esc(it.id)}">${esc(head)}${head !== kana ? `<span class="fg">(${esc(kana)})</span>` : ''}</a>
+      <span class="tr-wuk">${it.uk ? `${esc(it.uk)} <span class="check-badge" title="Переклад зі Словника, зроблений автоматично — перевіряйте">перевірити</span>` : `<span lang="en">${esc(it.senses.slice(0, 2).map(x => x[1]).join('; '))}</span>`}</span>
+      <span class="tr-wsrc small"><a href="#/dict/w/${esc(it.id)}">Відкрити в Словнику</a> · <button type="button" class="link-btn" data-dadd="${i}">+ До мого уроку</button></span>
+      <button type="button" class="icon-btn" data-say="${esc(kana)}" aria-label="Вимова">${I.speaker}</button>
+    </div>`; }).join('')}</div>`;
+}
+
 function wordsHTML(list) {
   if (!list.length) return '';
   return `<h2 class="sec-title">Слова з моїх уроків</h2><div class="tr-wlist">${list.map(({ card: c, set: s }) => `<div class="tr-wrow">
@@ -204,7 +221,7 @@ function wordsHTML(list) {
 
 // ---------- view ----------
 export function translateView(root, initial) {
-  let results = [], curLang = '', ran = false;
+  let results = [], curLang = '', ran = false, dictItems = [];
   root.innerHTML = `<div class="translate fade-in">
     <section class="hero tr-hero"><div><p class="eyebrow" lang="ja">翻訳 · ほんやく</p><h1>Перекладач</h1>
       <p class="muted">Переклад і розбір речення: кожне слово, форма, частка й конструкція — з посиланням на урок підручника.</p></div></section>
@@ -234,6 +251,7 @@ export function translateView(root, initial) {
     <details class="tr-hist" hidden><summary>Історія</summary><div class="tr-hist-list"></div></details>
     <div class="tr-out">
       <section class="panel tr-words" hidden></section>
+      <section class="panel tr-dict" hidden></section>
       <div class="tr-ana-wrap" hidden>
         <p class="tr-ana-title small" hidden>Розбір чернетки перекладу — перевірте, чи це те, що ви хотіли сказати:</p>
         <div class="tr-legend small"><span class="wb-dot wb-n"></span>іменник <span class="wb-dot wb-v"></span>дієслово <span class="wb-dot wb-a"></span>прикметник <span class="wb-dot wb-p"></span>частка <span class="wb-dot wb-c"></span>зв’язка <span class="wb-dot wb-d"></span>інше</div>
@@ -244,6 +262,8 @@ export function translateView(root, initial) {
     <p class="tr-credits muted small">Розбір: Kuromoji (IPADIC) у браузері · пояснення: правила за підручником Minna no Nihongo · значення: мої слова, канджі; інакше JMdict © EDRDG (CC BY-SA 4.0) · чернетка перекладу: MyMemory (текст надсилається на api.mymemory.translated.net).</p>
   </div>`;
   const ta = $('textarea', root), page = $('.translate', root), status = $('.tr-status', root);
+  const dictBox = $('.tr-dict', root);
+  const showDict = (items, my) => { if (!current(my)) return; dictItems = items; dictBox.hidden = !items.length; dictBox.innerHTML = dictHTML(items); };
   const start = $('.tr-start', root), tryBox = $('.tr-try', root), swap = $('[data-swap]', root), inHead = $('.tr-input .tr-lang', root);
   const mtBox = $('.tr-mt', root), wordsBox = $('.tr-words', root), anaWrap = $('.tr-ana-wrap', root), ana = $('.tr-ana', root), exBox = $('.tr-exs', root), anaTitle = $('.tr-ana-title', root);
   const setStatus = (msg, busy = false) => { status.innerHTML = busy ? `<span class="spinner"></span> ${esc(msg)}` : esc(msg); };
@@ -315,6 +335,19 @@ export function translateView(root, initial) {
         }
         if (found) render(D, idx, true);
       }).catch(() => {});
+      // the whole Словник (219 000 words, Ukrainian meaning when there is one) — in the background
+      (async () => {
+        let found = 0;
+        for (const b of missing.slice(0, 12)) {
+          const r = await dictExact([...new Set([b.base, b.surface].filter(Boolean))]);
+          if (!current(my)) return;
+          const it = r.items[0];
+          if (!it) continue;
+          b.dict = { id: it.id, uk: it.uk, en: it.senses.slice(0, 2).map(x => x[1]).join('; '), head: (it.kanji || it.kana).split('|')[0], kana: it.kana.split('|')[0] };
+          found++;
+        }
+        if (found && current(my)) render(D, idx, true);
+      })().catch(() => {});
     }
     return results;
   }
@@ -330,7 +363,8 @@ export function translateView(root, initial) {
     page.dataset.dir = lang ? lang + '-' + (lang === 'ja' ? 'uk' : 'ja') : '';
   }
   function reset() {
-    for (const b of [wordsBox, anaWrap, exBox]) b.hidden = true;
+    for (const b of [wordsBox, anaWrap, exBox, dictBox]) b.hidden = true;
+    dictItems = [];
     const lang = langOf(cleanInput(ta.value));
     mtBox.innerHTML = mtHTML(null, lang, lang ? (lang === 'ja' ? 'uk' : 'ja') : '');
     swap.disabled = true;
@@ -367,7 +401,18 @@ export function translateView(root, initial) {
         wordsBox.innerHTML = wordsHTML(words);
         showExamples(matchByUk(exIndex(), text));
         setStatus('');
+        // the Ukrainian meanings of the Словник (short queries only), then the Japanese draft looked up exactly
+        const short = text.split(/\s+/).length <= 3;
+        const ukHits = short ? dictSearch(text.replace(/[.!?…]+$/, ''), 'uk', 5).then(r => r.items.filter(it => it.score >= 2)).catch(() => []) : Promise.resolve([]);
+        ukHits.then(items => { if (items.length) showDict(items, my); });
         const ja = cleanInput(await translateBox(text, 'uk', 'ja', my));
+        if (ja && short && current(my) && langOf(ja) === 'ja') {
+          const key = ja.replace(/[。．！？!?]+$/u, '');
+          Promise.all([ukHits, dictExact([key]).then(r => r.items).catch(() => [])]).then(([a, b]) => {
+            const seen = new Set(a.map(x => x.id));
+            showDict([...a, ...b.filter(x => !seen.has(x.id))].slice(0, 6), my); // exact Ukrainian matches first
+          });
+        }
         if (ja && current(my) && langOf(ja) === 'ja') {
           anaTitle.hidden = false;
           await analyzeJa(ja, my);
@@ -400,6 +445,16 @@ export function translateView(root, initial) {
     if (e.target.closest('[data-swap]')) {
       const t = $('.tr-mt-text', mtBox)?.textContent || '';
       if (t && t !== '—') { ta.value = t; run(); }
+      return;
+    }
+    const da = e.target.closest('[data-dadd]');
+    if (da) {
+      const it = dictItems[+da.dataset.dadd];
+      if (!it) return;
+      const g = groupOfPos(it.senses[0]?.[0]);
+      const k = it.kanji ? it.kanji.split('|')[0] : '', kn = it.kana.split('|')[0];
+      const uk = it.uk ? it.uk.split('; ').slice(0, 3).join('; ') : cleanInput(ta.value);
+      addToLessonModal({ kanji: g ? toMasu(k, g) : k, kana: g ? toMasu(kn, g) : kn, ukrainian: uk, verbGroup: g, title: 'Додати слово до мого уроку' });
       return;
     }
     const more = e.target.closest('[data-more]');

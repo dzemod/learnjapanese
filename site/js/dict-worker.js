@@ -8,7 +8,7 @@
 // Ukrainian meanings: data/dict/uk.json { m: { jmdictId: "значення; …" } } (written by Claude → «перевірити»);
 // priority of the common words: data/dict/order.json { ids: [...] } (tools/dict-order.mjs) — ranking ties + browse.
 // Ranking: exact form > form starts with the query > contains it (Japanese); English / Ukrainian: a whole gloss equal
-// to the query > a gloss starting with it > the word inside a gloss; common words first; priority; shorter first.
+// to the query > a gloss starting with it > the word inside a gloss; common words first; shorter first; priority.
 /* global importScripts, wanakana */
 let E = [];             // entries
 let forms = [];         // [form, entryIndex] sorted by form (kanji and kana forms) — prefix search by binary search
@@ -59,7 +59,7 @@ const pri = i => ORDER.get(E[i][0]) ?? 1e9;
 const escRe = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 function rank(pairs, limit, len, offset = 0) {
-  pairs.sort((a, b) => b[1] - a[1] || E[b[0]][3] - E[a[0]][3] || pri(a[0]) - pri(b[0]) || len(a[0]) - len(b[0]) || a[0] - b[0]);
+  pairs.sort((a, b) => b[1] - a[1] || E[b[0]][3] - E[a[0]][3] || len(a[0]) - len(b[0]) || pri(a[0]) - pri(b[0]) || a[0] - b[0]);
   return { items: pairs.slice(offset, offset + limit).map(([i, s]) => view(i, s)), count: pairs.length };
 }
 function searchJa(q, limit, offset) {
