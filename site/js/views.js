@@ -8,6 +8,7 @@ import { MODES, faceHTML, metaHTML } from './modes.js';
 import { todayPanel } from './today.js';
 import { mountWeekCard } from './week-view.js';
 import { openAnkiDialog } from './anki.js';
+import { mountInstall } from './pwa.js';
 import { loadKanji, books as kanjiBooks } from './kanji.js';
 import { getNote, defaultAssoc } from './kanji-assoc.js';
 import { syncBlockHTML, mountSyncBlock } from './sync-progress.js';
@@ -79,6 +80,7 @@ export function homeView(root) {
       <section class="panel data-panel">
         <h2 class="sec-title">Резервна копія і дані</h2>
         <p class="muted">Прогрес і позначки ★ зберігаються в цьому браузері. Увімкніть синхронізацію, щоб мати їх на всіх пристроях, або час від часу робіть резервну копію.</p>
+        <div class="install-slot"></div>
         ${syncBlockHTML()}
         ${changes ? `<p class="note">Локальних змін, яких ще немає в <code>sets.json</code>: ${changes}.</p>` : ''}
         <div class="btn-row">
@@ -94,6 +96,7 @@ export function homeView(root) {
     todayPanel($('.today-slot', root));
     mountWeekCard($('.week-slot', root));
     mountSyncBlock(root);
+    mountInstall($('.install-slot', root));
     const card = s => {
       const x = setStats(s);
       return `<a class="set-card" href="${setUrl(s.id)}">

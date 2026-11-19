@@ -16,6 +16,7 @@ import { initProgressSync } from './sync-progress.js';
 import { achievementsView, initAchievements } from './achievements.js';
 import { drillView } from './drill.js';
 import { weekView } from './week-view.js';
+import { initPWA } from './pwa.js';
 
 const app = $('#app');
 let cleanup = null;
@@ -137,8 +138,8 @@ function drawSyncBar() {
 }
 onSync(drawSyncBar);
 
-// Cache the Kuromoji dictionary (CDN) after the first download — see sw.js. Site files are never cached by it.
-if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+// Offline use + install: sw.js (site files network-first, CDN files cache-first) — pwa.js.
+initPWA();
 
 (async function init() {
   await loadBase();

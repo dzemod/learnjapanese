@@ -1575,3 +1575,8 @@ button.kb-c:hover { outline: 2px solid var(--text); outline-offset: 1px; }
   .kp-sq:nth-child(n+9) { display: grid !important; }
   .kp-sq span { font-size: 30px; }
 }
+
+/* offline bar (pwa.js) */
+#netbar { position: fixed; left: 50%; top: calc(env(safe-area-inset-top) + 8px); transform: translateX(-50%); z-index: 65; max-width: calc(100% - 32px); padding: 8px 14px; border-radius: 999px; background: var(--panel-3); border: 1px solid var(--amber); color: var(--text); font-size: .85rem; font-weight: 600; text-align: center; box-shadow: 0 8px 24px rgba(0, 0, 0, .5); }
+.install-slot { margin: 6px 0 12px; }
+.install-slot .btn { margin-right: 8px; }
