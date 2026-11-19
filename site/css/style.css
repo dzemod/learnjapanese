@@ -1601,3 +1601,23 @@ button.kb-c:hover { outline: 2px solid var(--text); outline-offset: 1px; }
 .rd-word { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 .rd-big { font-family: var(--jp); font-size: 2rem; font-weight: 700; }
 .rd-mean { font-size: 1.1rem; margin: 8px 0 2px; }
+
+/* speaking practice (speak.js) */
+.sp-setup .ex-range { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.sp-setup .ex-range .input { width: 80px; }
+.sp-setup .btn { margin-bottom: 10px; }
+.sp-card { text-align: center; }
+.sp-ja { font-family: var(--jp); font-size: 1.5rem; line-height: 2.2; margin: 0; line-break: strict; overflow-wrap: anywhere; }
+.sp-ja rt { font-size: .5em; color: var(--muted); }
+.sp-t.hit { color: var(--green); }
+.sp-t.part { color: var(--amber); }
+.sp-t.miss { color: #FF4D67; text-decoration: underline wavy; text-underline-offset: 6px; }
+.sp-uk { margin: 4px 0 14px; }
+.sp-btns, .sp-next { justify-content: center; }
+.sp-mic .sp-dot { width: 10px; height: 10px; border-radius: 50%; background: #fff; }
+.sp-mic.on .sp-dot { animation: spPulse 1s infinite; }
+@keyframes spPulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .4; transform: scale(1.4); } }
+@media (prefers-reduced-motion: reduce) { .sp-mic.on .sp-dot { animation: none; } }
+.sp-out { min-height: 3.2em; margin-top: 10px; }
+.sp-verdict { font-weight: 700; margin: 0 0 4px; }
+.sp-verdict.good { color: var(--green); } .sp-verdict.close { color: var(--amber); } .sp-verdict.retry { color: #FF4D67; }

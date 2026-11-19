@@ -73,7 +73,7 @@ export function gatherStats(now = new Date()) {
     best: st.best, streak: st.streak, days: st.total, freezeUsed: st.freezeUsed, comeback: st.comeback,
     words, mineWords, lessonsDone, part1, part2, kanjiWritten, kanjiKnown, kanjiEasy, notes,
     exams, examBest, univBest, tsPerfect, mistakesCleared: (+lget(KEYS.cleared, 0) || 0) > 0 ? 1 : 0,
-    records: Object.keys(state.best || {}).length, todayDone: +counts.todayDone || 0, sensei: +counts.sensei || 0, conj: +counts.conj || 0, read: +counts.read || 0, goalDays: goalDays(studyTime(), getGoal()).length,
+    records: Object.keys(state.best || {}).length, todayDone: +counts.todayDone || 0, sensei: +counts.sensei || 0, conj: +counts.conj || 0, read: +counts.read || 0, speak: +counts.speak || 0, goalDays: goalDays(studyTime(), getGoal()).length,
     ...timeStats(now),
   };
 }
