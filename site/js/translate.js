@@ -4,13 +4,13 @@
 // (examples.js); history of queries (localStorage jp.translate.history).
 // Tokenizer: Kuromoji in a Web Worker (tokenizer.js; dictionary from a CDN, cached).
 // Meanings: my sets + kanji books first, then a small JMdict subset (data/jmdict-mini.json, English).
-import { $, $$, esc, I, furi, furiT, furiBase, furiSay, speak, toast, modal, JA, tightenJa, hasKanji } from './util.js';
+import { $, $$, esc, I, furi, furiT, furiBase, furiSay, speak, toast, JA, tightenJa, hasKanji } from './util.js';
 import { machineTranslate, MtLimitError, mtResetLimit } from './mt.js';
 import { buildExampleIndex, matchByUk, matchByJa, matchWords } from './examples.js';
-import { getSets, isMine, createSet, addCards } from './store.js';
+import { getSets } from './store.js';
 import { loadKanji, books as kanjiBooks } from './kanji.js';
 import { loadGrammar, grammarLessons } from './grammar.js';
-import { afterSave } from './edit.js';
+import { addToLessonModal, toMasu } from './add-word.js';
 import { ensureTokenizer, tokenize, onTokProgress, tokState, tokProgressText } from './tokenizer.js';
 import { analyzeText, literal, pointRef, toHira } from './analyzer.js';
 import { buildIndex, lookupWord, kanjiParts } from './wordindex.js';
@@ -56,56 +56,6 @@ async function copy(text) {
   try { await navigator.clipboard.writeText(text); toast('Скопійовано'); }
   catch { toast('Не вдалося скопіювати'); }
 }
-/** Dictionary form → ます-form (my cards keep verbs in the ます-form). */
-function toMasu(dict, group) {
-  const d = String(dict || '');
-  if (group === 'III') return d.replace(/する$/, 'します').replace(/(来|く)る$/, (m, k) => (k === '来' ? '来ます' : 'きます'));
-  if (group === 'II') return d.replace(/る$/, 'ます');
-  const U2I = { 'う': 'い', 'く': 'き', 'ぐ': 'ぎ', 'す': 'し', 'つ': 'ち', 'ぬ': 'に', 'ぶ': 'び', 'む': 'み', 'る': 'り' };
-  const last = d.slice(-1);
-  return U2I[last] ? d.slice(0, -1) + U2I[last] + 'ます' : d;
-}
-
-// ---------- add to my lesson ----------
-export function addToLessonModal({ kanji = '', kana = '', ukrainian = '', verbGroup = '', title = 'Додати до мого уроку' }) {
-  const mine = getSets().filter(isMine);
-  const last = (() => { try { return localStorage.getItem('jp.translate.lastSet') || ''; } catch { return ''; } })();
-  modal(`<div class="modal-head"><h2>${esc(title)}</h2></div>
-    <form class="tr-add">
-      <label class="field"><span>Урок</span><select class="input" name="set">
-        ${mine.map(s => `<option value="${esc(s.id)}" ${s.id === last ? 'selected' : ''}>${esc(s.title)} (${s.cards.length})</option>`).join('')}
-        <option value="" ${!mine.length ? 'selected' : ''}>+ Новий урок…</option></select></label>
-      <label class="field" data-new hidden><span>Назва нового уроку</span><input class="input" name="title" placeholder="Наприклад: Перекладач"></label>
-      <label class="field"><span>Канджі (якщо є)</span><input class="input jp" name="kanji" lang="ja" value="${esc(kanji)}"></label>
-      <label class="field"><span>Кана (читання)</span><input class="input jp" name="kana" lang="ja" value="${esc(kana)}"></label>
-      <label class="field"><span>Переклад українською</span><textarea class="input" name="uk" rows="2">${esc(ukrainian)}</textarea></label>
-      <p class="wf-error" hidden></p>
-      <div class="modal-btns"><button type="button" class="btn ghost" data-cancel>Скасувати</button><button class="btn primary">Додати</button></div>
-    </form>`, (m, close) => {
-    m.classList.add('sheet');
-    const f = $('form', m), err = $('.wf-error', m), nw = $('[data-new]', m);
-    const sync = () => { nw.hidden = !!f.set.value; };
-    sync();
-    f.set.onchange = sync;
-    $('[data-cancel]', m).onclick = close;
-    f.onsubmit = e => {
-      e.preventDefault();
-      const k = f.kanji.value.trim(), kn = f.kana.value.trim(), uk = f.uk.value.trim();
-      const show = msg => { err.textContent = msg; err.hidden = false; };
-      if (!k && !kn) return show('Введіть японське слово або речення.');
-      if (!uk) return show('Введіть переклад українською.');
-      if (hasKanji(kn)) return show('У полі «Кана» мають бути лише хірагана або катакана.');
-      const card = { japanese: hasKanji(k) ? k : (k || kn), reading: hasKanji(k) ? kn : '', ukrainian: uk, verbGroup, source: 'my' };
-      let setId = f.set.value;
-      if (setId) addCards(setId, [card]);
-      else setId = createSet(f.title.value.trim() || 'Перекладач', [card]).id;
-      try { localStorage.setItem('jp.translate.lastSet', setId); } catch { /* ignore */ }
-      close();
-      afterSave('Додано до уроку');
-    };
-  });
-}
-
 // ---------- rendering ----------
 // Sentence map colours (CSS .tr-k-*): who / what, object, circumstances, manner, predicate.
 const ROLE_KIND = { topic: 'who', subject: 'who', agent: 'who', object: 'obj', result: 'obj', quote: 'obj', time: 'when', place: 'when', destination: 'when', target: 'when', from: 'when', to: 'when', source: 'when', partner: 'when', recipient: 'when', scope: 'when', means: 'how', purpose: 'how', reason: 'how', predicate: 'pred' };
@@ -528,3 +478,5 @@ export function translateView(root, initial) {
   else setTimeout(() => ta.focus({ preventScroll: true }), 50);
   return () => { alive = false; offLoad(); };
 }
+
+export { addToLessonModal };

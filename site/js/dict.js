@@ -6,6 +6,9 @@
 //   #/dict/k/<kanji>       kanji page: stroke order (KanjiVG via kanji.js), readings, meanings (my Ukrainian one
 //                          first), components, words with it, link to the kanji card when it is a book kanji
 //   #/dict/radicals        pick components → matching kanji
+//   #/dict/browse/<common|all>/<pos|->/<freq|kana>/<page>   every word, 100 per page, filters
+// Ukrainian meanings of the common words: data/dict/uk.json (Claude → «перевірити»), searched as mode 'uk'.
+// «До мого уроку» on the word page (add-word.js).
 // Data: data/dict/* (tools/build-dict.mjs), searched in dict-worker.js (chunk 00 = common words first, the rest in
 // the background, cached by the service worker). Favourites jp.dict.fav, recent jp.dict.recent. Speech on click only.
 import { $, $$, esc, I, speak, toast } from './util.js';
@@ -14,6 +17,7 @@ import { buildIndex, lookupWord } from './wordindex.js';
 import { loadKanji, books as kanjiBooks, strokeOrder } from './kanji.js';
 import { getNote, defaultAssoc } from './kanji-assoc.js';
 import { kunHTML } from './modes.js';
+import { addToLessonModal, toMasu } from './add-word.js';
 
 const KFAV = 'jp.dict.fav', KREC = 'jp.dict.recent';
 const lget = (k, d) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } };
@@ -51,7 +55,7 @@ function worker() {
   return W;
 }
 const ask = msg => new Promise(res => { const id = ++seq; waits.set(id, res); worker().postMessage({ ...msg, id }); });
-export const dictSearch = (q, mode, limit = 50) => ask({ type: 'search', q, mode, limit });
+export const dictSearch = (q, mode, limit = 50, offset = 0) => ask({ type: 'search', q, mode, limit, offset });
 export const dictEntry = wid => ask({ type: 'entry', wid });
 export const onDictProgress = fn => { progressFns.add(fn); return () => progressFns.delete(fn); };
 
@@ -83,7 +87,14 @@ const formsHTML = it => {
   const k = it.kanji ? it.kanji.split('|') : [], r = it.kana.split('|');
   return `<span class="dc-main" lang="ja">${esc(k[0] || r[0])}</span>${k.length ? `<span class="reading" lang="ja">${esc(r[0])}</span>` : ''}${it.common ? '<span class="chip dc-common">поширене</span>' : ''}`;
 };
-const glossHTML = (senses, metaP, max = 3) => `<ol class="dc-senses">${senses.slice(0, max).map(s => { const pos = posText(s[0], metaP); return `<li>${pos.length ? `<span class="dc-pos">${esc(pos.join(', '))}</span> ` : ''}<span lang="en">${esc(s[1])}</span></li>`; }).join('')}</ol>`;
+const UK_NOTE = 'Переклад українською зроблено автоматично (Claude) з англійських значень JMdict — перевіряйте';
+/** One result row: my lesson meaning > dictionary Ukrainian meaning > English. */
+function itemHTML(it, my, m) {
+  const h = my ? lookupWord(my.words, (it.kanji || it.kana).split('|')[0], it.kana.split('|')[0], { strict: true }) : null;
+  const uk = h ? `<div class="dc-mine">${esc(h.uk)} <span class="muted small">· ${esc(h.src)}</span></div>` : it.uk ? `<div class="dc-uk" title="${UK_NOTE}">${esc(it.uk)}</div>` : '';
+  return `<a class="dc-item" href="#/dict/w/${it.id}"><div>${formsHTML(it)}</div>${uk}${glossHTML(it.senses, m, uk ? 1 : 2, !!uk)}</a>`;
+}
+const glossHTML = (senses, metaP, max = 3, quiet = false) => `<ol class="dc-senses${quiet ? ' quiet' : ''}">${senses.slice(0, max).map(s => { const pos = posText(s[0], metaP); return `<li>${pos.length ? `<span class="dc-pos">${esc(pos.join(', '))}</span> ` : ''}<span lang="en">${esc(s[1])}</span></li>`; }).join('')}</ol>`;
 
 function searchBox(q = '') {
   return `<form class="dc-search" role="search"><label class="search">${I.search}<input type="search" name="q" value="${esc(q)}" placeholder="Слово: 日本, にほん, nihon, Japan, Японія…" aria-label="Пошук у словнику" autocomplete="off" autocapitalize="off" spellcheck="false"></label><button class="btn primary">Шукати</button></form>`;
@@ -97,10 +108,10 @@ function homeView(root) {
   const rec = lget(KREC, []) || [], fv = favs();
   root.innerHTML = `<div class="dc fade-in">
     <section class="hero"><div><p class="eyebrow" lang="ja">辞書</p><h1>Словник</h1>
-      <p class="muted">JMdict — 219 000 японських слів з англійськими значеннями, 10 000 канджі. Ваші слова з уроків — українською.</p></div></section>
+      <p class="muted">Усі японські слова — 219 000 (JMdict), 10 000 канджі. Поширені слова мають український переклад, решта — англійський; ваші слова з уроків — завжди першими.</p></div></section>
     ${searchBox()}
     <div class="dc-prog" aria-live="polite"></div>
-    <div class="btn-row dc-links"><a class="btn ghost" href="#/dict/radicals"><span lang="ja">部首</span><span>Пошук канджі за ключами</span></a></div>
+    <div class="btn-row dc-links"><a class="btn ghost" href="#/dict/browse"><span lang="ja">一覧</span><span>Усі слова</span></a><a class="btn ghost" href="#/dict/radicals"><span lang="ja">部首</span><span>Пошук канджі за ключами</span></a></div>
     ${fv.length ? `<section class="panel"><h2 class="sec-title">Обране</h2><div class="dc-favs">${fv.map(f => `<a class="chip dc-fav" href="${esc(f.href)}"><span lang="ja">${esc(f.label)}</span>${f.sub ? ` <small class="muted">${esc(f.sub)}</small>` : ''}</a>`).join('')}</div></section>` : ''}
     ${rec.length ? `<section class="panel"><h2 class="sec-title">Нещодавні пошуки</h2><div class="dc-favs">${rec.map(q => `<a class="chip" href="#/dict/q/${encodeURIComponent(q)}">${esc(q)}</a>`).join('')}</div></section>` : ''}
     <p class="muted small dc-lic">JMdict, KANJIDIC2, RADKFILE © Electronic Dictionary Research and Development Group, CC BY-SA 4.0 · порядок рисок: KanjiVG</p>
@@ -112,6 +123,14 @@ function homeView(root) {
   prog.innerHTML = progressHTML(state);
   setTimeout(() => $('.dc-search input', root)?.focus({ preventScroll: true }), 50);
   return off;
+}
+
+const PAGE = 60;
+function sectionHTML(mode, title, r, my, m) {
+  const left = r.count - r.items.length;
+  return `<section class="dc-sec" data-mode="${mode}"><h2 class="group-title">${title}${mode === 'romaji' && r.q ? ` <span class="muted small" lang="ja">${esc(r.q)}</span>` : ''} <span class="muted small">${r.count.toLocaleString('uk-UA')}</span>${mode === 'uk' ? ' <span class="check-badge" title="' + UK_NOTE + '">автоматичний переклад</span>' : ''}</h2>
+    ${r.items.length ? `<div class="dc-list">${r.items.map(it => itemHTML(it, my, m)).join('')}</div>${left > 0 ? `<button type="button" class="btn ghost dc-more" data-more>Показати ще (${left.toLocaleString('uk-UA')})</button>` : ''}`
+      : `<p class="muted small">${mode === 'uk' ? 'У словнику з українським перекладом такого слова немає. Спробуйте англійською.' : 'Нічого не знайдено.'}</p>`}</section>`;
 }
 
 async function resultsView(root, q) {
@@ -131,21 +150,33 @@ async function resultsView(root, q) {
       hits.sort((a, b) => (a.c.ukrainian.toLowerCase() === ql ? 0 : 1) - (b.c.ukrainian.toLowerCase() === ql ? 0 : 1) || a.c.ukrainian.length - b.c.ukrainian.length);
       const kh = [...my.book.values()].filter(k => (k.meaning || '').toLowerCase().includes(ql)).slice(0, 12);
       sections.push(`<h2 class="group-title">Ваші уроки <span class="muted small">${hits.length}</span></h2>${hits.length ? `<div class="dc-list">${hits.slice(0, 40).map(({ c, s }) => `<a class="dc-item" href="#/dict/q/${encodeURIComponent(c.japanese.replace(/[～〜[\]（）()]/g, '').replace(/\s.*$/, ''))}"><div><span class="dc-main" lang="ja">${esc(c.japanese)}</span>${c.reading ? `<span class="reading" lang="ja">${esc(c.reading)}</span>` : ''}</div><div>${esc(c.ukrainian)} <span class="muted small">· ${esc(s.title)}</span></div></a>`).join('')}</div>` : '<p class="muted small">У ваших уроках такого слова немає. Спробуйте англійською — словник JMdict англійсько-японський.</p>'}`);
+      { const r = await dictSearch(q, 'uk', PAGE); partial ||= r.partial; sections.push(sectionHTML('uk', 'Словник', r, my, m)); }
       if (kh.length) sections.push(`<h2 class="group-title">Канджі</h2><div class="dc-kanji-row">${kh.map(k => `<a class="dc-k" href="#/dict/k/${encodeURIComponent(k.kanji)}"><b lang="ja">${esc(k.kanji)}</b><small>${esc(k.meaning)}</small></a>`).join('')}</div>`);
     } else {
       const runs = ja ? [['ja', 'Японською']] : lat ? [['romaji', `Ромаджі → кана`], ['en', 'Англійською']] : [['ja', 'Японською']];
       for (const [mode, title] of runs) {
-        const r = await dictSearch(q, mode, 60);
+        const r = await dictSearch(q, mode, PAGE);
         partial ||= r.partial;
         if (!r.items.length && mode !== 'ja') continue;
-        sections.push(`<h2 class="group-title">${title}${mode === 'romaji' && r.q ? ` <span class="muted small" lang="ja">${esc(r.q)}</span>` : ''} <span class="muted small">${r.items.length}${r.items.length >= 60 ? '+' : ''}</span></h2>
-          ${r.items.length ? `<div class="dc-list">${r.items.map(it => { const h = lookupWord(my.words, (it.kanji || it.kana).split('|')[0], it.kana.split('|')[0], { strict: true }); return `<a class="dc-item" href="#/dict/w/${it.id}"><div>${formsHTML(it)}</div>${h ? `<div class="dc-mine">${esc(h.uk)} <span class="muted small">· ${esc(h.src)}</span></div>` : ''}${glossHTML(it.senses, m, 2)}</a>`; }).join('')}</div>` : '<p class="muted small">Нічого не знайдено.</p>'}`);
+        sections.push(sectionHTML(mode, title, r, my, m));
       }
       const kj = [...q].filter(ch => KANJI.test(ch));
       if (kj.length) { const K = await kanjiData(); sections.unshift(`<div class="dc-kanji-row">${[...new Set(kj)].map(ch => { const k = K.get(ch), b = my.book.get(ch); return `<a class="dc-k" href="#/dict/k/${encodeURIComponent(ch)}"><b lang="ja">${esc(ch)}</b><small>${esc(b?.meaning || k?.[7]?.split('; ')[0] || '')}</small></a>`; }).join('')}</div>`); }
     }
     if (box.isConnected) box.innerHTML = sections.join('') || '<p class="muted">Нічого не знайдено.</p>';
   };
+  // «Показати ще»: the next page of one section, appended
+  box.addEventListener('click', async e => {
+    const b = e.target.closest('[data-more]');
+    if (!b) return;
+    b.disabled = true;
+    const sec = b.closest('.dc-sec'), mode = sec.dataset.mode, list = $('.dc-list', sec);
+    const off = list.children.length;
+    const [r, m, my] = await Promise.all([dictSearch(q, mode, PAGE, off), meta(), mine()]);
+    list.insertAdjacentHTML('beforeend', r.items.map(it => itemHTML(it, my, m)).join(''));
+    const left = r.count - list.children.length;
+    if (left > 0) { b.disabled = false; b.textContent = `Показати ще (${left.toLocaleString('uk-UA')})`; } else b.remove();
+  });
   const off = onDictProgress(s => { if (!prog.isConnected) return; prog.innerHTML = progressHTML(s); if (partial && s.loaded >= s.total) { partial = false; draw(); } });
   prog.innerHTML = progressHTML(state);
   await draw();
@@ -164,9 +195,10 @@ async function wordView(root, wid) {
   root.innerHTML = `<div class="dc fade-in"><a class="back" href="javascript:history.back()">${I.back}<span>Назад</span></a>
     <section class="panel dc-word">
       <div class="dc-whead"><span class="dc-big" lang="ja">${esc(head)}</span>${k.length ? `<span class="reading dc-rd" lang="ja">${esc(rd[0])}</span>` : ''}
-        <span class="dc-acts"><button type="button" class="icon-btn" data-say aria-label="Прослухати">${I.speaker}</button><button type="button" class="icon-btn star ${isFav(key) ? 'on' : ''}" data-fav aria-label="Обране">${I.star}</button></span></div>
+        <span class="dc-acts"><button type="button" class="btn ghost sm" data-add title="До мого уроку" aria-label="Додати до мого уроку">${I.plus}<span>До мого уроку</span></button><button type="button" class="icon-btn" data-say aria-label="Прослухати">${I.speaker}</button><button type="button" class="icon-btn star ${isFav(key) ? 'on' : ''}" data-fav aria-label="Обране">${I.star}</button></span></div>
       ${it.common ? '<span class="chip dc-common">поширене слово</span>' : ''}
       ${h ? `<div class="dc-mine big"><b>${esc(h.uk)}</b> <a class="link small" href="${esc(h.href)}">${esc(h.src)}</a></div>` : ''}
+      ${it.uk ? `<div class="dc-ukb"><b>${esc(it.uk)}</b> <span class="check-badge" title="${UK_NOTE}">перевірити</span></div>` : ''}
       ${glossHTML(it.senses, m, 10)}
       ${k.length > 1 || rd.length > 1 ? `<p class="small"><span class="muted">Інші написання:</span> <span lang="ja">${esc([...k.slice(1), ...rd.slice(k.length ? 1 : 1)].filter(Boolean).join('、'))}</span></p>` : ''}
     </section>
@@ -174,7 +206,14 @@ async function wordView(root, wid) {
     <p class="small"><a class="link" href="#/translate/${encodeURIComponent(head)}">Розібрати в Перекладачі</a></p>
     <p class="muted small dc-lic">JMdict © EDRDG, CC BY-SA 4.0</p></div>`;
   $('[data-say]', root).onclick = () => speak(rd[0]);
-  $('[data-fav]', root).onclick = e => { const on = toggleFav({ key, label: head, sub: h?.uk || it.senses[0]?.[1]?.split('; ')[0] || '', href: '#/dict/w/' + it.id }); e.currentTarget.classList.toggle('on', on); toast(on ? 'Додано до обраного' : 'Прибрано з обраного'); };
+  $('[data-add]', root).onclick = () => {
+    const p = (it.senses[0]?.[0] || '').split(/[,|]/)[0];
+    const g = /^v5/.test(p) ? 'I' : /^v1/.test(p) ? 'II' : /^(vs|vk)/.test(p) ? 'III' : '';
+    const jp = k[0] || '', kn = rd[0];
+    const uk = h?.uk || it.uk.split('; ').slice(0, 3).join('; ');
+    addToLessonModal({ kanji: g ? toMasu(jp, g) : jp, kana: g ? toMasu(kn, g) : kn, ukrainian: uk, verbGroup: g, title: 'Додати слово до мого уроку', newTitle: 'Словник' });
+  };
+  $('[data-fav]', root).onclick = e => { const on = toggleFav({ key, label: head, sub: h?.uk || it.uk.split('; ')[0] || it.senses[0]?.[1]?.split('; ')[0] || '', href: '#/dict/w/' + it.id }); e.currentTarget.classList.toggle('on', on); toast(on ? 'Додано до обраного' : 'Прибрано з обраного'); };
 }
 
 async function kanjiView(root, ch) {
@@ -225,6 +264,43 @@ async function radicalsView(root) {
   draw();
 }
 
+// ---------- browse: every word ----------
+const BROWSE_POS = [['-', 'Усі частини мови'], ['n', 'Іменники'], ['v', 'Дієслова'], ['adj-i', 'い-прикметники'], ['adj-na', 'な-прикметники'], ['adv', 'Прислівники'], ['exp', 'Вирази']];
+const BROWSE_PAGE = 100;
+async function browseView(root, [filter = 'common', pos = '-', sort = 'freq', page = '1']) {
+  filter = filter === 'all' ? 'all' : 'common';
+  sort = sort === 'kana' ? 'kana' : 'freq';
+  pos = BROWSE_POS.some(p => p[0] === pos) ? pos : '-';
+  let n = Math.max(1, parseInt(page, 10) || 1);
+  const href = (o = {}) => `#/dict/browse/${o.filter || filter}/${o.pos || pos}/${o.sort || sort}/${o.page || 1}`;
+  root.innerHTML = `<div class="dc fade-in"><a class="back" href="#/dict">${I.back}<span>Словник</span></a>
+    <section class="hero"><div><p class="eyebrow" lang="ja">一覧</p><h1>Усі слова</h1><p class="muted">Гортайте весь словник: спершу найпоширеніші слова, або за абеткою あいうえお.</p></div></section>
+    <div class="dc-bfilters">
+      <div class="seg" role="group" aria-label="Які слова"><a class="${filter === 'common' ? 'on' : ''}" href="${href({ filter: 'common' })}">Поширені</a><a class="${filter === 'all' ? 'on' : ''}" href="${href({ filter: 'all' })}">Усі 219 000</a></div>
+      <div class="seg" role="group" aria-label="Порядок"><a class="${sort === 'freq' ? 'on' : ''}" href="${href({ sort: 'freq' })}">За поширеністю</a><a class="${sort === 'kana' ? 'on' : ''}" href="${href({ sort: 'kana' })}" lang="ja">あいうえお</a></div>
+      <select class="input dc-bpos" aria-label="Частина мови">${BROWSE_POS.map(([k, t]) => `<option value="${k}" ${k === pos ? 'selected' : ''}>${t}</option>`).join('')}</select>
+    </div>
+    <div class="dc-prog" aria-live="polite"></div>
+    <div class="dc-bres"><div class="loading"><span class="sun pulse"></span></div></div></div>`;
+  $('.dc-bpos', root).onchange = e => { location.hash = href({ pos: e.target.value }); };
+  const prog = $('.dc-prog', root), box = $('.dc-bres', root);
+  const off = onDictProgress(s => { if (prog.isConnected) prog.innerHTML = progressHTML(s); });
+  prog.innerHTML = progressHTML(state);
+  const [r, m, my] = await Promise.all([ask({ type: 'browse', filter, pos: pos === '-' ? '' : pos, sort, offset: (n - 1) * BROWSE_PAGE, limit: BROWSE_PAGE }), meta(), mine()]);
+  if (!box.isConnected) return off;
+  const pages = Math.max(1, Math.ceil(r.count / BROWSE_PAGE));
+  if (n > pages) { location.replace(href({ page: pages })); return off; }
+  const pager = `<nav class="dc-pager" aria-label="Сторінки">
+      ${n > 1 ? `<a class="btn ghost sm" href="${href({ page: n - 1 })}">← Назад</a>` : '<span></span>'}
+      <form class="dc-pjump"><span class="muted small">Сторінка</span><input class="input" name="p" type="number" min="1" max="${pages}" value="${n}" aria-label="Номер сторінки"><span class="muted small">з ${pages.toLocaleString('uk-UA')}</span></form>
+      ${n < pages ? `<a class="btn ghost sm" href="${href({ page: n + 1 })}">Далі →</a>` : '<span></span>'}
+    </nav>`;
+  box.innerHTML = `<p class="muted small">${r.count.toLocaleString('uk-UA')} слів · ${((n - 1) * BROWSE_PAGE + 1).toLocaleString('uk-UA')}–${Math.min(n * BROWSE_PAGE, r.count).toLocaleString('uk-UA')}</p>
+    ${pager}<div class="dc-list">${r.items.map(it => itemHTML(it, my, m)).join('')}</div>${pager}`;
+  box.querySelectorAll('.dc-pjump').forEach(fm => (fm.onsubmit = e => { e.preventDefault(); const p = Math.min(pages, Math.max(1, parseInt(fm.p.value, 10) || 1)); location.hash = href({ page: p }); }));
+  return off;
+}
+
 export function dictView(root, parts) {
   const [kind, arg] = parts;
   try {
@@ -232,6 +308,7 @@ export function dictView(root, parts) {
     if (kind === 'w' && arg) return wordView(root, arg);
     if (kind === 'k' && arg) return kanjiView(root, arg);
     if (kind === 'radicals') return radicalsView(root);
+    if (kind === 'browse') return browseView(root, parts.slice(1));
   } catch (e) { console.error(e); }
   return homeView(root);
 }

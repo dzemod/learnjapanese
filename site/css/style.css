@@ -1737,6 +1737,18 @@ button.kb-c:hover { outline: 2px solid var(--text); outline-offset: 1px; }
 .dc-common { color: var(--green); border-color: rgba(95, 191, 138, .5); font-size: .72rem; }
 .dc-mine { color: var(--text); font-weight: 600; }
 .dc-mine.big { font-size: 1.15rem; margin: 8px 0; }
+.dc-uk { color: var(--text); font-weight: 600; }
+.dc-ukb { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; margin: 8px 0; font-size: 1.15rem; }
+.dc-senses.quiet { font-size: .82rem; opacity: .8; list-style: none; padding-left: 0; }
+.dc-sec + .dc-sec { margin-top: 8px; }
+.dc-more { margin-top: 10px; width: 100%; }
+.dc-whead .dc-acts .btn span { display: none; }
+@media (min-width: 560px) { .dc-whead .dc-acts .btn span { display: inline; } }
+.dc-bfilters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
+.dc-bpos { width: auto; min-height: 44px; font-size: 16px; }
+.dc-pager { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 10px 0; }
+.dc-pjump { display: flex; align-items: center; gap: 6px; }
+.dc-pjump .input { width: 5.5em; min-height: 38px; padding: 4px 8px; text-align: center; font-size: 16px; }
 .dc-senses { margin: 0; padding-left: 1.2em; color: var(--muted); font-size: .92rem; display: grid; gap: 2px; overflow-wrap: anywhere; }
 .dc-senses [lang="en"] { color: var(--text); }
 .dc-pos { color: var(--amber); font-size: .8rem; }
