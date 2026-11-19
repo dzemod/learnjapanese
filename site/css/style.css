@@ -1183,7 +1183,7 @@ textarea.ask-input { width: 100%; min-height: 84px; resize: vertical; font-famil
 .kc-so-btns { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
 .kc-so-btns .btn span { display: inline; }
 .kw { max-width: 560px; margin: 0 auto; }
-.kw-top { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.kw-top { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; padding-top: env(safe-area-inset-top); }
 .kw-back { flex: none; }
 .kw-scope { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .kw-counts { display: flex; gap: 16px; font-weight: 800; font-variant-numeric: tabular-nums; }
@@ -1252,7 +1252,7 @@ textarea.ask-input { width: 100%; min-height: 84px; resize: vertical; font-famil
 .kw-r.hard { color: #f2c94c; }
 .kw-r.good { color: #5ec26a; }
 .kw-r.easy { color: #3ba7e8; }
-body.kw-rating main { padding-bottom: 110px; }
+body.kw-rating main { padding-bottom: calc(110px + env(safe-area-inset-bottom)); }
 @media (min-width: 600px) { .kw-rate { left: 50%; right: auto; width: 560px; transform: translateX(-50%); border: 1px solid var(--border-2); border-bottom: 0; } .kw-diag { width: 120px; height: 120px; } }
 
 /* ==========================================================================
@@ -1505,6 +1505,7 @@ a.link { color: var(--text); text-decoration: underline; text-decoration-color: 
 .today-goal.done .tg-txt span { color: var(--green); }
 .tg-sel { margin-left: auto; }
 .tg-sel select { background: var(--panel); color: var(--text); border: 1px solid var(--border-2); border-radius: 8px; padding: 6px 8px; font: inherit; font-size: .85rem; }
+@media (pointer: coarse) { .tg-sel select { font-size: 16px; } } /* iOS Safari zooms into fields under 16 px */
 .goal-ring { flex: none; }
 .goal-ring .gr-bg { fill: none; stroke: var(--panel-3); stroke-width: 7; }
 .goal-ring .gr-fg { fill: none; stroke: var(--red); stroke-width: 7; stroke-linecap: round; transition: stroke-dashoffset .5s var(--ease); }
