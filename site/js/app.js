@@ -5,6 +5,7 @@ import { homeView, setView, editorView } from './views.js';
 import { modeView } from './modes.js';
 import { loadKanji, kanjiHome, kanjiLessonView, isKanjiSet } from './kanji.js';
 import { kanjiWriteView } from './kanji-write.js';
+import { kanjiBoardView } from './kanji-board.js';
 import { loadGrammar, grammarHome, grammarLesson } from './grammar.js';
 import { examView, returnButton } from './exam.js';
 import { translateView } from './translate.js';
@@ -65,6 +66,7 @@ async function route() {
   const out = v => { cleanup = typeof v === 'function' ? v : null; };
   if (!parts.length) cleanup = homeView(app, api);
   else if (parts[0] === 'grammar') out(parts[1] ? grammarLesson(app, +parts[1], parts[2]) : grammarHome(app));
+  else if (parts[0] === 'kanji' && parts[1] === 'board') out(kanjiBoardView(app, parts[2] || ''));
   else if (parts[0] === 'kanji' && parts[1] === 'write') out(kanjiWriteView(app, parts[2] || '', parts[3] || ''));
   else if (parts[0] === 'kanji') out(parts[1] ? kanjiLessonView(app, parts[1], parts[2]) : kanjiHome(app));
   else if (parts[0] === 'translate') out(translateView(app, parts.slice(1).join('/')));

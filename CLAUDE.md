@@ -139,7 +139,7 @@
 4. DONE Daily goal — `site/js/goal.js` (pure: `timeFor` = gap since the previous study action if ≤ 2 min else 20 s, `goalDays`, `ringSVG`). store.js `markStudied` adds study time to `jp.studyTime` { day: ms } (synced, per-day max) + `jp.studyTime.at`; goal minutes `jp.goal` (5/10/15/30, default 10; `getGoal`/`setGoal`); event `kotoba:goal` when reached → toast. Ring + select in the «Сьогодні» panel. Achievements goal-1/7/30. Tests: `node tools/test-goal.mjs`, `node tools/qa-goal.mjs` (320/375/1280).
    NOTE for edits by script: String.replace turns `$$` in the replacement into `$` — pass a function (`s.replace(a, () => b)`).
 5. DONE Weekly summary — `site/js/week.js` (pure: `weekStart` Monday 00:00, `summarize` days/minutes/actions/words reviewed+known/kanji/exams+avg/weakest grammar point from exam mistakes, `showCard` Mon–Wed) + `site/js/week-view.js` (home card «Ваш тиждень» under «Сьогодні», «✕» → jp.week.seen; page #/week/<offset>, link from the achievements heatmap). Tests: `node tools/test-week.mjs`, `node tools/qa-week.mjs` (page clock set to a Tuesday).
-6. Kanji collection board (1000 kanji grid coloured by writing status)
+6. DONE Kanji collection board — `site/js/kanji-board.js` (#/kanji/board[/k300|k700]; cells by lesson coloured new / learning / review / known / mastered (interval ≥ 21 days) from jp.kanjiWrite; a cell opens the kanji card; entry «Колекція канджі» on the kanji home). `.seg a` styled like `.seg button`. Test: `node tools/qa-kanji-board.mjs`.
 7. Anki export (words / kanji, TSV for Anki import)
 8. Printable kanji practice sheets (print CSS / PDF via browser print, grid + stroke order)
 9. Offline install (PWA: manifest + sw caches site files with network-first, data sync when online)

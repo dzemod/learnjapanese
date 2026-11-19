@@ -334,7 +334,7 @@ export function kanjiHome(root) {
   root.innerHTML = `<div class="kanji-home fade-in">
     <section class="hero"><div><p class="eyebrow" lang="ja">漢字</p><h1>Канджі</h1>
       <p class="muted">${books().map(b => `${esc(b.title)}: ${b.lessons.reduce((n, l) => n + l.kanji.length, 0)}`).join(' · ')}</p>
-      <div class="kw-entry"><a class="btn primary" href="#/kanji/write"><span lang="ja">書</span><span>Писати канджі</span></a>${books().filter(b => b.lessons.length).map(b => `<a class="btn ghost" href="#/kanji/write/${encodeURIComponent(b.id)}"><span>Писати: ${esc(b.title)}</span></a>`).join('')}</div></div></section>
+      <div class="kw-entry"><a class="btn primary" href="#/kanji/write"><span lang="ja">書</span><span>Писати канджі</span></a>${books().filter(b => b.lessons.length).map(b => `<a class="btn ghost" href="#/kanji/write/${encodeURIComponent(b.id)}"><span>Писати: ${esc(b.title)}</span></a>`).join('')}<a class="btn ghost" href="#/kanji/board"><span lang="ja">帳</span><span>Колекція канджі</span></a></div></div></section>
     ${books().map(b => `<h2 class="group-title"><span lang="ja">${esc(b.titleJp || '')}</span> ${esc(b.title)}</h2>
       ${b.lessons.length ? '' : '<p class="muted small">Уроки цієї книжки ще не додано.</p>'}
       <div class="set-grid">${b.lessons.map(l => {

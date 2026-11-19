@@ -246,8 +246,8 @@ body[data-view="home"] main { max-width: 1040px; }
 
 /* Segmented control */
 .seg { display: inline-flex; flex-wrap: wrap; gap: 4px; padding: 4px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 12px; }
-.seg button { border: 0; background: transparent; padding: 8px 12px; border-radius: 9px; color: var(--muted); font-weight: 600; font-size: .85rem; min-height: 36px; }
-.seg button.on { background: var(--red); color: #fff; }
+.seg button, .seg a { border: 0; background: transparent; padding: 8px 12px; border-radius: 9px; color: var(--muted); font-weight: 600; font-size: .85rem; min-height: 36px; }
+.seg button.on, .seg a.on { background: var(--red); color: #fff; }
 .seg.small button { padding: 5px 10px; min-height: 30px; }
 
 /* ---------------- FLIP CARD ---------------- */
@@ -1519,3 +1519,21 @@ a.link { color: var(--text); text-decoration: underline; text-decoration-color: 
 .wk-up { color: var(--green); font-weight: 700; } .wk-down { color: var(--amber); font-weight: 700; }
 .wk-weak { display: grid; gap: 6px; margin: 14px 0 10px; padding: 12px; border-left: 3px solid var(--red); background: var(--red-bg); border-radius: 0 10px 10px 0; }
 .wk-nav { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 4px; }
+
+/* kanji collection board (kanji-board.js) */
+.kb-books { margin-bottom: 12px; }
+.kb-books a { display: inline-block; }
+.kb-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; color: var(--muted); font-size: .85rem; margin-bottom: 10px; }
+.kb-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.kb-legend b { color: var(--text); }
+.kb-legend .kb-c { width: 14px; height: 14px; border-radius: 4px; }
+.kb-bar { margin-bottom: 6px; }
+.kb-lt { font-size: 1rem; margin: 20px 0 8px; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+.kb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(42px, 1fr)); gap: 5px; }
+.kb-c { display: grid; place-items: center; aspect-ratio: 1; border-radius: 8px; border: 1px solid var(--border); background: var(--panel-2); color: var(--muted); font-family: var(--jp); font-size: 1.25rem; padding: 0; cursor: pointer; }
+.kb-c.new { color: #6E6A64; }
+.kb-c.learning { background: rgba(217, 162, 91, .16); border-color: rgba(217, 162, 91, .5); color: var(--text); }
+.kb-c.review { background: var(--red-bg); border-color: var(--red); color: var(--text); }
+.kb-c.known { background: var(--green-bg); border-color: rgba(95, 191, 138, .55); color: var(--text); }
+.kb-c.mastered { background: rgba(226, 182, 76, .22); border-color: var(--t3); color: #fff; font-weight: 700; }
+button.kb-c:hover { outline: 2px solid var(--text); outline-offset: 1px; }
