@@ -195,7 +195,8 @@ export function achievementsView(root) {
         <p class="muted small">Кожні ${FREEZE.every} днів навчання дають заморозку (до ${FREEZE.max}). Якщо пропустите день, заморозка спрацює сама, і серія не обірветься.
           ${st.nextFreezeIn ? `Наступна через ${st.nextFreezeIn} ${plWord(st.nextFreezeIn, ['день', 'дні', 'днів'])} навчання.` : 'У вас максимум заморозок.'}</p>
       </section>
-      <section class="panel ach-heat" aria-labelledby="ach-hm"><h2 class="sec-title" id="ach-hm">Календар навчання</h2><div class="hm-slot"></div></section>
+      <section class="panel ach-heat" aria-labelledby="ach-hm"><h2 class="sec-title" id="ach-hm">Календар навчання</h2><div class="hm-slot"></div>
+        <p class="small"><a class="link" href="#/week/0">Підсумки тижнів</a></p></section>
     </div>
     ${GROUPS.map(([g, title, jp]) => {
       const list = ACHIEVEMENTS.filter(a => a.g === g);

@@ -6,6 +6,7 @@ import {
 } from './store.js';
 import { MODES, faceHTML, metaHTML } from './modes.js';
 import { todayPanel } from './today.js';
+import { mountWeekCard } from './week-view.js';
 import { syncBlockHTML, mountSyncBlock } from './sync-progress.js';
 import { mountWordForm, openWordModal, afterSave } from './edit.js';
 
@@ -51,6 +52,7 @@ export function homeView(root) {
     root.innerHTML = `<div class="home fade-in">
       ${state.loadError ? `<div class="alert">Не вдалося завантажити <code>data/sets.json</code>. Якщо ви відкрили файл напряму, запустіть локальний сервер: <code>npx serve site</code>.</div>` : ''}
       <div class="today-slot"></div>
+      <div class="week-slot"></div>
       <a class="drill-entry" href="#/drill"><span class="mode-ic" lang="ja">活</span><span><b>Тренажер дієслів</b><small>て-, ない-, た-форма та інші — лише ті, що ви вже пройшли</small></span><span class="today-ach-go" aria-hidden="true">›</span></a>
       <section class="hero">
         <div>
@@ -86,6 +88,7 @@ export function homeView(root) {
 
     const groups = $('.groups', root);
     todayPanel($('.today-slot', root));
+    mountWeekCard($('.week-slot', root));
     mountSyncBlock(root);
     const card = s => {
       const x = setStats(s);
