@@ -68,7 +68,7 @@ const goalHTML = () => {
   const g = getGoal(), ms = studyTimeToday(), done = ms / (g * 6e4), min = Math.floor(ms / 6e4);
   return `<div class="today-goal${done >= 1 ? ' done' : ''}">${ringSVG(done, 52)}
     <div class="tg-txt"><b data-t="goal">${Math.min(min, 999)} / ${g} хв</b><span>${done >= 1 ? 'денну мету виконано' : 'денна мета'}</span></div>
-    <label class="tg-sel"><span class="sr-only">Денна мета</span><select data-goal aria-label="Денна мета, хвилин">${GOALS.map(m => `<option value="${m}" ${m === g ? 'selected' : ''}>${m} хв</option>`).join('')}</select></label></div>`;
+    <label class="tg-sel"><select data-goal aria-label="Денна мета, хвилин">${GOALS.map(m => `<option value="${m}" ${m === g ? 'selected' : ''}>${m} хв</option>`).join('')}</select></label></div>`;
 };
 document.addEventListener('kotoba:goal', () => toast(`Денну мету виконано — ${getGoal()} хв навчання сьогодні 🎉`, { duration: 4000 }));
 
