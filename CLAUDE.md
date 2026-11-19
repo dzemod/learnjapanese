@@ -135,7 +135,7 @@
 ## ROADMAP (user request 2026-11-19: «Do all of your ideas») — in this order, commit + push after each, mark DONE here
 1. Kanji QA run + QA.md (= step 2 below)
 2. DONE Word review schedule — `site/js/word-srs.js` (pure: `schedule`, `isDue`, `dueScore`; fields due/ivl/ease inside jp.progress; wrong → 10 min, first right 20 h, recall ×ease, recognition ×1.3, no growth before due, legacy words by the old rules, max 1 year). store.js `record()` schedules, `dueCards(set)`, filter `due` («Повторити N») in the modes, «N слів на повторення зараз · Повторити» on the lesson page, today.js wordsDue uses it. Tests: `node tools/test-word-srs.mjs`, `node tools/qa-word-srs.mjs`.
-3. Conjugation drill (conjugate.js forms, only forms taught up to the chosen lesson)
+3. DONE Conjugation drill «Тренажер дієслів» — `site/js/drill.js` (#/drill setup, #/drill/run) + `site/js/drill-core.js` (pure: `verbPool`, `makeQuestions` weighted by weak forms, `checkAnswer` kana/kanji/katakana/ー, wrong form detected). Forms only up to the chosen lesson (conjugate.js FORMS[].lesson, ≥ 14). Storage jp.drill.conf, jp.drill.stats { form: { n, ok } }, session sessionStorage jp.drill. Romaji via wanakana like the exam (unbind + blur before redraw). Entry: home page card + exam hero link. Achievements conj-50 / conj-500 (counter `conj`). Tests: `node tools/test-drill.mjs` (all 399 verbs × 14 forms), `node tools/qa-drill.mjs`.
 4. Daily goal ring in «Сьогодні» (10/15/30 min or N items)
 5. Weekly summary (Monday card: learned, weakest grammar point, practise button)
 6. Kanji collection board (1000 kanji grid coloured by writing status)

@@ -17,7 +17,8 @@ let memUnlocked = null; // fallback when localStorage is blocked
 const getUnlocked = () => lget(KEYS.unlocked, null) || memUnlocked || {};
 const setUnlocked = v => { memUnlocked = v; lset(KEYS.unlocked, v); };
 
-/** Counters that no other data records: 'todayDone' (finished «Сьогодні» sessions), 'sensei' (Сенсей replies). */
+/** Counters that no other data records: 'todayDone' (finished «Сьогодні» sessions), 'sensei' (Сенсей replies),
+ *  'conj' (right answers in the conjugation drill). */
 export function bump(name) {
   const c = lget(KEYS.counts, {}) || {};
   c[name] = (+c[name] || 0) + 1;
@@ -71,7 +72,7 @@ export function gatherStats(now = new Date()) {
     best: st.best, streak: st.streak, days: st.total, freezeUsed: st.freezeUsed, comeback: st.comeback,
     words, mineWords, lessonsDone, part1, part2, kanjiWritten, kanjiKnown, kanjiEasy, notes,
     exams, examBest, univBest, tsPerfect, mistakesCleared: (+lget(KEYS.cleared, 0) || 0) > 0 ? 1 : 0,
-    records: Object.keys(state.best || {}).length, todayDone: +counts.todayDone || 0, sensei: +counts.sensei || 0,
+    records: Object.keys(state.best || {}).length, todayDone: +counts.todayDone || 0, sensei: +counts.sensei || 0, conj: +counts.conj || 0,
     ...timeStats(now),
   };
 }

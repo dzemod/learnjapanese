@@ -12,6 +12,7 @@ import { senseiView } from './sensei.js';
 import { todaySessionView } from './today.js';
 import { initProgressSync } from './sync-progress.js';
 import { achievementsView, initAchievements } from './achievements.js';
+import { drillView } from './drill.js';
 
 const app = $('#app');
 let cleanup = null;
@@ -68,6 +69,7 @@ async function route() {
   else if (parts[0] === 'translate') out(translateView(app, parts.slice(1).join('/')));
   else if (parts[0] === 'sensei') out(senseiView(app, parts[1] || ''));
   else if (parts[0] === 'achievements') out(achievementsView(app));
+  else if (parts[0] === 'drill') out(drillView(app, parts[1] || ''));
   else if (parts[0] === 'today') { await todaySessionView(app); if (my !== routeNo) return; }
   else if (parts[0] === 'exam') { const v = await examView(app, parts[1]); if (my === routeNo) out(v); }
   else if (parts[0] === 'set' && parts[1] && isKanjiSet(parts[1]) && (!parts[2] || ['add', 'edit'].includes(parts[2]))) {

@@ -543,7 +543,7 @@ function setupView(root) {
     const kb = kanjiBooks();
     const hist = load(K.history, []);
     root.innerHTML = `<div class="exam fade-in">
-      <section class="hero"><div><p class="eyebrow" lang="ja">試験</p><h1>Екзамен</h1><p class="muted">Підготовка до екзамену: частки, форми дієслів, переклад, слова, канджі.</p></div></section>
+      <section class="hero"><div><p class="eyebrow" lang="ja">試験</p><h1>Екзамен</h1><p class="muted">Підготовка до екзамену: частки, форми дієслів, переклад, слова, канджі. Форми дієслів окремо — у <a class="link" href="#/drill">Тренажері дієслів</a>.</p></div></section>
       ${S?.univ && !S.done ? `<div class="sync-box"><div><b>Є незавершена університетська версія</b> — уроки ${S.conf.from}–${S.conf.to}.</div><div class="sync-btns"><a class="btn sm primary" href="#/exam/run">Продовжити</a><button class="btn sm ghost" data-drop>Скасувати</button></div></div>` : ''}
       ${S && !S.univ && S.i < S.qs.length ? `<div class="sync-box"><div><b>Є незавершений екзамен</b> — питання ${S.i + 1} з ${S.qs.length}.</div><div class="sync-btns"><a class="btn sm primary" href="#/exam/run">Продовжити</a><button class="btn sm ghost" data-drop>Скасувати</button></div></div>` : ''}
       ${presets().length ? `<section class="panel"><h2 class="sec-title">Мої екзамени</h2><div class="ex-presets">${presets().map(p => `<div class="ex-preset"><button class="btn ghost sm" data-load="${esc(p.name)}">${esc(p.name)}</button><button class="icon-btn sm" data-del="${esc(p.name)}" aria-label="Видалити">${I.trash}</button></div>`).join('')}</div></section>` : ''}
