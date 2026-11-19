@@ -107,10 +107,16 @@ export function addToLessonModal({ kanji = '', kana = '', ukrainian = '', verbGr
 }
 
 // ---------- rendering ----------
+// Sentence map colours (CSS .tr-k-*): who / what, object, circumstances, manner, predicate.
+const ROLE_KIND = { topic: 'who', subject: 'who', agent: 'who', object: 'obj', result: 'obj', quote: 'obj', time: 'when', place: 'when', destination: 'when', target: 'when', from: 'when', to: 'when', source: 'when', partner: 'when', recipient: 'when', scope: 'when', means: 'how', purpose: 'how', reason: 'how', predicate: 'pred' };
+const TABS = [['struct', 'Будова'], ['part', 'Частки'], ['cons', 'Конструкції'], ['pol', 'Ввічливість']];
+let TAB = 'struct'; // the chosen tab stays for the next sentences / queries
+
 function blockBtn(b, i) {
   if (b.cls === 'punct') return `<span class="wb-punct" lang="ja">${esc(b.surface)}</span>`;
+  const k = hasKanji(b.surface);
   return `<button type="button" class="wb wb-${CLS[b.cls] || 'f'}" data-b="${i}" aria-label="${esc(b.surface + ' — ' + b.pos)}">
-    <span class="wb-jp" lang="ja">${esc(b.surface)}</span>${hasKanji(b.surface) ? `<span class="wb-kana" lang="ja">(${esc(b.kana)})</span>` : ''}
+    <span class="wb-kana" lang="ja"${k ? '' : ' aria-hidden="true"'}>${k ? esc(b.kana) : '&nbsp;'}</span><span class="wb-jp" lang="ja">${esc(b.surface)}</span>
     <span class="wb-pos">${esc(b.particle ? b.particle.label : b.pos)}</span></button>`;
 }
 
@@ -132,7 +138,7 @@ function meaningHTML(b, idx) {
 }
 
 function detailHTML(b, D, idx) {
-  if (!b) return '<p class="muted small center">Натисніть на слово, щоб побачити пояснення.</p>';
+  if (!b) return '<p class="tr-detail-hint"><span class="tr-tap" aria-hidden="true">☝</span>Торкніться слова вище — побачите його значення, форму й урок, де воно пояснюється.</p>';
   const isVerb = b.cls === 'verb', grp = isVerb && b.group ? D.groups[b.group] : null;
   const head = b.potentialOf ? b.potentialOf.base : b.base, headK = b.potentialOf ? b.potentialOf.kana : b.baseKana;
   const word = b.meaning?.uk ? b.meaning.uk.split(/[;,(]/)[0].trim() : '';
@@ -152,30 +158,36 @@ function detailHTML(b, D, idx) {
     ${b.particle ? `<div class="tr-pinfo"><b lang="ja">${esc(b.particle.name)}</b> — ${esc(b.particle.label)}<p>${furi(b.particle.text)}</p>${refLink(b.particle.point, D)}</div>` : ''}`;
 }
 
-function sentenceHTML(r, si, D) {
-  const pol = r.politeness;
+function politeLevel(pol, D) {
+  const is = k => pol.some(p => p.label === D.politeness[k]?.label);
+  return is('sonkei') || is('kenjo') ? 2 : is('polite') ? 1 : 0;
+}
+
+function sentenceHTML(r, si, D, count) {
+  const pol = r.politeness, lvl = politeLevel(pol, D);
+  const n = { struct: r.structure.length, part: r.particles.length, cons: r.constructions.length, pol: 0 };
+  const map = r.structure.length
+    ? `<div class="tr-map">${r.structure.map((x, i) => `${i ? '<span class="tr-map-arrow" aria-hidden="true">›</span>' : ''}<div class="tr-node tr-k-${ROLE_KIND[x.role] || 'how'}"><span class="tr-role">${esc(x.label)}</span><span class="tr-stext" lang="ja">${esc(x.text)}</span></div>`).join('')}</div>`
+    : '<p class="muted small">Будову цього речення не вдалося визначити.</p>';
+  const panes = {
+    struct: `${map}<div class="tr-literal"><span class="tr-literal-k">Дослівно</span>${esc(r.literal)}</div>`,
+    part: r.particles.length ? `<div class="tr-plist">${r.particles.map(p => `<div class="tr-prow"><span class="tr-pp" lang="ja">${esc(p.p)}</span><div><b>${esc(p.label)}</b>${p.phrase ? ` · <span lang="ja">${esc(p.phrase)}${esc(p.p)}</span>` : ''}<p class="small">${furi(p.text)}</p>${refLink(p.point, D)}</div></div>`).join('')}</div>`
+      : '<p class="muted small">У цьому реченні немає часток.</p>',
+    cons: r.constructions.length ? `<div class="tr-clist">${r.constructions.map(c => `<div class="tr-crow"><div class="tr-ctitle" lang="ja">${furiT(c.title)}</div><div class="tr-cmatch" lang="ja">${esc(c.match)}</div><p class="small">${furi(c.text)} ${refLink(c.point, D)}</p></div>`).join('')}</div>`
+      : '<p class="muted small">Конструкцій з підручника не знайдено (або вони ще не додані до правил).</p>',
+    pol: `<div class="tr-meter" role="img" aria-label="Рівень ввічливості: ${['просте мовлення', 'ввічливе мовлення', 'кейґо'][lvl]}">${['Просте', 'Ввічливе', 'Кейґо'].map((t, i) => `<span class="tr-meter-step${i === lvl ? ' on' : ''}${i < lvl ? ' past' : ''}">${t}</span>`).join('')}</div>
+      <div class="tr-pol">${pol.map(p => `<div class="tr-polrow"><b>${furi(p.label)}</b>${p.word ? ` <span lang="ja">(${esc(p.word)})</span>` : ''}<p class="small">${furi(p.text)}</p>${refLink(p.point, D)}</div>`).join('')}</div>`,
+  };
   return `<section class="panel tr-sent" data-s="${si}">
-    <div class="tr-sent-head"><h2 class="sec-title">Речення${si ? ' ' + (si + 1) : ''}</h2>
+    <div class="tr-sent-head"><h2 class="tr-snum"><span lang="ja" aria-hidden="true">文</span>${count > 1 ? `Речення ${si + 1} з ${count}` : 'Розбір речення'}</h2>
       <div class="tr-sent-btns"><button type="button" class="icon-btn" data-say="${esc(r.kana)}" aria-label="Прослухати речення">${I.speaker}</button>
       <button type="button" class="icon-btn" data-copy="${esc(r.text)}" aria-label="Копіювати речення">${I.copy}</button>
       <button type="button" class="btn ghost sm" data-addsent="${si}">${I.plus}<span>Речення до уроку</span></button></div></div>
-    <div class="tr-blocks">${r.blocks.map(blockBtn).join('')}</div>
-    <p class="tr-kana muted small" lang="ja">${esc(r.kana)}</p>
+    <div class="tr-stage"><div class="tr-blocks">${r.blocks.map(blockBtn).join('')}</div>
+      <p class="tr-kana" lang="ja">${esc(r.kana)}</p></div>
     <div class="tr-detail" aria-live="polite">${detailHTML(null, D)}</div>
-
-    ${r.structure.length ? `<h3 class="sub-title">Будова речення</h3><div class="tr-struct">${r.structure.map(x => `<div class="tr-srow tr-r-${x.role}"><span class="tr-role">${esc(x.label)}</span><span class="tr-stext" lang="ja">${esc(x.text)}</span></div>`).join('')}</div>` : ''}
-
-    <h3 class="sub-title">Рівень ввічливості</h3>
-    <div class="tr-pol">${pol.map(p => `<div class="tr-polrow"><b>${furi(p.label)}</b>${p.word ? ` <span lang="ja">(${esc(p.word)})</span>` : ''}<p class="small">${furi(p.text)}</p>${refLink(p.point, D)}</div>`).join('')}</div>
-
-    ${r.particles.length ? `<h3 class="sub-title">Частки в цьому реченні</h3><div class="tr-plist">${r.particles.map(p => `<div class="tr-prow"><span class="tr-pp" lang="ja">${esc(p.p)}</span><div><b>${esc(p.label)}</b>${p.phrase ? ` · <span lang="ja">${esc(p.phrase)}${esc(p.p)}</span>` : ''}<p class="small">${furi(p.text)}</p>${refLink(p.point, D)}</div></div>`).join('')}</div>` : ''}
-
-    <h3 class="sub-title">Граматичні конструкції</h3>
-    ${r.constructions.length ? `<div class="tr-clist">${r.constructions.map(c => `<div class="tr-crow"><div class="tr-ctitle" lang="ja">${furiT(c.title)}</div><div class="tr-cmatch" lang="ja">${esc(c.match)}</div><p class="small">${furi(c.text)} ${refLink(c.point, D)}</p></div>`).join('')}</div>`
-      : '<p class="muted small">Конструкцій з підручника не знайдено (або вони ще не додані до правил).</p>'}
-
-    <h3 class="sub-title">Дослівно</h3>
-    <p class="tr-literal">${esc(r.literal)}</p>
+    <div class="tr-tabs" role="tablist" aria-label="Розбір речення">${TABS.map(([k, t]) => `<button type="button" role="tab" class="tr-tab" data-tab="${k}" aria-selected="${k === TAB}">${t}${n[k] ? `<span class="tr-tab-n">${n[k]}</span>` : ''}</button>`).join('')}</div>
+    ${TABS.map(([k]) => `<div class="tr-pane-tab" role="tabpanel" data-pane="${k}"${k === TAB ? '' : ' hidden'}>${panes[k]}</div>`).join('')}
   </section>`;
 }
 
@@ -188,9 +200,14 @@ let EXI = null;
 const exIndex = () => (EXI ||= buildExampleIndex(grammarLessons()));
 const plainJa = s => furiBase(s).replace(/\s+/g, '');
 
+const LANG_NAME = { ja: '日本語 · японська', uk: 'Українська' };
+function paneHead(lang, fallback, extra = '') {
+  return `<div class="tr-pane-head"><span class="tr-lang${lang ? ' on' : ''}">${lang ? esc(LANG_NAME[lang]) : esc(fallback)}</span>${extra}</div>`;
+}
 function mtHTML(st, from, to) {
-  const head = `<div class="tr-sent-head"><h2 class="sec-title">${to === 'ja' ? 'Переклад японською' : 'Переклад українською'}</h2><span class="check-badge">чернетка, може бути неточною</span></div>`;
-  if (st.loading) return `${head}<p class="muted small"><span class="spinner"></span> Перекладаю…</p>`;
+  if (!st) return `${paneHead(to, 'Переклад')}<p class="tr-mt-empty">${to === 'ja' ? 'Тут з’явиться переклад японською' : to === 'uk' ? 'Тут з’явиться переклад українською' : 'Тут з’явиться переклад'}</p>`;
+  const head = paneHead(to, '', '<span class="check-badge">чернетка</span>');
+  if (st.loading) return `${head}<p class="tr-mt-empty"><span class="spinner"></span> Перекладаю…</p>`;
   if (st.limit) return `${head}<p class="small">Безкоштовний ліміт перекладів MyMemory на сьогодні вичерпано (≈ 5000 слів на день). Спробуйте завтра — розбір речення і приклади з підручника працюють і без перекладу.</p><button type="button" class="btn ghost sm" data-mtretry>Спробувати ще раз</button>`;
   if (st.error) return `${head}<p class="small">Не вдалося отримати переклад — перевірте інтернет-з’єднання.</p><button type="button" class="btn ghost sm" data-mtretry>Спробувати ще раз</button>`;
   const t = st.text || '';
@@ -200,19 +217,29 @@ function mtHTML(st, from, to) {
       ${t ? `<button type="button" class="btn ghost sm" data-copy="${esc(t)}">${I.copy}<span>Копіювати переклад</span></button>
       <button type="button" class="btn ghost sm" data-copy="${esc(st.src + '\n' + t)}">${I.copy}<span>Оригінал + переклад</span></button>` : ''}
     </div>
-    <p class="muted small">Машинний переклад MyMemory (безкоштовно). Перевіряйте його за розбором і прикладами з підручника.</p>`;
+    <p class="muted small">Машинний переклад MyMemory — може бути неточним. Перевіряйте його за розбором і прикладами з підручника.</p>`;
 }
 
+const EX_SHOW = 4;
 function examplesHTML(list, title) {
   if (!list.length) return '';
-  return `<h2 class="sec-title">${esc(title)}</h2><div class="tr-exlist">${list.map(e => `<div class="tr-ex">
+  return `<h2 class="sec-title">${esc(title)}</h2><div class="tr-exlist">${list.map((e, i) => `<div class="tr-ex"${i >= EX_SHOW ? ' hidden' : ''}>
       <div class="tr-ex-jp" lang="ja">${furi(e.ex)}</div>
       <div class="tr-ex-uk">${esc(e.uk)}${e.check ? ' <span class="check-badge" title="Переклад зроблено самостійно — у книжці перекладів інше речення">перевірити</span>' : ''}</div>
       <div class="tr-ex-meta">${refLink(e.pointId)}
         <span class="tr-ex-btns"><button type="button" class="icon-btn" data-say="${esc(furiSay(e.ex))}" aria-label="Прослухати приклад">${I.speaker}</button>
         <button type="button" class="icon-btn" data-copy="${esc(plainJa(e.ex) + '\n' + e.uk)}" aria-label="Копіювати приклад">${I.copy}</button>
         <button type="button" class="btn ghost sm" data-analyze="${esc(plainJa(e.ex))}">Розібрати</button></span></div>
-    </div>`).join('')}</div>`;
+    </div>`).join('')}</div>${list.length > EX_SHOW ? `<button type="button" class="btn ghost sm tr-more" data-more>Показати ще (${list.length - EX_SHOW})</button>` : ''}`;
+}
+
+/** Sentences to try on the empty page: short textbook examples (Japanese) + their translations (Ukrainian). */
+function trySentences() {
+  const all = grammarLessons().flatMap(l => l.points.flatMap(p => p.blocks.filter(b => b.ex && b.uk && !/～|[Ａ-Ｚ]|…|\.\.\./.test(b.ex))));
+  const short = all.filter(b => { const t = cleanInput(b.ex); return t.length >= 6 && t.length <= 22 && !/[—…]/.test(b.uk) && b.uk.length <= 42; });
+  const pick = n => { const out = []; for (let k = 0; k < 50 && out.length < n && short.length; k++) { const b = short[(Math.random() * short.length) | 0]; if (!out.includes(b)) out.push(b); } return out; };
+  const [u, ...j] = pick(4);
+  return [...j.map(b => ({ t: cleanInput(b.ex), l: 'ja' })), ...(u ? [{ t: u.uk, l: 'uk' }] : [])];
 }
 
 function wordsHTML(list) {
@@ -227,23 +254,35 @@ function wordsHTML(list) {
 
 // ---------- view ----------
 export function translateView(root, initial) {
-  let results = [], curLang = '';
+  let results = [], curLang = '', ran = false;
   root.innerHTML = `<div class="translate fade-in">
-    <section class="hero"><div><p class="eyebrow" lang="ja">翻訳</p><h1>Перекладач</h1>
-      <p class="muted">Японське речення — розбір кожного слова, форми, частки й конструкції з посиланнями на уроки та чернетка перекладу. Українське речення — чернетка перекладу японською, слова з моїх уроків і схожі приклади з підручника.</p></div></section>
-    <div class="panel tr-input">
-      <textarea class="input big" rows="3" placeholder="Введіть японське або українське речення…" aria-label="Текст для перекладу"></textarea>
-      <div class="tr-btns">
-        <button type="button" class="btn primary" data-go>${I.search}<span>Перекласти</span></button>
-        <button type="button" class="btn ghost" data-example>Приклад</button>
-        <button type="button" class="btn ghost" data-clear>Очистити</button>
-      </div>
-      <div class="progress tr-load" hidden><div class="bar"><i></i></div><span class="progress-label small muted"></span></div>
-      <p class="tr-status muted small" role="status"></p>
-      <details class="tr-hist" hidden><summary>Історія</summary><div class="tr-hist-list"></div></details>
+    <section class="hero tr-hero"><div><p class="eyebrow" lang="ja">翻訳 · ほんやく</p><h1>Перекладач</h1>
+      <p class="muted">Переклад і розбір речення: кожне слово, форма, частка й конструкція — з посиланням на урок підручника.</p></div></section>
+    <div class="tr-console">
+      <section class="panel tr-pane tr-input">
+        ${paneHead('', 'Мову визначу сам', '<span class="tr-kbd small muted">Ctrl + Enter</span>')}
+        <textarea class="input big" rows="4" placeholder="Напишіть японською або українською…" aria-label="Текст для перекладу"></textarea>
+        <div class="tr-btns">
+          <button type="button" class="btn ghost" data-example title="Випадкове речення з підручника"><span aria-hidden="true">🎲</span><span>Приклад</span></button>
+          <button type="button" class="btn ghost" data-clear>Очистити</button>
+          <button type="button" class="btn primary" data-go>${I.search}<span>Перекласти</span></button>
+        </div>
+        <div class="progress tr-load" hidden><div class="bar"><i></i></div><span class="progress-label small muted"></span></div>
+        <p class="tr-status muted small" role="status"></p>
+      </section>
+      <button type="button" class="tr-swap" data-swap disabled title="Поміняти місцями: перекласти переклад назад" aria-label="Поміняти місцями: перекласти переклад назад">⇄</button>
+      <section class="panel tr-pane tr-mt" aria-live="polite"></section>
     </div>
+    <div class="tr-start">
+      <div class="tr-try"></div>
+      <ol class="tr-how">
+        <li><b>Напишіть</b> речення японською чи українською</li>
+        <li><b>Торкніться</b> будь-якого слова в розборі</li>
+        <li><b>Відкрийте урок</b>, де пояснюється граматика</li>
+      </ol>
+    </div>
+    <details class="tr-hist" hidden><summary>Історія</summary><div class="tr-hist-list"></div></details>
     <div class="tr-out">
-      <section class="panel tr-mt" hidden></section>
       <section class="panel tr-words" hidden></section>
       <div class="tr-ana-wrap" hidden>
         <p class="tr-ana-title small" hidden>Розбір чернетки перекладу — перевірте, чи це те, що ви хотіли сказати:</p>
@@ -254,7 +293,8 @@ export function translateView(root, initial) {
     </div>
     <p class="tr-credits muted small">Розбір: Kuromoji (IPADIC) у браузері · пояснення: правила за підручником Minna no Nihongo · значення: мої слова, канджі; інакше JMdict © EDRDG (CC BY-SA 4.0) · чернетка перекладу: MyMemory (текст надсилається на api.mymemory.translated.net).</p>
   </div>`;
-  const ta = $('textarea', root), out = $('.tr-out', root), status = $('.tr-status', root);
+  const ta = $('textarea', root), page = $('.translate', root), status = $('.tr-status', root);
+  const start = $('.tr-start', root), tryBox = $('.tr-try', root), swap = $('[data-swap]', root), inHead = $('.tr-input .tr-lang', root);
   const mtBox = $('.tr-mt', root), wordsBox = $('.tr-words', root), anaWrap = $('.tr-ana-wrap', root), ana = $('.tr-ana', root), exBox = $('.tr-exs', root), anaTitle = $('.tr-ana-title', root);
   const setStatus = (msg, busy = false) => { status.innerHTML = busy ? `<span class="spinner"></span> ${esc(msg)}` : esc(msg); };
   let alive = true, runNo = 0;
@@ -295,7 +335,7 @@ export function translateView(root, initial) {
   // ----- machine translation -----
   async function translateBox(text, from, to, my) {
     const st = { src: text, loading: true };
-    const draw = () => { if (current(my)) { mtBox.hidden = false; mtBox.innerHTML = mtHTML(st, from, to); } };
+    const draw = () => { if (current(my)) { mtBox.innerHTML = mtHTML(st, from, to); swap.disabled = !st.text; } };
     draw();
     try { st.text = (await machineTranslate(text, from, to)).text; }
     catch (e) { if (e instanceof MtLimitError) st.limit = true; else st.error = true; }
@@ -333,17 +373,34 @@ export function translateView(root, initial) {
     exBox.hidden = !list.length;
     exBox.innerHTML = examplesHTML(list, 'Схожі приклади з підручника');
   }
+  // language chips of both panes follow the text as it is typed
+  function drawLangs(lang = langOf(cleanInput(ta.value))) {
+    inHead.textContent = lang ? LANG_NAME[lang] : 'Мову визначу сам';
+    inHead.classList.toggle('on', !!lang);
+    page.dataset.dir = lang ? lang + '-' + (lang === 'ja' ? 'uk' : 'ja') : '';
+  }
   function reset() {
-    for (const b of [mtBox, wordsBox, anaWrap, exBox]) b.hidden = true;
+    for (const b of [wordsBox, anaWrap, exBox]) b.hidden = true;
+    const lang = langOf(cleanInput(ta.value));
+    mtBox.innerHTML = mtHTML(null, lang, lang ? (lang === 'ja' ? 'uk' : 'ja') : '');
+    swap.disabled = true;
     ana.innerHTML = '';
     anaTitle.hidden = true;
     results = [];
+    drawLangs(lang);
+  }
+  async function drawTry() {
+    await loadGrammar().catch(() => {});
+    if (!alive) return;
+    const list = trySentences();
+    tryBox.innerHTML = list.length ? `<span class="tr-try-k">Спробуйте:</span>${list.map(x => `<button type="button" class="tr-chip" data-try="${esc(x.t)}" lang="${x.l}"><span class="tr-chip-l">${x.l === 'ja' ? '日' : 'УК'}</span>${esc(x.t)}</button>`).join('')}<button type="button" class="tr-chip tr-chip-more" data-tryagain aria-label="Інші приклади">↻</button>` : '';
   }
 
   async function run() {
     const text = cleanInput(ta.value);
     const my = ++runNo;
     reset();
+    start.hidden = ran = !!text;
     if (!text) { setStatus(''); return; }
     const lang = langOf(text);
     curLang = lang;
@@ -385,8 +442,18 @@ export function translateView(root, initial) {
   }
 
   // buttons outside the analysis (translation box, words, examples)
-  out.addEventListener('click', e => {
+  page.addEventListener('click', e => {
     if (e.target.closest('.tr-ana')) return;
+    const tr = e.target.closest('[data-try]');
+    if (tr) { ta.value = tr.dataset.try; run(); return; }
+    if (e.target.closest('[data-tryagain]')) { drawTry(); return; }
+    if (e.target.closest('[data-swap]')) {
+      const t = $('.tr-mt-text', mtBox)?.textContent || '';
+      if (t && t !== '—') { ta.value = t; run(); }
+      return;
+    }
+    const more = e.target.closest('[data-more]');
+    if (more) { $$('.tr-ex[hidden]', exBox).forEach(x => (x.hidden = false)); more.remove(); return; }
     const say = e.target.closest('[data-say]');
     if (say) { speak(say.dataset.say); return; }
     const cp = e.target.closest('[data-copy]');
@@ -398,12 +465,19 @@ export function translateView(root, initial) {
 
   function render(D, idx, keepSel = false) {
     const sel = keepSel ? $$('.wb.on', ana).map(b => [b.closest('.tr-sent').dataset.s, b.dataset.b]) : [];
-    ana.innerHTML = results.map((r, i) => sentenceHTML(r, i, D)).join('');
+    ana.innerHTML = results.map((r, i) => sentenceHTML(r, i, D, results.length)).join('');
     ana.onclick = e => {
       const say = e.target.closest('[data-say]');
       if (say) { speak(say.dataset.say); return; }
       const cp = e.target.closest('[data-copy]');
       if (cp) { copy(cp.dataset.copy); return; }
+      const tab = e.target.closest('.tr-tab'); // not [data-tab]: <body data-tab> is the app's nav state
+      if (tab) {
+        TAB = tab.dataset.tab;
+        $$('.tr-tab', ana).forEach(x => x.setAttribute('aria-selected', String(x.dataset.tab === TAB)));
+        $$('.tr-pane-tab', ana).forEach(x => (x.hidden = x.dataset.pane !== TAB));
+        return;
+      }
       const sec = e.target.closest('.tr-sent');
       if (!sec) return;
       const r = results[+sec.dataset.s];
@@ -429,14 +503,17 @@ export function translateView(root, initial) {
       if (wb) {
         const on = wb.classList.contains('on');
         $$('.wb', sec).forEach(x => x.classList.toggle('on', x === wb && !on));
-        $('.tr-detail', sec).innerHTML = detailHTML(on ? null : r.blocks[+wb.dataset.b], D, idx);
+        const det = $('.tr-detail', sec);
+        det.className = 'tr-detail' + (on ? '' : ' sel ' + ([...wb.classList].find(c => /^wb-[a-z]$/.test(c)) || ''));
+        det.innerHTML = detailHTML(on ? null : r.blocks[+wb.dataset.b], D, idx);
       }
     };
     for (const [s, b] of sel) $(`.tr-sent[data-s="${s}"] .wb[data-b="${b}"]`, ana)?.click();
   }
 
   $('[data-go]', root).onclick = run;
-  $('[data-clear]', root).onclick = () => { ta.value = ''; runNo++; reset(); setStatus(''); history.replaceState(null, '', '#/translate'); ta.focus(); };
+  $('[data-clear]', root).onclick = () => { ta.value = ''; runNo++; reset(); start.hidden = ran = false; setStatus(''); history.replaceState(null, '', '#/translate'); ta.focus(); };
+  ta.addEventListener('input', () => { if (!ran) reset(); else drawLangs(); });
   $('[data-example]', root).onclick = async () => {
     await loadGrammar();
     const exs = grammarLessons().flatMap(l => l.points.flatMap(p => p.blocks.filter(b => b.ex && !/～|[Ａ-Ｚ]/.test(b.ex)).map(b => b.ex)));
@@ -445,6 +522,8 @@ export function translateView(root, initial) {
     run();
   };
   ta.addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); run(); } });
+  reset();
+  drawTry();
   if (initial) { ta.value = cleanInput(initial); run(); }
   else setTimeout(() => ta.focus({ preventScroll: true }), 50);
   return () => { alive = false; offLoad(); };
