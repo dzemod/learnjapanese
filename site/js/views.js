@@ -7,6 +7,9 @@ import {
 import { MODES, faceHTML, metaHTML } from './modes.js';
 import { todayPanel } from './today.js';
 import { mountWeekCard } from './week-view.js';
+import { openAnkiDialog } from './anki.js';
+import { loadKanji, books as kanjiBooks } from './kanji.js';
+import { getNote, defaultAssoc } from './kanji-assoc.js';
 import { syncBlockHTML, mountSyncBlock } from './sync-progress.js';
 import { mountWordForm, openWordModal, afterSave } from './edit.js';
 
@@ -82,6 +85,7 @@ export function homeView(root) {
           <button class="btn ghost" data-exp>${I.download}<span>Зберегти резервну копію</span></button>
           <button class="btn ghost" data-imp>${I.upload}<span>Відновити з копії</span></button>
           <button class="btn ghost" data-claude>${I.download}<span>Експорт слів для Claude</span></button>
+          <button class="btn ghost" data-anki>${I.download}<span>Експорт в Anki</span></button>
         </div>
       </section>
     </div>`;
@@ -124,6 +128,7 @@ export function homeView(root) {
     $('[data-exp]', root).onclick = backupNow;
     $('[data-sound]', root).onchange = e => setSound(e.target.checked);
     $('[data-autospeak]', root).onchange = e => setAutoSpeak(e.target.checked);
+    $('[data-anki]', root).onclick = async () => { await loadKanji(); openAnkiDialog({ books: kanjiBooks, assocOf: id => getNote(id) || defaultAssoc(id)?.t || '' }); };
     $('[data-claude]', root).onclick = () => { download(`kotoba-sets-${today()}.json`, setsExport()); toast('Слова експортовано — надішліть файл Claude'); };
     $('[data-imp]', root).onclick = async () => {
       const text = await pickFile();

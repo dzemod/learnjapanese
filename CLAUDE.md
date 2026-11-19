@@ -140,7 +140,7 @@
    NOTE for edits by script: String.replace turns `$$` in the replacement into `$` — pass a function (`s.replace(a, () => b)`).
 5. DONE Weekly summary — `site/js/week.js` (pure: `weekStart` Monday 00:00, `summarize` days/minutes/actions/words reviewed+known/kanji/exams+avg/weakest grammar point from exam mistakes, `showCard` Mon–Wed) + `site/js/week-view.js` (home card «Ваш тиждень» under «Сьогодні», «✕» → jp.week.seen; page #/week/<offset>, link from the achievements heatmap). Tests: `node tools/test-week.mjs`, `node tools/qa-week.mjs` (page clock set to a Tuesday).
 6. DONE Kanji collection board — `site/js/kanji-board.js` (#/kanji/board[/k300|k700]; cells by lesson coloured new / learning / review / known / mastered (interval ≥ 21 days) from jp.kanjiWrite; a cell opens the kanji card; entry «Колекція канджі» on the kanji home). `.seg a` styled like `.seg button`. Test: `node tools/qa-kanji-board.mjs`.
-7. Anki export (words / kanji, TSV for Anki import)
+7. DONE Anki export — `site/js/anki.js` (pure `wordsTSV` / `kanjiTSV` with Anki header lines #separator/#html/#deck/#columns/#tags column; dialog `openAnkiDialog`: words all / part I / part II / my / known / starred, kanji 300 / 700 / all with own or ready-made association). Button «Експорт в Anki» in «Резервна копія і дані». Tests: `node tools/test-anki.mjs`, `node tools/qa-anki.mjs`.
 8. Printable kanji practice sheets (print CSS / PDF via browser print, grid + stroke order)
 9. Offline install (PWA: manifest + sw caches site files with network-first, data sync when online)
 10. Reading practice (short texts from studied words/grammar, tap a word → meaning + grammar)
