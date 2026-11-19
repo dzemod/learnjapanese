@@ -20,6 +20,7 @@
 //   QA_BASE=<url> — test a deployed site instead of the local server (e.g. https://learnjapanese-site-two.vercel.app/).
 //   QA_STEPS=<name,name,…> — run only these step names (e.g. kcard-k700-046,kmode-k300-15-flashcards).
 // Chrome: QA_CHROME=<path to chrome.exe> (default: Program Files Google Chrome).
+// KanjiVG: QA_KVG=<dir with the stroke SVGs> (default %TEMP%/claude-kvg if present) or QA_KVG=cdn for the real CDNs.
 import http from 'http';
 import fs from 'fs';
 import path from 'path';
@@ -290,6 +291,14 @@ const ALLOWED = ['manrope', 'noto serif jp'];
 
 async function makePage(kind) {
   const ctx = await browser.newContext(kind === 'd' ? { viewport: { width: 1920, height: 1080 } } : { viewport: { width: 375, height: 812 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
+  // KanjiVG stroke files from a local copy (QA_KVG, default %TEMP%/claude-kvg when it exists): thousands of files in
+  // one run hit the CDNs' rate limits (HTTP 403) and the writing mode then times out — that measures the CDN, not the site.
+  // QA_KVG=cdn uses the real CDNs.
+  const kvgDir = process.env.QA_KVG || path.join(process.env.TEMP || '/tmp', 'claude-kvg');
+  if (process.env.QA_KVG !== 'cdn' && fs.existsSync(kvgDir)) await ctx.route(/(cdn\.jsdelivr\.net\/gh\/KanjiVG\/kanjivg@[^/]+|raw\.githubusercontent\.com\/KanjiVG\/kanjivg\/[^/]+)\/kanji\/([0-9a-f]+)\.svg$/, r => {
+    const f = path.join(kvgDir, /([0-9a-f]+)\.svg$/.exec(r.request().url())[1] + '.svg');
+    return fs.existsSync(f) ? r.fulfill({ status: 200, contentType: 'image/svg+xml', headers: { 'access-control-allow-origin': '*' }, body: fs.readFileSync(f, 'utf8') }) : r.fulfill({ status: 404, body: '' });
+  });
   const page = await ctx.newPage();
   const errs = [];
   page.on('console', m => { if (m.type() === 'error') errs.push('console: ' + m.text().slice(0, 200)); });
