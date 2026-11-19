@@ -378,6 +378,7 @@ export function kanjiLessonView(root, id, openId) {
         }).join('')}</div>
         <h3 class="sub-title">Вчити канджі</h3>
         <a class="mode-btn kw-mode-btn" href="#/kanji/write/${encodeURIComponent(id)}"><span class="mode-ic" lang="ja">書</span><span><b>Писати канджі</b><small>риска за риською, з повтореннями</small></span></a>
+        <a class="mode-btn" href="#/kanji/print/${encodeURIComponent(id)}"><span class="mode-ic" lang="ja">紙</span><span><b>Аркуш для друку</b><small>порядок рисок і клітинки для письма</small></span></a>
         ${modesGrid(id)}
       </section>
 
