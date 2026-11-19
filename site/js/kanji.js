@@ -10,7 +10,7 @@ import {
 import { MODES, kunHTML } from './modes.js';
 import { parseLabels, spreadLabels } from './kvg-labels.js';
 import { partsFromSVG } from './kanji-parts.js';
-import { mountAssoc } from './kanji-assoc.js';
+import { mountAssoc, loadDefaults as loadAssoc } from './kanji-assoc.js';
 
 const K = { base: null, loading: null, error: false };
 const BOOKS_FALLBACK = [];
@@ -28,7 +28,8 @@ export function loadKanji() {
       }
       if (changed) saveCustomNow();
     })
-    .catch(e => { console.error('Could not load data/kanji.json', e); K.base = []; K.error = true; }));
+    .catch(e => { console.error('Could not load data/kanji.json', e); K.base = []; K.error = true; })
+    .then(() => loadAssoc())); // ready-made associations (kanji-assoc.js) — never fails
 }
 
 const baseLesson = id => { for (const b of K.base || []) for (const l of b.lessons) if (l.id === id) return l; return null; };

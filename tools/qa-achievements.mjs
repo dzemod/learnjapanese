@@ -168,7 +168,20 @@ for (const [kind, width, height] of [['phone', 375, 812], ['desktop', 1280, 860]
   await page.waitForSelector('.kc-assoc .as-part', { timeout: 8000 }).catch(() => {});
   const parts = await page.$$eval('.kc-assoc .as-part', els => els.map(e => e.textContent));
   ok(parts.length === 2 && parts[0].startsWith('亻') && parts[0].includes('людина') && parts[1].startsWith('木'), T('休: components 亻 + 木 with meanings'), parts.join(' | '));
-  ok(await page.locator('.kc-assoc .as-empty').count() === 1, T('no note yet: invitation text'));
+  ok(await page.locator('.kc-assoc .as-default .check-badge').count() === 1 && (await page.textContent('.kc-assoc .as-default')).includes('(亻)'), T('no own note: ready-made association with «перевірити»'));
+  await page.click('.kc-assoc [data-as-own]');
+  ok((await page.inputValue('.kc-assoc textarea')).includes('(亻)'), T('«Взяти собі» copies it into the editor'));
+  await page.click('[data-as-cancel]');
+  // a kanji without a ready-made association: invitation text
+  const noDef = kj.books[1].lessons.at(-1).kanji.at(-1);
+  const ready = JSON.parse(fs.readFileSync(path.join(ROOT, 'site/data/kanji-assoc.json'), 'utf8')).kanji;
+  if (!ready[noDef.id]) {
+    const p2 = await ctx.newPage();
+    await p2.goto(BASE + `#/kanji/${kj.books[1].lessons.at(-1).id}/${noDef.id}`, { waitUntil: 'networkidle' });
+    await p2.waitForSelector('.kc-assoc .as-btns');
+    ok(await p2.locator('.kc-assoc .as-empty').count() === 1 && await p2.locator('[data-as-own]').count() === 0, T('no ready-made one: invitation text'));
+    await p2.close();
+  }
   await page.click('.kc-assoc [data-as-ai]');
   await page.waitForSelector('.as-idea', { timeout: 5000 });
   ok(await page.locator('.as-idea').count() === 2, T('Сенсей: two ideas'));

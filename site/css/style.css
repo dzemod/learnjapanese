@@ -1468,3 +1468,5 @@ a.streak:hover { border-color: var(--red); }
 .as-hint { margin-top: 8px; font-size: .92rem; }
 .as-hint summary { cursor: pointer; color: var(--muted); font-weight: 600; }
 .as-hint p { margin: 6px 0 0; padding: 8px 10px; border-left: 3px solid var(--red); background: var(--red-bg); border-radius: 0 8px 8px 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.as-default { border-left-color: var(--border-2); background: var(--panel-2); flex-direction: column; gap: 4px; }
+.as-default .as-def-l { margin: 0; color: var(--muted); display: flex; align-items: center; gap: 8px; }
