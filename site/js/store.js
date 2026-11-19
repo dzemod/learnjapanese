@@ -1,8 +1,9 @@
 import { uid, today, shuffle, hasKanji } from './util.js';
 import { streakInfo } from './streak-calc.js';
 import { schedule, isDue, dueScore } from './word-srs.js';
+import { timeFor, DEFAULT_GOAL, GOALS } from './goal.js';
 
-const K = { progress: 'jp.progress', custom: 'jp.custom', opts: 'jp.opts', days: 'jp.days', activity: 'jp.activity', best: 'jp.best', pw: 'jp.pw' };
+const K = { progress: 'jp.progress', custom: 'jp.custom', opts: 'jp.opts', days: 'jp.days', activity: 'jp.activity', time: 'jp.studyTime', timeAt: 'jp.studyTime.at', goal: 'jp.goal', best: 'jp.best', pw: 'jp.pw' };
 const DEFAULT_OPTS = { answer: 'uk', filter: 'all', shuffle: false, fcSort: true, listenType: 'choose', kanjiAns: 'both', termOrder: 'book' };
 
 function load(k, def) {
@@ -466,8 +467,24 @@ export function markStudied(key = '') {
   const keys = Object.keys(state.activity).sort();
   if (keys.length > 800) for (const k of keys.slice(0, keys.length - 800)) delete state.activity[k];
   save(K.activity, state.activity);
-  try { document.dispatchEvent(new CustomEvent('kotoba:studied')); } catch { /* not in a browser */ }
+  // study time for the daily goal (goal.js): the gap since the previous action, or 20 s after a break
+  const now = Date.now(), goalMs = getGoal() * 6e4;
+  const time = load(K.time, {}) || {};
+  const before = +time[t] || 0;
+  time[t] = before + timeFor(+load(K.timeAt, 0) || 0, now);
+  const tk = Object.keys(time).sort();
+  if (tk.length > 800) for (const k of tk.slice(0, tk.length - 800)) delete time[k];
+  save(K.time, time); save(K.timeAt, now);
+  try {
+    document.dispatchEvent(new CustomEvent('kotoba:studied'));
+    if (before < goalMs && time[t] >= goalMs) document.dispatchEvent(new CustomEvent('kotoba:goal')); // reached just now
+  } catch { /* not in a browser */ }
 }
+/** Daily goal in minutes (jp.goal) and today's study time in ms (jp.studyTime). */
+export const getGoal = () => { const g = +load(K.goal, DEFAULT_GOAL); return GOALS.includes(g) ? g : DEFAULT_GOAL; };
+export const setGoal = m => save(K.goal, GOALS.includes(+m) ? +m : DEFAULT_GOAL);
+export const studyTime = () => ({ ...(load(K.time, {}) || {}) });
+export const studyTimeToday = () => +(load(K.time, {}) || {})[today()] || 0;
 /** Streak with freezes (streak-calc.js): { streak, best, freezes, frozen, freezeUsed, total, comeback, nextFreezeIn }. */
 export const streakData = () => streakInfo(state.days, today());
 export const streak = () => streakData().streak;
@@ -490,7 +507,7 @@ export function setBest(id, t) { state.best[id] = t; save(K.best, state.best); }
 
 // ---------- Backup ----------
 // Other per-learner data kept in the backup: heatmap counts, kanji associations, achievements.
-const EXTRA_KEYS = [K.activity, 'jp.kanjiNotes', 'jp.achievements', 'jp.ach.counts'];
+const EXTRA_KEYS = [K.activity, K.time, K.goal, 'jp.kanjiNotes', 'jp.achievements', 'jp.ach.counts'];
 export function backupData() {
   return {
     app: 'kotoba', version: 2, exported: new Date().toISOString(),

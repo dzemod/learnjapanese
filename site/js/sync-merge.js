@@ -11,6 +11,7 @@
 //   level      jp.sensei.level  "N" → this device's value; another device's only if this one has none
 //   activity   jp.activity      { "YYYY-MM-DD": n } → per day the larger count (last 800 days) — the heatmap
 //   unlocked   jp.achievements  { id: time } → union, the earliest unlock wins (ach-rules.js mergeUnlocked)
+//   time       jp.studyTime     { "YYYY-MM-DD": ms } → per day the larger value (daily goal)
 //   notes      jp.kanjiNotes    { kanjiId: { t, at } } → per kanji the newer note wins (an emptied note has t: "")
 import { mergeUnlocked } from './ach-rules.js';
 
@@ -91,7 +92,7 @@ export function mergeNotes(a, b) {
 export { mergeUnlocked };
 export const mergeLevel = (local, remote) => (local != null && local !== '' ? local : remote ?? null);
 
-/** All datasets at once: { progress, kanji, days, mistakes, history, best, level, activity, unlocked, notes } (missing parts = empty). */
+/** All datasets at once: { progress, kanji, days, mistakes, history, best, level, activity, time, unlocked, notes } (missing parts = empty). */
 export function mergeAll(local, remote) {
   local = obj(local); remote = obj(remote);
   return {
@@ -103,6 +104,7 @@ export function mergeAll(local, remote) {
     best: mergeBest(local.best, remote.best),
     level: mergeLevel(local.level, remote.level),
     activity: mergeActivity(local.activity, remote.activity),
+    time: mergeActivity(local.time, remote.time),
     unlocked: mergeUnlocked(local.unlocked, remote.unlocked),
     notes: mergeNotes(local.notes, remote.notes),
   };

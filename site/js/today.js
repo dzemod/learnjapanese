@@ -6,8 +6,9 @@
 // «Почати сесію» = a ≈ 15-minute mix in this order: due words (flashcards, recorded like the study modes), due kanji
 // (recall → reveal with stroke order → the writing mode's ratings, same schedule), then the exam mistakes in the
 // Exam's own runner. The session plan is kept in sessionStorage (jp.today.session), so a reload continues it.
-import { $, $$, esc, I, plWord, speakCard } from './util.js';
-import { getSets, prog, record, streak, markStudied, studiedToday } from './store.js';
+import { $, $$, esc, I, plWord, speakCard, toast } from './util.js';
+import { getSets, prog, record, streak, markStudied, studiedToday, getGoal, setGoal, studyTimeToday } from './store.js';
+import { ringSVG, GOALS } from './goal.js';
 import { loadKanji, books as kanjiBooks, kanjiVG } from './kanji.js';
 import { RATINGS, applyRating, nextInterval, fmtInterval, status as kStatus, DAY } from './stroke-match.js';
 import { startMistakesExam, savedMistakeList } from './exam.js';
@@ -62,6 +63,15 @@ export function planSession(words, kanji, mistakes, B = BUDGET) {
   return { words: words.slice(0, w).map(x => [x.setId, x.cardId]), kanji: kanji.slice(0, k).map(x => [x.lessonId, x.id]), exam: e, minutes: Math.round((B.totalSec - left) / 60) };
 }
 
+// ---------- daily goal ----------
+const goalHTML = () => {
+  const g = getGoal(), ms = studyTimeToday(), done = ms / (g * 6e4), min = Math.floor(ms / 6e4);
+  return `<div class="today-goal${done >= 1 ? ' done' : ''}">${ringSVG(done, 52)}
+    <div class="tg-txt"><b data-t="goal">${Math.min(min, 999)} / ${g} хв</b><span>${done >= 1 ? 'денну мету виконано' : 'денна мета'}</span></div>
+    <label class="tg-sel"><span class="sr-only">Денна мета</span><select data-goal aria-label="Денна мета, хвилин">${GOALS.map(m => `<option value="${m}" ${m === g ? 'selected' : ''}>${m} хв</option>`).join('')}</select></label></div>`;
+};
+document.addEventListener('kotoba:goal', () => toast(`Денну мету виконано — ${getGoal()} хв навчання сьогодні 🎉`, { duration: 4000 }));
+
 // ---------- the home page panel ----------
 const n = (v, forms) => `${v} ${plWord(v, forms)}`;
 export function todayPanel(slot) {
@@ -76,10 +86,12 @@ export function todayPanel(slot) {
         <a class="today-cell" href="#/kanji/write"><b data-t="kanji">${kanjiReady ? kanjiN : '…'}</b><span>${plWord(kanjiN, ['канджі', 'канджі', 'канджі'])} для письма</span></a>
         <a class="today-cell" href="#/exam"><b data-t="exam">${mist.length}</b><span>${plWord(mist.length, ['помилка', 'помилки', 'помилок'])} з екзамену</span></a>
       </div>
+      ${goalHTML()}
       ${todayLineHTML()}
       ${any ? `<a class="btn primary today-start" href="#/today" data-start-today>Почати сесію <small>≈ 15 хв</small></a>` : `<p class="muted small today-empty">${studiedToday() ? 'На сьогодні все повторено. 🎉' : 'Поки нічого не треба повторювати: вивчіть кілька слів уроку або напишіть канджі — і вони з’являться тут.'}</p>`}
     </section>`;
   };
+  slot.addEventListener('change', e => { if (e.target.matches('[data-goal]')) { setGoal(e.target.value); const box = $('.today-goal', slot); if (box) box.outerHTML = goalHTML(); } });
   draw(0, false);
   loadKanji().then(() => { if (slot.isConnected) { let k = 0; try { k = kanjiDue().length; } catch { k = 0; } draw(k, true); } });
 }

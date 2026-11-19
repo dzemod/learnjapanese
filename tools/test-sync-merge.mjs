@@ -52,7 +52,7 @@ ok(M.mergeMistakes({ items: Array.from({ length: 150 }, (_, i) => ({ uid: 'u' + 
 // broken / missing remote data never breaks local data
 const broken = M.mergeAll(phone, { progress: 'x', kanji: [1], days: {}, mistakes: 5, history: 'y', best: null });
 ok(eq(broken.progress, phone.progress) && eq(broken.kanji, phone.kanji) && eq(broken.days, phone.days), 'broken remote data: local data kept');
-ok(eq(M.mergeAll({}, {}), { progress: {}, kanji: {}, days: [], mistakes: { items: [], clearedAt: 0 }, history: [], best: {}, level: null, activity: {}, unlocked: {}, notes: {} }), 'empty + empty = empty');
+ok(eq(M.mergeAll({}, {}), { progress: {}, kanji: {}, days: [], mistakes: { items: [], clearedAt: 0 }, history: [], best: {}, level: null, activity: {}, time: {}, unlocked: {}, notes: {} }), 'empty + empty = empty');
 
 // heatmap counts, achievement dates, kanji associations
 const sym = (fn, x, y) => eq(fn(x, y), fn(y, x)) && eq(fn(fn(x, y), y), fn(x, y));

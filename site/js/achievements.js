@@ -5,7 +5,8 @@
 // Stored: jp.achievements = { id: unlock time } (synced, earliest wins). Checks run after every study action
 // (event kotoba:studied), on navigation and after a progress sync; a new badge shows a small pop-up.
 import { $, esc, plWord, I } from './util.js';
-import { state, getSets, streakData, activity } from './store.js';
+import { state, getSets, streakData, activity, studyTime, getGoal } from './store.js';
+import { goalDays } from './goal.js';
 import { ACHIEVEMENTS, GROUPS, newlyUnlocked, progressOf, value, timeStats } from './ach-rules.js';
 import { FREEZE } from './streak-calc.js';
 
@@ -72,7 +73,7 @@ export function gatherStats(now = new Date()) {
     best: st.best, streak: st.streak, days: st.total, freezeUsed: st.freezeUsed, comeback: st.comeback,
     words, mineWords, lessonsDone, part1, part2, kanjiWritten, kanjiKnown, kanjiEasy, notes,
     exams, examBest, univBest, tsPerfect, mistakesCleared: (+lget(KEYS.cleared, 0) || 0) > 0 ? 1 : 0,
-    records: Object.keys(state.best || {}).length, todayDone: +counts.todayDone || 0, sensei: +counts.sensei || 0, conj: +counts.conj || 0,
+    records: Object.keys(state.best || {}).length, todayDone: +counts.todayDone || 0, sensei: +counts.sensei || 0, conj: +counts.conj || 0, goalDays: goalDays(studyTime(), getGoal()).length,
     ...timeStats(now),
   };
 }
