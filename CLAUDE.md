@@ -132,6 +132,20 @@
 - After rebuilding grammar/exam always run `node tools/typo-uk.js` (quotes «», apostrophe ’, dash —, …) — it touches Ukrainian string values only, never Japanese fields (ex, ja, pre, post…).
 - Transcription: readings of Japanese words ONLY in kana (never Cyrillic). Cyrillic Japanese names/terms — Hepburn-based Ukrainian transcription (NOT Kovalenko/Polivanov): し ші, ち чі, じ джі, しゃ/しゅ/しょ ша/шу/шо, ちゃ/ちゅ/ちょ ча/чу/чо, じゃ/じゅ/じょ джа/джу/джо, ず/ざ/ぜ/ぞ зу/за/зе/зо, つ цу, ふ фу, え е, よ йо, ゆ ю, ん н (м before б, п, м), long vowels written once. Examples: канджі, Тадаші, Ічіро, Ямада Ічіро, суші, Шінджуку, Фуджі, Сузукі. Established Ukrainian words stay (дзюдо). Convert with `node tools/transcribe-hepburn.js [--write]` (explicit word list, whole words), check with `node tools/qa-translit.js` (part of QA, must pass).
 
+## ROADMAP (user request 2026-11-19: «Do all of your ideas») — in this order, commit + push after each, mark DONE here
+1. Kanji QA run + QA.md (= step 2 below)
+2. DONE Word review schedule — `site/js/word-srs.js` (pure: `schedule`, `isDue`, `dueScore`; fields due/ivl/ease inside jp.progress; wrong → 10 min, first right 20 h, recall ×ease, recognition ×1.3, no growth before due, legacy words by the old rules, max 1 year). store.js `record()` schedules, `dueCards(set)`, filter `due` («Повторити N») in the modes, «N слів на повторення зараз · Повторити» on the lesson page, today.js wordsDue uses it. Tests: `node tools/test-word-srs.mjs`, `node tools/qa-word-srs.mjs`.
+3. Conjugation drill (conjugate.js forms, only forms taught up to the chosen lesson)
+4. Daily goal ring in «Сьогодні» (10/15/30 min or N items)
+5. Weekly summary (Monday card: learned, weakest grammar point, practise button)
+6. Kanji collection board (1000 kanji grid coloured by writing status)
+7. Anki export (words / kanji, TSV for Anki import)
+8. Printable kanji practice sheets (print CSS / PDF via browser print, grid + stroke order)
+9. Offline install (PWA: manifest + sw caches site files with network-first, data sync when online)
+10. Reading practice (short texts from studied words/grammar, tap a word → meaning + grammar)
+11. Speaking practice (Web Speech API recognition, free, Chrome; compare with the sentence)
+12. «Словник» tab (= step 6 below)
+
 ## CURRENT TASKS (handoff, 2026-11-03) — order set by the user, commit + push after each step
 1. **Перекладач freezing** — DONE: Kuromoji runs in a Web Worker (`site/js/kuromoji-worker.js`, API `site/js/tokenizer.js`: `ensureTokenizer`, `tokenize`, `onTokProgress`, `kuroshiroAnalyzer` for importer readings). The worker downloads the 12 dict files (≈ 18 MB) with byte progress into Cache API `kotoba-cdn-v1` (shared with sw.js) and answers Kuromoji’s XHR from memory; progress bar `.tr-load` in the tab; loading starts when the tab opens. Never call Kuromoji on the main thread.
 2. **Finish the site QA** (user request: whole site, 1920 + 375 px, fix everything, re-run until clean, batches committed as "QA: …").

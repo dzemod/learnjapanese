@@ -143,9 +143,9 @@ for (const [kind, width, height] of [['narrow', 320, 640], ['phone', 390, 844], 
   await page.goto(BASE + '#/', { waitUntil: 'networkidle' });
   await page.waitForFunction(() => document.querySelector('.today [data-t="kanji"]')?.textContent !== '…');
   p = await panel(page);
-  // the word answered wrong comes back after RULES.WRONG_AFTER (10 min), so right after the session nothing is due
+  // the word answered wrong comes back after 10 min (word-srs.js SRS.AGAIN), so right after the session nothing is due
   ok(p.streak === '3' && p.words === '0' && p.kanji === '0', T('after the session: streak 3, nothing due right now'), JSON.stringify(p));
-  const later = await page.evaluate(() => { const pr = JSON.parse(localStorage.getItem('jp.progress')); for (const v of Object.values(pr)) v.last -= 11 * 6e4; localStorage.setItem('jp.progress', JSON.stringify(pr)); });
+  const later = await page.evaluate(() => { const pr = JSON.parse(localStorage.getItem('jp.progress')); for (const v of Object.values(pr)) { v.last -= 11 * 6e4; if (v.due) v.due -= 11 * 6e4; } localStorage.setItem('jp.progress', JSON.stringify(pr)); });
   void later;
   await page.reload({ waitUntil: 'networkidle' });
   ok((await page.textContent('.today [data-t="words"]')) === '1', T('11 minutes later: the word answered wrong is due again'));

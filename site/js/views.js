@@ -1,8 +1,8 @@
 import { sortGojuon } from './util.js';
-import { $, $$, esc, I, speakCard, toast, modal, download, pickFile, parseText, norm, today, onSwipe, justSwiped, isTyping, hasKanji, soundOn, setSound, autoSpeakOn, setAutoSpeak } from './util.js';
+import { $, $$, esc, I, speakCard, toast, modal, download, pickFile, parseText, norm, today, onSwipe, justSwiped, isTyping, hasKanji, soundOn, setSound, autoSpeakOn, setAutoSpeak, plWord } from './util.js';
 import {
   state, getSets, getSet, isMine, setStats, prog, toggleStar, createSet, addCards, deleteCard, renameSet, deleteSet, markChecked,
-  mostMissed, saveOpts, backupData, restoreBackup, setsExport, localChangeCount, streak, syncAll, onSync,
+  mostMissed, dueCards, saveOpts, backupData, restoreBackup, setsExport, localChangeCount, streak, syncAll, onSync,
 } from './store.js';
 import { MODES, faceHTML, metaHTML } from './modes.js';
 import { todayPanel } from './today.js';
@@ -150,6 +150,7 @@ export function setView(root, id, api) {
   const mine = isMine(set);
   const x = setStats(set);
   const missed = mostMissed(set);
+  const nDue = dueCards(set).length;
   const redraw = () => { const y = window.scrollY; setView(root, id, api); window.scrollTo(0, y); };
   const status = () => {
     if (state.custom.pending[set.id]) return syncBox(true);
@@ -198,6 +199,7 @@ export function setView(root, id, api) {
         <div class="stat m"><b>${x.m}</b><span>Вивчені</span></div>
       </div>
       <div class="stack-bar big"><i class="m" style="width:${(x.m / x.total) * 100}%"></i><i class="l" style="width:${(x.l / x.total) * 100}%"></i></div>
+      ${nDue ? `<div class="due-row"><span><b>${nDue}</b> ${plWord(nDue, ['слово', 'слова', 'слів'])} на повторення зараз</span><button class="btn primary sm" data-due>Повторити</button></div>` : ''}
       ${missed.length ? `<h3 class="sub-title">Найчастіші помилки</h3>
         <ol class="missed">${missed.map(({ c, p }) => `<li><span class="jp" lang="ja">${esc(c.japanese)} <small class="reading">${esc(readingTxt(c))}</small></span><span class="uk">${esc(c.ukrainian)}</span><span class="miss-n">✕ ${p.w}</span></li>`).join('')}</ol>
         <button class="btn primary" data-difficult>Вчити важкі слова</button>`
@@ -319,6 +321,7 @@ export function setView(root, id, api) {
       : `Сховати «${set.title}» на цьому пристрої?\n\nЦе урок з підручника — він залишиться в sets.json.`;
     if (confirm(msg)) { deleteSet(set.id); if (mine) syncAll(); toast(mine ? 'Урок видалено' : 'Урок сховано'); location.hash = '#/'; }
   };
+  $('[data-due]', root)?.addEventListener('click', () => { saveOpts({ filter: 'due' }); location.hash = `${setUrl(set.id)}/write`; });
   $('[data-difficult]', root)?.addEventListener('click', () => { saveOpts({ filter: 'difficult' }); location.hash = `${setUrl(set.id)}/learn`; });
 
   // ----- preview flashcard -----

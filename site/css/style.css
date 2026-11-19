@@ -1470,3 +1470,5 @@ a.streak:hover { border-color: var(--red); }
 .as-hint p { margin: 6px 0 0; padding: 8px 10px; border-left: 3px solid var(--red); background: var(--red-bg); border-radius: 0 8px 8px 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .as-default { border-left-color: var(--border-2); background: var(--panel-2); flex-direction: column; gap: 4px; }
 .as-default .as-def-l { margin: 0; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+.due-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-top: 14px; padding: 10px 12px; border: 1px solid var(--red); border-radius: 10px; background: var(--red-bg); }
+.due-row b { font-size: 1.1rem; }

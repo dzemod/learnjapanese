@@ -1,6 +1,6 @@
 import { $, $$, esc, shuffle, speakCard, speakCardAuto, autoSpeakOn, setAutoSpeak, stopSpeech, check, I, onSwipe, justSwiped, isTyping, sizeClass, toast } from './util.js';
 import { openWordModal } from './edit.js';
-import { state, getSet, prog, record, toggleStar, saveOpts, studyCards, difficultCards, getBest, setBest } from './store.js';
+import { state, getSet, prog, record, toggleStar, saveOpts, studyCards, difficultCards, dueCards, getBest, setBest } from './store.js';
 
 export const MODES = {
   flashcards: { name: 'Картки', jp: '札', desc: 'Перегортай і сортуй', run: flashcards },
@@ -127,7 +127,7 @@ export function modeView(root, setId, mode, api) {
     const cards = studyCards(set);
     renderOpts(panel, def, set, start);
     if (!cards.length) {
-      body.innerHTML = `<div class="empty fade-in"><div class="empty-jp" lang="ja">空</div><p>Немає слів за цим фільтром${state.opts.filter === 'starred' ? ' — спершу позначте слова ★' : state.opts.filter === 'difficult' ? ' — помилок ще немає' : ''}.</p><button class="btn primary" data-all>Вчити всі слова</button></div>`;
+      body.innerHTML = `<div class="empty fade-in"><div class="empty-jp" lang="ja">空</div><p>Немає слів за цим фільтром${state.opts.filter === 'starred' ? ' — спершу позначте слова ★' : state.opts.filter === 'difficult' ? ' — помилок ще немає' : state.opts.filter === 'due' ? ' — зараз нічого не треба повторювати' : ''}.</p><button class="btn primary" data-all>Вчити всі слова</button></div>`;
       $('[data-all]', body).onclick = () => { saveOpts({ filter: 'all' }); start(); };
       return;
     }
@@ -144,14 +144,14 @@ function seg(name, label, items, cur) {
 function renderOpts(panel, def, set, restart) {
   const o = state.opts;
   const nStar = set.cards.filter(c => prog(set.id, c.id).star).length;
-  const nDiff = difficultCards(set).length;
+  const nDiff = difficultCards(set).length, nDue = dueCards(set).length;
   panel.innerHTML =
     (set.kind === 'kanji' ? seg('kanjiAns', 'Що показувати у відповіді', [['both', 'Значення + читання'], ['meaning', 'Лише значення'], ['readings', 'Лише читання']], o.kanjiAns || 'both') : '') +
     (def.noAnswer ? '' : def.key === 'listen'
       ? seg('answer', 'Відповідь', [['uk', 'Значення українською'], ['ja', '日本語 диктант']], o.answer)
       : seg('answer', 'Відповідь', [['uk', 'Українська'], ['ja', '日本語']], o.answer)) +
     (def.key === 'listen' ? seg('listenType', 'Спосіб', [['choose', 'Вибір'], ['type', 'Введення']], o.listenType) : '') +
-    seg('filter', 'Слова', [['all', `Усі ${set.cards.length}`], ['starred', `★ Позначені ${nStar}`], ['difficult', `Важкі ${nDiff}`]], o.filter) +
+    seg('filter', 'Слова', [['all', `Усі ${set.cards.length}`], ['starred', `★ Позначені ${nStar}`], ['difficult', `Важкі ${nDiff}`], ['due', `Повторити ${nDue}`]], o.filter) +
     seg('shuffle', 'Порядок', [['false', 'По порядку'], ['true', 'Перемішати']], o.shuffle);
   $$('.seg', panel).forEach(s => (s.onclick = e => {
     const b = e.target.closest('button');

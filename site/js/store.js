@@ -1,5 +1,6 @@
 import { uid, today, shuffle, hasKanji } from './util.js';
 import { streakInfo } from './streak-calc.js';
+import { schedule, isDue, dueScore } from './word-srs.js';
 
 const K = { progress: 'jp.progress', custom: 'jp.custom', opts: 'jp.opts', days: 'jp.days', activity: 'jp.activity', best: 'jp.best', pw: 'jp.pw' };
 const DEFAULT_OPTS = { answer: 'uk', filter: 'all', shuffle: false, fcSort: true, listenType: 'choose', kanjiAns: 'both', termOrder: 'book' };
@@ -377,9 +378,11 @@ function setProg(setId, cardId, patch) {
   save(K.progress, state.progress);
 }
 
-/** kind: 'mc' (recognition → familiar at most) | 'write' (recall → can reach mastered) */
+/** kind: 'mc' (recognition → familiar at most) | 'write' (recall → can reach mastered). Also the review schedule
+ *  (word-srs.js: due / ivl / ease), computed from the progress before this answer. */
 export function record(setId, cardId, correct, kind = 'write') {
   const p = { ...prog(setId, cardId) };
+  Object.assign(p, schedule(p, correct, kind));
   if (correct) {
     p.c++;
     p.lvl = kind === 'mc' ? Math.max(p.lvl, 1) : p.lvl >= 1 ? 2 : 1;
@@ -418,6 +421,11 @@ export function difficultCards(set) {
     .map(x => x.c);
 }
 
+/** Words of a set that are due for review now (word-srs.js), most overdue first. */
+export function dueCards(set, now = Date.now()) {
+  return set.cards.map(c => ({ c, p: prog(set.id, c.id) })).filter(x => isDue(x.p, now)).sort((a, b) => dueScore(b.p, now) - dueScore(a.p, now)).map(x => x.c);
+}
+
 export function mostMissed(set, n = 5) {
   return set.cards
     .map(c => ({ c, p: prog(set.id, c.id) }))
@@ -431,6 +439,7 @@ export function studyCards(set) {
   let cs = set.cards;
   if (state.opts.filter === 'starred') cs = cs.filter(c => prog(set.id, c.id).star);
   else if (state.opts.filter === 'difficult') cs = difficultCards(set);
+  else if (state.opts.filter === 'due') return dueCards(set); // most overdue first, never shuffled
   return state.opts.shuffle ? shuffle(cs) : cs;
 }
 

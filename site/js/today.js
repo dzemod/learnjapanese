@@ -16,6 +16,8 @@ import { todayLineHTML, bump } from './achievements.js';
 import { noteHintHTML } from './kanji-assoc.js';
 
 // ---------- what is due ----------
+import { isDue, dueScore } from './word-srs.js';
+/** Legacy rules (words answered before the review schedule; word-srs.js LEGACY uses the same values). */
 export const RULES = {
   LEARNING_AFTER: 20 * 36e5, // a learning word (lvl 1) is due again the next day (20 h after its last answer)
   KNOWN_AFTER: 7 * DAY,      // a known word (lvl 2) is due a week after its last answer
@@ -29,15 +31,13 @@ const lset = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } cat
 const sget = k => { try { return JSON.parse(sessionStorage.getItem(k) || 'null'); } catch { return null; } };
 const sset = (k, v) => { try { v == null ? sessionStorage.removeItem(k) : sessionStorage.setItem(k, JSON.stringify(v)); } catch { /* memory only */ } };
 
-/** A word is due when it was studied before and its time has come (see RULES). Most overdue / most missed first. */
+/** A word is due when it was studied before and its review time has come (word-srs.js: its own `due`, or RULES for
+ *  words answered before the schedule existed). Most overdue / most missed first. */
 export function wordsDue(now = Date.now()) {
   const out = [];
   for (const s of getSets()) for (const c of s.cards) {
     const p = prog(s.id, c.id);
-    if (!p.last || !(p.lvl >= 1 || p.w > 0)) continue;
-    const age = now - p.last;
-    const due = (p.w > p.c && age >= RULES.WRONG_AFTER) || (p.lvl === 1 && age >= RULES.LEARNING_AFTER) || (p.lvl >= 2 && age >= RULES.KNOWN_AFTER);
-    if (due) out.push({ setId: s.id, cardId: c.id, score: (p.w - p.c) * 1e6 + age / 6e4 });
+    if (isDue(p, now)) out.push({ setId: s.id, cardId: c.id, score: dueScore(p, now) });
   }
   return out.sort((a, b) => b.score - a.score);
 }
