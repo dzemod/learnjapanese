@@ -1,7 +1,7 @@
 // Progress sync between devices through the learner's own free Puter account (puter.kv: a private key-value store
 // of this site inside the learner's account; "user-pays" — nothing is billed to the site, no key, no server).
 // What is synced (localStorage): word progress, kanji writing schedule, study days, saved exam mistakes (+ when the
-// list was cleared), exam history, best match times, Сенсей level. Merge rules: sync-merge.js (newer answer wins,
+// list was cleared), exam history, best match times, Сенсей level, heatmap counts, achievement dates, kanji associations. Merge rules: sync-merge.js (newer answer wins,
 // unions; symmetric, so devices may sync in any order). Lessons themselves are not synced here (they go to GitHub).
 // Remote layout: head key HEAD = { v, at, id, n, hash } + parts `${HEAD}.${id}.${i}` (the JSON split into strings, so
 // one value never reaches puter.kv.MAX_VALUE_SIZE, 399 KB); a new head is written after its parts, old parts deleted.
@@ -16,7 +16,7 @@ export const HEAD = 'kotoba.progress.v1';
 const PART_CHARS = 60000; // ≤ 180 KB even if every character takes 3 bytes of UTF-8
 const STATE_KEY = 'jp.sync';
 const AUTO_GAP_MS = 2 * 60e3; // automatic syncs at most every 2 minutes
-export const LS = { progress: 'jp.progress', kanji: 'jp.kanjiWrite', days: 'jp.days', mistakes: 'jp.examMistakes', cleared: 'jp.examMistakes.clearedAt', history: 'jp.examHistory', best: 'jp.best', level: 'jp.sensei.level' };
+export const LS = { progress: 'jp.progress', kanji: 'jp.kanjiWrite', days: 'jp.days', mistakes: 'jp.examMistakes', cleared: 'jp.examMistakes.clearedAt', history: 'jp.examHistory', best: 'jp.best', level: 'jp.sensei.level', activity: 'jp.activity', unlocked: 'jp.achievements', notes: 'jp.kanjiNotes' };
 export const MSG = {
   signin: 'Щоб синхронізувати прогрес, увійдіть у безкоштовний акаунт Puter',
   fail: 'Не вдалося синхронізувати, спробуйте ще раз',
@@ -36,12 +36,14 @@ export function localData() {
     progress: get(LS.progress, {}), kanji: get(LS.kanji, {}), days: get(LS.days, []),
     mistakes: { items: get(LS.mistakes, []), clearedAt: +get(LS.cleared, 0) || 0 },
     history: get(LS.history, []), best: get(LS.best, {}), level: getRaw(LS.level),
+    activity: get(LS.activity, {}), unlocked: get(LS.unlocked, {}), notes: get(LS.notes, {}),
   };
 }
 function writeLocal(d) {
   set(LS.progress, d.progress); set(LS.kanji, d.kanji); set(LS.days, d.days);
   set(LS.mistakes, d.mistakes.items); set(LS.cleared, d.mistakes.clearedAt);
   set(LS.history, d.history); set(LS.best, d.best);
+  set(LS.activity, d.activity); set(LS.unlocked, d.unlocked); set(LS.notes, d.notes);
   if (d.level != null) setRaw(LS.level, String(d.level));
   reloadProgressFromStorage();
 }
@@ -120,7 +122,7 @@ export function mountSyncBlock(root) {
   const draw = () => {
     const s = syncState();
     box.innerHTML = `<h3 class="sp-title">Синхронізація між пристроями</h3>
-      <p class="muted small">Прогрес слів і канджі, дні навчання, збережені помилки й історія екзаменів зберігаються у вашому безкоштовному акаунті Puter (той самий, що для Сенсея) і з’єднуються на всіх пристроях, де ви увійшли. Якщо вчилися на двох пристроях без інтернету, нічого не загубиться: для кожного слова береться новіша відповідь.</p>
+      <p class="muted small">Прогрес слів і канджі, дні навчання, досягнення, асоціації до канджі, збережені помилки й історія екзаменів зберігаються у вашому безкоштовному акаунті Puter (той самий, що для Сенсея) і з’єднуються на всіх пристроях, де ви увійшли. Якщо вчилися на двох пристроях без інтернету, нічого не загубиться: для кожного слова береться новіша відповідь.</p>
       <p class="sp-status small">${busy ? '<span class="spinner"></span> Синхронізую…' : s.error ? `<span class="ask-err">${esc(s.error)}</span>` : s.on ? `Увімкнено${s.last ? ` · остання синхронізація: ${esc(when(s.last))}` : ''}` : 'Вимкнено: прогрес зберігається лише в цьому браузері.'}</p>
       <div class="btn-row">${s.on ? '<button type="button" class="btn primary sm" data-sync-now>Синхронізувати зараз</button><button type="button" class="btn ghost sm" data-sync-off>Вимкнути</button>' : '<button type="button" class="btn primary sm" data-sync-on>Увімкнути синхронізацію</button>'}</div>`;
     const run = async () => {

@@ -492,7 +492,7 @@ function askContext(q, a) {
 
 // ---------- session ----------
 let S = null; // { conf, qs, i, res: [{ok, given}], start, deadline }
-const persist = () => { ssave(K.session, S); if (S?.answered) markStudied(); }; // an answer = a study day
+const persist = () => { ssave(K.session, S); if (S?.answered) markStudied(`exam:${S.start}:${S.i}`); }; // an answer = a study day (counted once)
 /** «Сьогодні»: an exam of saved mistakes (the same session as «Повторити мої помилки» in the setup). */
 export function startMistakesExam(qs, name = 'Сьогодні: мої помилки') {
   const c = { ...DEFAULT, ...(load(K.presets + '.last', null) || {}) };

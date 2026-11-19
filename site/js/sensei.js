@@ -10,6 +10,7 @@ import { $, $$, esc, modal } from './util.js';
 import { chat, loadPuter, MSG_FAIL, TRANSLIT, SENSEI_PREFILL } from './ai-helper.js';
 import { renderReply } from './reply-md.js';
 import { loadGrammar, grammarLessons } from './grammar.js';
+import { bump } from './achievements.js';
 
 // ---------- the illustration: input bar on the outstretched hands ----------
 // sensei-cutout.(webp|png) = the figure cropped from reference/sensei (tools/make-sensei-cutout.mjs), 538 × 471 px.
@@ -230,6 +231,7 @@ export function senseiView(root, startMode = '') {
     draw('typing');
     const r = await chat(buildMessages(log, q, systemFor(M, level())), { signin: MSG_SIGNIN, maxTokens: MAX_TOKENS, timeoutMs: TIMEOUT_MS });
     busy = false;
+    if (r.answer) bump('sensei');
     if (r.answer) writeLog(M, [...readLog(M), r.cut ? { r: 'a', t: r.answer, cut: true } : { r: 'a', t: r.answer }]);
     else {
       // not answered: take the message back into the input, so nothing is lost

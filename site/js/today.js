@@ -12,6 +12,8 @@ import { loadKanji, books as kanjiBooks, kanjiVG } from './kanji.js';
 import { RATINGS, applyRating, nextInterval, fmtInterval, status as kStatus, DAY } from './stroke-match.js';
 import { startMistakesExam, savedMistakeList } from './exam.js';
 import { kunHTML } from './modes.js';
+import { todayLineHTML, bump } from './achievements.js';
+import { noteHintHTML } from './kanji-assoc.js';
 
 // ---------- what is due ----------
 export const RULES = {
@@ -74,6 +76,7 @@ export function todayPanel(slot) {
         <a class="today-cell" href="#/kanji/write"><b data-t="kanji">${kanjiReady ? kanjiN : '…'}</b><span>${plWord(kanjiN, ['канджі', 'канджі', 'канджі'])} для письма</span></a>
         <a class="today-cell" href="#/exam"><b data-t="exam">${mist.length}</b><span>${plWord(mist.length, ['помилка', 'помилки', 'помилок'])} з екзамену</span></a>
       </div>
+      ${todayLineHTML()}
       ${any ? `<a class="btn primary today-start" href="#/today" data-start-today>Почати сесію <small>≈ 15 хв</small></a>` : `<p class="muted small today-empty">${studiedToday() ? 'На сьогодні все повторено. 🎉' : 'Поки нічого не треба повторювати: вивчіть кілька слів уроку або напишіть канджі — і вони з’являться тут.'}</p>`}
     </section>`;
   };
@@ -115,6 +118,7 @@ export async function todaySessionView(root) {
       return;
     }
     if (S.i >= total) {
+      bump('todayDone');
       frame(`<div class="empty today-done"><div class="empty-jp" lang="ja">完</div><p>Сесію завершено: ${n(S.plan.words.length, ['слово', 'слова', 'слів'])}, ${n(S.plan.kanji.length, ['канджі', 'канджі', 'канджі'])}${S.plan.exam ? `, ${n(S.plan.exam, ['помилка', 'помилки', 'помилок'])} з екзамену` : ''}.</p><a class="btn primary" href="#/">На головну</a></div>`);
       sset(SESSION_KEY, null);
       return;
@@ -150,6 +154,7 @@ export async function todaySessionView(root) {
     frame(`<section class="panel today-card"><p class="eyebrow">Канджі · письмо</p>
       <div class="today-q">${esc(k.meaning)}</div>
       <div class="kw-rd">${k.on.length ? `<span class="kw-rl">Он</span>${k.on.map(r => `<span class="kw-chip" lang="ja">${esc(r)}</span>`).join('')}` : ''}${k.kun.length ? ` <span class="kw-rl">Кун</span>${k.kun.map(r => `<span class="kw-chip" lang="ja">${kunHTML(r)}</span>`).join('')}` : ''}</div>
+      ${noteHintHTML(k, true)}
       <p class="muted small">Напишіть канджі на папері або пальцем у повітрі, потім перевірте. <a href="#/kanji/write/${encodeURIComponent(lessonId)}/${encodeURIComponent(id)}">Писати на екрані</a></p>
       <div class="today-a" hidden><div class="today-kanji" lang="ja">${esc(k.kanji)}</div><svg class="today-kvg" viewBox="0 0 109 109" aria-label="Порядок рисок"></svg></div>
       <div class="btn-row today-btns"><button type="button" class="btn primary wide" data-show>Показати</button></div></section>`);

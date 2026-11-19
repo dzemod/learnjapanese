@@ -9,6 +9,8 @@ import {
 } from './store.js';
 import { MODES, kunHTML } from './modes.js';
 import { parseLabels, spreadLabels } from './kvg-labels.js';
+import { partsFromSVG } from './kanji-parts.js';
+import { mountAssoc } from './kanji-assoc.js';
 
 const K = { base: null, loading: null, error: false };
 const BOOKS_FALLBACK = [];
@@ -188,6 +190,12 @@ export function editWord(lessonId, wordId, done) {
   });
 }
 
+/** Ukrainian meaning of a kanji that is one of the book kanji ('' otherwise) — for the components of «Асоціація». */
+export function meaningOf(ch) {
+  for (const b of books()) for (const l of b.lessons) { const k = l.kanji.find(x => x.kanji === ch); if (k) return k.meaning; }
+  return '';
+}
+
 // ---------- stroke order (KanjiVG) ----------
 const svgCache = new Map();
 // Pinned release: jsDelivr throttles @master (HTTP 403); GitHub raw is the fallback.
@@ -203,7 +211,7 @@ export function kanjiVG(ch) {
         const doc = new DOMParser().parseFromString(t, 'image/svg+xml');
         const paths = [...doc.querySelectorAll('path')].filter(p => /-s\d+$/.test(p.getAttribute('id') || '')).map(p => p.getAttribute('d'));
         const nums = [...doc.querySelectorAll('text')].map(t => ({ t: t.textContent, tr: t.getAttribute('transform') || '' }));
-        return { paths, nums };
+        return { paths, nums, parts: partsFromSVG(t, ch) }; // parts: components for «Асоціація»
       })
       .catch(e => { svgCache.delete(hex); throw e; }));
   }
@@ -270,6 +278,7 @@ export function openKanji(lessonId, kanjiId, onChange) {
           ${k.on.length ? `<div><span class="kb-l">он</span><span lang="ja">${esc(k.on.join('、'))}</span></div>` : ''}
           ${k.kun.length ? `<div><span class="kb-l">кун</span><span lang="ja">${k.kun.map(kunHTML).join('、')}</span></div>` : ''}
         </div>
+        <div class="kc-assoc"></div>
         <h3 class="sub-title">Слова з цим канджі</h3>
         <div class="kc-ex">${(k.examples || []).map(e => `<div class="kc-exrow ${e.check ? 'needs-check' : ''}" data-ex="${esc(e.id)}">
             <span class="jp" lang="ja">${esc(e.word)}</span>${e.kana && e.kana !== e.word ? `<span class="reading" lang="ja">(${esc(e.kana)})</span>` : ''}
@@ -282,6 +291,7 @@ export function openKanji(lessonId, kanjiId, onChange) {
         </div>
         <p class="kvg-note muted">Порядок рисок: KanjiVG © Ulrich Apel, CC BY-SA 3.0</p>`;
       const replay = strokeOrder($('.so-box', box), k.kanji);
+      mountAssoc($('.kc-assoc', box), k, { getParts: () => kanjiVG(k.kanji).then(d => d.parts), meaningOf });
       $('[data-replay]', box).onclick = replay;
       $('[data-star]', box).onclick = e => { e.currentTarget.classList.toggle('on', toggleStar(lessonId, k.id)); onChange?.(); };
       $('[data-say]', box).onclick = () => speakCard(kanjiCard(k));

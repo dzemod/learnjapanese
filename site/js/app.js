@@ -1,5 +1,5 @@
 import { $, stopSpeech, modal, plWord, soundOn, setSound, I } from './util.js';
-import { loadBase, streak, studiedToday, setPasswordPrompt, syncAll, state, onSync } from './store.js';
+import { loadBase, streakData, studiedToday, setPasswordPrompt, syncAll, state, onSync } from './store.js';
 import { bulkEditView } from './edit.js';
 import { homeView, setView, editorView } from './views.js';
 import { modeView } from './modes.js';
@@ -11,6 +11,7 @@ import { translateView } from './translate.js';
 import { senseiView } from './sensei.js';
 import { todaySessionView } from './today.js';
 import { initProgressSync } from './sync-progress.js';
+import { achievementsView, initAchievements } from './achievements.js';
 
 const app = $('#app');
 let cleanup = null;
@@ -32,10 +33,11 @@ document.addEventListener('keydown', e => {
 });
 
 function refreshStreak() {
-  const n = streak();
+  const st = streakData(), n = st.streak;
   const el = $('#streak');
-  el.innerHTML = `<span class="streak-dot ${studiedToday() ? 'on' : ''}"></span><b>${n}</b><span class="streak-lbl">${plWord(n, ['день', 'дні', 'днів'])}</span>`;
-  el.title = studiedToday() ? 'Сьогодні ви вже вчилися' : 'Повчіться сьогодні, щоб не перервати серію';
+  el.innerHTML = `<span class="streak-dot ${studiedToday() ? 'on' : ''}"></span><b>${n}</b><span class="streak-lbl">${plWord(n, ['день', 'дні', 'днів'])}</span>${st.freezes ? `<span class="streak-fz" aria-hidden="true">❄${st.freezes > 1 ? st.freezes : ''}</span>` : ''}`;
+  el.title = (studiedToday() ? 'Сьогодні ви вже вчилися' : 'Повчіться сьогодні, щоб не перервати серію') + (st.freezes ? ` · заморозок: ${st.freezes}` : '') + ' · Досягнення';
+  el.setAttribute('aria-label', `Серія: ${n} ${plWord(n, ['день', 'дні', 'днів'])}${st.freezes ? `, заморозок ${st.freezes}` : ''}. Досягнення`);
 }
 
 let routeNo = 0;
@@ -65,6 +67,7 @@ async function route() {
   else if (parts[0] === 'kanji') out(parts[1] ? kanjiLessonView(app, parts[1], parts[2]) : kanjiHome(app));
   else if (parts[0] === 'translate') out(translateView(app, parts.slice(1).join('/')));
   else if (parts[0] === 'sensei') out(senseiView(app, parts[1] || ''));
+  else if (parts[0] === 'achievements') out(achievementsView(app));
   else if (parts[0] === 'today') { await todaySessionView(app); if (my !== routeNo) return; }
   else if (parts[0] === 'exam') { const v = await examView(app, parts[1]); if (my === routeNo) out(v); }
   else if (parts[0] === 'set' && parts[1] && isKanjiSet(parts[1]) && (!parts[2] || ['add', 'edit'].includes(parts[2]))) {
@@ -135,6 +138,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.se
   if (Object.keys(state.custom.pending).length) syncAll({ interactive: false });
   window.addEventListener('hashchange', route);
   route();
+  initAchievements(); // achievements.js: checks after study actions, navigation and sync
   initProgressSync(); // progress sync between devices (sync-progress.js; only if the learner turned it on)
 })();
 

@@ -5,6 +5,7 @@
 import { $, $$, esc, I } from './util.js';
 import { books, kanjiVG } from './kanji.js';
 import { markStudied } from './store.js';
+import { noteHintHTML } from './kanji-assoc.js';
 import { kunHTML } from './modes.js';
 import {
   STROKE, judgeStroke, RATINGS, nextInterval, applyRating, counts, buildQueue, fmtInterval,
@@ -130,6 +131,7 @@ export function kanjiWriteView(root, scope = '', startId = '') {
           <div class="kw-meaning">${esc(k.meaning)}</div>
           ${k.on.length ? `<div class="kw-rd"><span class="kw-rl">Он</span>${k.on.map(r => `<span class="kw-chip" lang="ja">${esc(r)}</span>`).join('')}</div>` : ''}
           ${k.kun.length ? `<div class="kw-rd"><span class="kw-rl">Кун</span>${k.kun.map(r => `<span class="kw-chip" lang="ja">${kunHTML(r)}</span>`).join('')}</div>` : ''}
+          ${noteHintHTML(k, !isNew)}
         </div>
       </div>
       <details class="kw-ex">

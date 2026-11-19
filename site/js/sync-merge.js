@@ -9,6 +9,10 @@
 //   history    jp.examHistory   [{ at, name, … }] → union by at + name (last 60, oldest first)
 //   best       jp.best          { setId: ms } → per set the faster time
 //   level      jp.sensei.level  "N" → this device's value; another device's only if this one has none
+//   activity   jp.activity      { "YYYY-MM-DD": n } → per day the larger count (last 800 days) — the heatmap
+//   unlocked   jp.achievements  { id: time } → union, the earliest unlock wins (ach-rules.js mergeUnlocked)
+//   notes      jp.kanjiNotes    { kanjiId: { t, at } } → per kanji the newer note wins (an emptied note has t: "")
+import { mergeUnlocked } from './ach-rules.js';
 
 const obj = v => (v && typeof v === 'object' && !Array.isArray(v) ? v : {});
 const arr = v => (Array.isArray(v) ? v : []);
@@ -67,9 +71,27 @@ export function mergeBest(a, b) {
   }
   return out;
 }
+export function mergeActivity(a, b) {
+  a = obj(a); b = obj(b);
+  const out = {};
+  const keys = [...new Set([...Object.keys(a), ...Object.keys(b)])].filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort().slice(-800);
+  for (const k of keys) { const v = Math.max(+a[k] || 0, +b[k] || 0); if (v) out[k] = v; }
+  return out;
+}
+export function mergeNotes(a, b) {
+  a = obj(a); b = obj(b);
+  const out = {};
+  for (const k of [...new Set([...Object.keys(a), ...Object.keys(b)])].sort()) {
+    const x = a[k] && typeof a[k] === 'object' ? a[k] : null, y = b[k] && typeof b[k] === 'object' ? b[k] : null;
+    const v = !x ? y : !y ? x : (+x.at || 0) !== (+y.at || 0) ? ((+x.at || 0) > (+y.at || 0) ? x : y) : byJSON(x, y);
+    if (v) out[k] = v;
+  }
+  return out;
+}
+export { mergeUnlocked };
 export const mergeLevel = (local, remote) => (local != null && local !== '' ? local : remote ?? null);
 
-/** All datasets at once: { progress, kanji, days, mistakes, history, best, level } (missing parts = empty). */
+/** All datasets at once: { progress, kanji, days, mistakes, history, best, level, activity, unlocked, notes } (missing parts = empty). */
 export function mergeAll(local, remote) {
   local = obj(local); remote = obj(remote);
   return {
@@ -80,5 +102,8 @@ export function mergeAll(local, remote) {
     history: mergeHistory(local.history, remote.history),
     best: mergeBest(local.best, remote.best),
     level: mergeLevel(local.level, remote.level),
+    activity: mergeActivity(local.activity, remote.activity),
+    unlocked: mergeUnlocked(local.unlocked, remote.unlocked),
+    notes: mergeNotes(local.notes, remote.notes),
   };
 }

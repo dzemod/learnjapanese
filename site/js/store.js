@@ -1,6 +1,7 @@
-import { uid, today, fmtDate, shuffle, hasKanji } from './util.js';
+import { uid, today, shuffle, hasKanji } from './util.js';
+import { streakInfo } from './streak-calc.js';
 
-const K = { progress: 'jp.progress', custom: 'jp.custom', opts: 'jp.opts', days: 'jp.days', best: 'jp.best', pw: 'jp.pw' };
+const K = { progress: 'jp.progress', custom: 'jp.custom', opts: 'jp.opts', days: 'jp.days', activity: 'jp.activity', best: 'jp.best', pw: 'jp.pw' };
 const DEFAULT_OPTS = { answer: 'uk', filter: 'all', shuffle: false, fcSort: true, listenType: 'choose', kanjiAns: 'both', termOrder: 'book' };
 
 function load(k, def) {
@@ -17,6 +18,7 @@ export const state = {
   progress: load(K.progress, {}),
   opts: { ...DEFAULT_OPTS, ...load(K.opts, {}) },
   days: load(K.days, []),
+  activity: load(K.activity, {}), // { 'YYYY-MM-DD': number of study actions } — the heatmap (achievements.js)
   best: load(K.best, {}),
   sync: { configured: null, busy: false, error: '' },
 };
@@ -438,22 +440,29 @@ export function saveOpts(patch) {
 }
 
 // ---------- Streak ----------
-export function markStudied() {
+let lastKey = '';
+/** One study action (a word answered, a kanji rated, an exam answer, a «Сьогодні» item): marks the day, counts it for
+ *  the heatmap and tells the achievements (event kotoba:studied). `key`: the same action reported twice is counted once. */
+export function markStudied(key = '') {
+  if (key && key === lastKey) return;
+  lastKey = key;
   const t = today();
   if (!state.days.includes(t)) {
     state.days.push(t);
     state.days = state.days.slice(-800);
     save(K.days, state.days);
   }
+  state.activity = load(K.activity, state.activity); // another tab may have counted too
+  state.activity[t] = (+state.activity[t] || 0) + 1;
+  const keys = Object.keys(state.activity).sort();
+  if (keys.length > 800) for (const k of keys.slice(0, keys.length - 800)) delete state.activity[k];
+  save(K.activity, state.activity);
+  try { document.dispatchEvent(new CustomEvent('kotoba:studied')); } catch { /* not in a browser */ }
 }
-export function streak() {
-  const days = new Set(state.days);
-  const d = new Date();
-  if (!days.has(fmtDate(d))) d.setDate(d.getDate() - 1);
-  let n = 0;
-  while (days.has(fmtDate(d))) { n++; d.setDate(d.getDate() - 1); }
-  return n;
-}
+/** Streak with freezes (streak-calc.js): { streak, best, freezes, frozen, freezeUsed, total, comeback, nextFreezeIn }. */
+export const streakData = () => streakInfo(state.days, today());
+export const streak = () => streakData().streak;
+export const activity = () => ({ ...state.activity });
 export const studiedToday = () => state.days.includes(today());
 /** The study-day log (localStorage jp.days, YYYY-MM-DD, last 800 days): a day counts when at least one item was
  *  completed — a word answered (record), a kanji rated in the writing mode, an exam answer, a «Сьогодні» item. */
@@ -462,6 +471,7 @@ export const studyDays = () => [...state.days];
 export function reloadProgressFromStorage() {
   state.progress = load(K.progress, {});
   state.days = load(K.days, []);
+  state.activity = load(K.activity, {});
   state.best = load(K.best, {});
 }
 
@@ -470,10 +480,13 @@ export const getBest = id => state.best[id] || null;
 export function setBest(id, t) { state.best[id] = t; save(K.best, state.best); }
 
 // ---------- Backup ----------
+// Other per-learner data kept in the backup: heatmap counts, kanji associations, achievements.
+const EXTRA_KEYS = [K.activity, 'jp.kanjiNotes', 'jp.achievements', 'jp.ach.counts'];
 export function backupData() {
   return {
     app: 'kotoba', version: 2, exported: new Date().toISOString(),
     progress: state.progress, custom: state.custom, opts: state.opts, days: state.days, best: state.best,
+    extra: Object.fromEntries(EXTRA_KEYS.map(k => [k, load(k, null)]).filter(([, v]) => v != null)),
   };
 }
 export function restoreBackup(obj) {
@@ -483,6 +496,8 @@ export function restoreBackup(obj) {
   state.opts = { ...DEFAULT_OPTS, ...(obj.opts || {}) };
   state.days = obj.days || [];
   state.best = obj.best || {};
+  for (const k of EXTRA_KEYS) if (obj.extra && obj.extra[k] != null) save(k, obj.extra[k]);
+  state.activity = load(K.activity, {});
   save(K.progress, state.progress); saveCustom(); save(K.opts, state.opts); save(K.days, state.days); save(K.best, state.best);
 }
 /** Merged sets in sets.json format — for Claude to make permanent. */
