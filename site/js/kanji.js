@@ -203,7 +203,16 @@ const svgCache = new Map();
 const KVG = 'r20260714';
 const KVG_URLS = [`https://cdn.jsdelivr.net/gh/KanjiVG/kanjivg@${KVG}/kanji/`, `https://raw.githubusercontent.com/KanjiVG/kanjivg/${KVG}/kanji/`];
 const getText = url => fetch(url).then(r => { if (!r.ok) throw new Error(r.status); return r.text(); });
-const fetchSVG = hex => getText(KVG_URLS[0] + hex + '.svg').catch(() => getText(KVG_URLS[1] + hex + '.svg'));
+// After jsDelivr refuses once (HTTP 403 rate limit when many files load, e.g. the collection board or a print sheet),
+// GitHub raw is asked first for the rest of the visit, so the failing request is not repeated for every kanji.
+let kvgOrder = [0, 1];
+const fetchSVG = async hex => {
+  const [first, second] = kvgOrder;
+  try { return await getText(KVG_URLS[first] + hex + '.svg'); } catch {
+    if (first === 0) kvgOrder = [1, 0];
+    return getText(KVG_URLS[second] + hex + '.svg');
+  }
+};
 export function kanjiVG(ch) {
   const hex = ch.codePointAt(0).toString(16).padStart(5, '0');
   if (!svgCache.has(hex)) {

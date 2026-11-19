@@ -56,6 +56,27 @@ for (const [kind, width, height] of [['phone', 375, 812], ['desktop', 1280, 860]
   ok(!errs.length, T('no page errors'), errs.join(' | '));
   await ctx.close();
 }
+// jsDelivr refuses (403): asked once, then every stroke file comes from GitHub raw
+{
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  let cdn = 0, raw = 0;
+  await ctx.route(/cdn\.jsdelivr\.net\/gh\/KanjiVG\//, r => { cdn++; return r.fulfill({ status: 403, body: '' }); });
+  await ctx.route(/raw\.githubusercontent\.com\/KanjiVG\/kanjivg\/[^/]+\/kanji\/([0-9a-f]+)\.svg$/, r => {
+    raw++;
+    const f = path.join(KVG_DIR, /([0-9a-f]+)\.svg$/.exec(r.request().url())[1] + '.svg');
+    return r.fulfill({ status: 200, contentType: 'image/svg+xml', body: fs.readFileSync(f, 'utf8') });
+  });
+  const page = await ctx.newPage();
+  await page.goto(BASE + '#/kanji/print/k300-03', { waitUntil: 'networkidle' });
+  await page.waitForSelector('[data-print]:not([disabled])', { timeout: 20000 });
+  const steps = await page.locator('.kp-row .kp-steps svg').count();
+  ok(steps > 100 && raw === 20 && cdn <= 20, `jsDelivr 403 → GitHub raw (cdn ${cdn}, raw ${raw}, steps ${steps})`);
+  const cdnBefore = cdn;
+  await page.goto(BASE + '#/kanji/print/k300-04', { waitUntil: 'networkidle' });
+  await page.waitForSelector('[data-print]:not([disabled])', { timeout: 20000 });
+  ok(cdn === cdnBefore && raw === 40, `next lesson: GitHub raw first, jsDelivr not asked again (cdn ${cdn}, raw ${raw})`);
+  await ctx.close();
+}
 // real PDFs
 for (const id of ['k300-01', 'k700-32']) {
   const ctx = await context({ viewport: { width: 1280, height: 900 } });
