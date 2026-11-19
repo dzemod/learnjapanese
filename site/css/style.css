@@ -836,13 +836,14 @@ body[data-view="grammar"] main, body[data-view="kanji"] main { max-width: 1040px
 /* ==========================================================================
    Exam tab
    ========================================================================== */
-.tabs-nav { grid-template-columns: repeat(6, auto); }
+.tabs-nav { grid-template-columns: repeat(7, auto); }
 .tabs-nav a { font-size: .82rem; gap: 5px; padding: 0 4px; min-width: 0; }
-@media (min-width: 760px) { .tabs-nav { min-width: 560px; } .tabs-nav a { font-size: .9rem; padding: 0 8px; } }
+@media (min-width: 760px) { .tabs-nav { min-width: 640px; } .tabs-nav a { font-size: .9rem; padding: 0 8px; } }
 @media (max-width: 600px) { .tn-jp { display: none; } .tabs-nav a { font-size: .76rem; letter-spacing: -.01em; } }
 body[data-tab="exam"] .tabs-nav [data-tab="exam"],
 body[data-tab="translate"] .tabs-nav [data-tab="translate"],
-body[data-tab="sensei"] .tabs-nav [data-tab="sensei"] { background: var(--red); color: #fff; }
+body[data-tab="sensei"] .tabs-nav [data-tab="sensei"],
+body[data-tab="dict"] .tabs-nav [data-tab="dict"] { background: var(--red); color: #fff; }
 body[data-view="exam"] main { max-width: 860px; }
 .ex-setup .sec-title { margin-top: 18px; }
 .ex-setup .sec-title:first-child { margin-top: 0; }
@@ -1257,7 +1258,7 @@ body.kw-rating main { padding-bottom: 110px; }
 /* ==========================================================================
    Сенсей tab (#/sensei): chat with the AI mentor — sharp corners, red accent
    ========================================================================== */
-@media (max-width: 480px) { .tabs-nav { grid-template-columns: repeat(3, 1fr); } } /* 6 tabs: two rows of three on phones */
+@media (max-width: 480px) { .tabs-nav { grid-template-columns: repeat(4, 1fr); } } /* 7 tabs: two rows (4 + 3) on phones */
 .sensei { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
 .ss-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
 .ss-head h1 { margin: 0; }
@@ -1621,3 +1622,43 @@ button.kb-c:hover { outline: 2px solid var(--text); outline-offset: 1px; }
 .sp-out { min-height: 3.2em; margin-top: 10px; }
 .sp-verdict { font-weight: 700; margin: 0 0 4px; }
 .sp-verdict.good { color: var(--green); } .sp-verdict.close { color: var(--amber); } .sp-verdict.retry { color: #FF4D67; }
+
+/* «Словник» (dict.js) */
+.dc-search { display: flex; gap: 8px; margin-bottom: 12px; }
+.dc-search .search { flex: 1; min-width: 0; }
+.dc-load { display: grid; gap: 6px; margin: 4px 0 12px; }
+.dc-links { margin-bottom: 8px; }
+.dc-favs { display: flex; flex-wrap: wrap; gap: 6px; }
+.dc-fav small { font-size: .78rem; }
+.dc-list { display: grid; gap: 8px; }
+.dc-item { display: grid; gap: 4px; padding: 12px 14px; background: var(--panel); border: 1px solid var(--border); border-radius: var(--r); min-width: 0; }
+.dc-item:hover { border-color: var(--red); }
+.dc-item > div:first-child { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.dc-main { font-family: var(--jp); font-size: 1.35rem; font-weight: 700; }
+.dc-common { color: var(--green); border-color: rgba(95, 191, 138, .5); font-size: .72rem; }
+.dc-mine { color: var(--text); font-weight: 600; }
+.dc-mine.big { font-size: 1.15rem; margin: 8px 0; }
+.dc-senses { margin: 0; padding-left: 1.2em; color: var(--muted); font-size: .92rem; display: grid; gap: 2px; overflow-wrap: anywhere; }
+.dc-senses [lang="en"] { color: var(--text); }
+.dc-pos { color: var(--amber); font-size: .8rem; }
+.dc-kanji-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); gap: 8px; margin-bottom: 14px; }
+.dc-k { display: grid; justify-items: center; gap: 2px; padding: 8px 4px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; text-align: center; min-width: 0; }
+.dc-k:hover { border-color: var(--red); }
+.dc-k b { font-family: var(--jp); font-size: 1.8rem; line-height: 1.1; }
+.dc-k small { color: var(--muted); font-size: .72rem; overflow-wrap: anywhere; }
+.dc-whead, .dc-khead { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 14px; }
+.dc-big { font-family: var(--jp); font-size: 2.4rem; font-weight: 700; }
+.dc-rd { font-size: 1.1rem; }
+.dc-acts { margin-left: auto; display: flex; gap: 4px; }
+.dc-kbig { font-family: var(--jp); font-size: 4.5rem; line-height: 1; }
+.dc-so { width: 120px; height: 120px; }
+.dc-kmean { font-size: 1.15rem; margin: 10px 0 4px; }
+.dc-kpage .as-note { margin-top: 10px; }
+.dc-lic { margin-top: 18px; }
+.dc-radsel { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; font-family: var(--jp); }
+.dc-rads { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 10px; }
+.dc-r { min-width: 38px; height: 38px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel-2); color: var(--text); font-family: var(--jp); font-size: 1.1rem; cursor: pointer; }
+.dc-r.on { background: var(--red); border-color: var(--red); color: #fff; }
+.dc-r.dim { opacity: .25; cursor: default; }
+.dc-rs { display: inline-grid; place-items: center; min-width: 26px; height: 38px; color: var(--red); font-weight: 800; font-size: .85rem; }
+.dc-found { max-height: 46vh; overflow-y: auto; }

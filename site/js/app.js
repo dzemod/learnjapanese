@@ -17,6 +17,7 @@ import { achievementsView, initAchievements } from './achievements.js';
 import { drillView } from './drill.js';
 import { readView } from './read.js';
 import { speakView } from './speak.js';
+import { dictView } from './dict.js';
 import { weekView } from './week-view.js';
 import { initPWA } from './pwa.js';
 
@@ -60,7 +61,7 @@ async function route() {
   window.scrollTo(0, 0);
   const kanjiRoute = parts[0] === 'kanji' || (parts[0] === 'set' && isKanjiSet(parts[1] || ''));
   document.body.dataset.view = parts[0] === 'kanji' && parts[1] === 'write' ? 'mode' : parts[0] === 'set' && parts[2] && !['add', 'edit'].includes(parts[2]) ? 'mode' : parts[0] || 'home';
-  document.body.dataset.tab = kanjiRoute ? 'kanji' : parts[0] === 'grammar' ? 'grammar' : parts[0] === 'exam' ? 'exam' : parts[0] === 'translate' ? 'translate' : parts[0] === 'sensei' ? 'sensei' : 'words';
+  document.body.dataset.tab = kanjiRoute ? 'kanji' : parts[0] === 'grammar' ? 'grammar' : parts[0] === 'exam' ? 'exam' : parts[0] === 'translate' ? 'translate' : parts[0] === 'sensei' ? 'sensei' : parts[0] === 'dict' ? 'dict' : 'words';
   returnButton(parts[0]);
   if (kanjiRoute || parts[0] === 'grammar') {
     app.innerHTML = '<div class="loading"><span class="sun pulse"></span></div>';
@@ -78,6 +79,7 @@ async function route() {
   else if (parts[0] === 'sensei') out(senseiView(app, parts[1] || ''));
   else if (parts[0] === 'achievements') out(achievementsView(app));
   else if (parts[0] === 'week') { await weekView(app, parts[1] || '0'); if (my !== routeNo) return; }
+  else if (parts[0] === 'dict') { const v = await dictView(app, parts.slice(1)); if (my === routeNo) out(v); }
   else if (parts[0] === 'read') readView(app);
   else if (parts[0] === 'speak') out(speakView(app));
   else if (parts[0] === 'drill') out(drillView(app, parts[1] || ''));

@@ -227,8 +227,8 @@ export function kanjiVG(ch) {
   }
   return svgCache.get(hex);
 }
-/** Draw the animated stroke order into `box`. Returns a replay function. */
-function strokeOrder(box, ch) {
+/** Draw the animated stroke order into `box`. Returns a replay function. (Also used by the «Словник» kanji page.) */
+export function strokeOrder(box, ch) {
   box.innerHTML = '<div class="so-loading"><span class="spinner"></span></div>';
   let data = null, anims = [];
   const draw = () => {
