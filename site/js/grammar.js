@@ -3,9 +3,48 @@
 // point.blocks = textbook (IV. Граматика, 文型, 例文 — never changed by extra work); point.details = «Детальніше» (optional extra blocks).
 // Blocks: { h } subheading · { p } paragraph · { note } note · { ex, uk, src? } example · { table: [[...]] }
 // Japanese text uses furigana markup {漢字|かんじ}, shown as 漢字(かんじ).
-import { $, $$, esc, I, furi, furiT, furiPlain, furiSay, furiBase, speak, norm } from './util.js';
+import { $, $$, esc, I, furi, furiT, furiPlain, furiSay, furiBase, speak, norm, toast, plWord } from './util.js';
 import { mountAskBlock, examQuestionFor } from './ai-helper.js';
 import { playOfferHTML } from './games.js';
+import { gsLoad, addPoints, removePoints, grammarDue, nextDue } from './grammar-srs.js';
+import { fmtIvl } from './word-srs.js';
+
+// ---------- grammar review (grammar-srs.js; questions + runner from exam.js, loaded on demand: exam.js imports this file) ----------
+const exam = () => import('./exam.js');
+const REVIEW_MAX = 10; // points per review run (≈ 2 questions each)
+const PUNKT = ['пункт', 'пункти', 'пунктів'];
+const pl = n => `${n} ${plWord(n, PUNKT)}`;
+// «зараз» / «через 3 дн.» (from 20 h on in days, so a review due tomorrow is never «через 24 год»)
+const whenTxt = t => { if (t == null) return ''; const ms = t - Date.now(); return ms <= 0 ? 'зараз' : `через ${fmtIvl(ms >= 20 * 36e5 ? Math.max(ms, 864e5) : ms)}`; };
+function reviewHomeHTML() {
+  const d = gsLoad(), all = Object.keys(d).length, due = grammarDue();
+  return `<section class="panel g-review" aria-labelledby="g-rev-t"><div class="g-review-txt"><h2 class="sec-title" id="g-rev-t">Повторення граматики</h2>
+    <p class="muted small">${all ? `<b data-g-due>${due.length}</b> ${plWord(due.length, PUNKT)} на повторення зараз · ${pl(all)} у розкладі${!due.length ? ` · наступне ${whenTxt(nextDue(d))}` : ''}`
+      : 'Додайте урок до повторення (кнопка внизу уроку) — його пункти повертатимуться короткими завданнями: завтра, потім через кілька днів, тижнів. Помилки з екзамену додаються самі.'}</p></div>
+    ${due.length ? `<button type="button" class="btn primary" data-g-review>Повторити ${pl(Math.min(due.length, REVIEW_MAX))}</button>` : ''}</section>`;
+}
+function wireReviewHome(root) {
+  $('[data-g-review]', root)?.addEventListener('click', async e => {
+    e.currentTarget.disabled = true;
+    const ok = await (await exam()).startGrammarReview(grammarDue().slice(0, REVIEW_MAX));
+    if (!ok) e.currentTarget.disabled = false;
+  });
+}
+async function drawLessonReview(slot, n, l) {
+  const okIds = await (await exam()).reviewablePoints();
+  if (!slot.isConnected) return;
+  const ids = l.points.map(p => p.id).filter(id => okIds.has(id)), d = gsLoad(), inS = ids.filter(id => d[id]);
+  if (!ids.length) { slot.innerHTML = ''; return; }
+  slot.innerHTML = `<section class="panel g-review g-review-l"><div class="g-review-txt"><h2 class="sec-title">Повторення граматики</h2>
+    <p class="muted small">${inS.length ? `У розкладі: ${inS.length} з ${pl(ids.length)} уроку · наступне повторення ${whenTxt(nextDue(d, inS))}`
+      : `Пункти уроку (${ids.length}) повертатимуться короткими завданнями: завтра, потім через дні й тижні. Відповіді в екзамені теж рухають розклад.`}</p></div>
+    <div class="g-review-btns">${inS.length < ids.length ? `<button type="button" class="btn ${inS.length ? 'ghost' : 'primary'} sm" data-g-add>${inS.length ? 'Додати решту пунктів' : `Повторювати граматику уроку ${n}`}</button>` : ''}
+      <button type="button" class="btn ghost sm" data-g-now>Перевірити себе зараз</button>
+      ${inS.length ? '<button type="button" class="btn ghost sm" data-g-rm>Прибрати з повторення</button>' : ''}</div></section>`;
+  $('[data-g-add]', slot)?.addEventListener('click', () => { addPoints(ids); toast(`Урок ${n} додано до повторення — перше завтра`); drawLessonReview(slot, n, l); });
+  $('[data-g-rm]', slot)?.addEventListener('click', () => { removePoints(ids); toast(`Урок ${n} прибрано з повторення`); drawLessonReview(slot, n, l); });
+  $('[data-g-now]', slot).addEventListener('click', async e => { e.currentTarget.disabled = true; await (await exam()).startGrammarReview(ids, `Урок ${n}: перевірка граматики`); });
+}
 
 const G = { data: null, loading: null, error: false };
 export function loadGrammar() {
@@ -70,6 +109,7 @@ export async function grammarHome(root) {
   root.innerHTML = `<div class="grammar-home fade-in">
     <section class="hero"><div><p class="eyebrow" lang="ja">文法</p><h1>Граматика</h1>
       <p class="muted">${G.data.length} уроків · ${pointsTxt(total)}</p></div></section>
+    ${reviewHomeHTML()}
     ${G.error ? '<div class="alert">Не вдалося завантажити <code>data/grammar.json</code>.</div>' : ''}
     <div class="home-tools"><label class="search">${I.search}<input type="search" placeholder="Пошук у граматиці: は, です, дієслово…" aria-label="Пошук у граматиці"></label></div>
     <details class="panel g-legend"><summary>Позначення</summary><dl>
@@ -93,6 +133,7 @@ export async function grammarHome(root) {
           : `<div class="g-tile off"><b>Урок ${n}</b><span class="muted small">ще не додано</span></div>`;
       }).join('')}</div>`).join('')}</div>
   </div>`;
+  wireReviewHome(root);
   const res = $('.g-results', root), lessons = $('.g-lessons', root);
   $('.search input', root).oninput = e => {
     const q = norm(e.target.value);
@@ -127,6 +168,7 @@ export async function grammarLesson(root, n, pointId) {
     <div class="g-cards">${l.points.map((pt, i) => `<details class="g-card" id="g-${esc(pt.id)}" open>
       <summary><span class="g-num">${i + 1}</span><span class="g-title" lang="ja">${furiT(pt.title)}</span><span class="g-chev" aria-hidden="true"></span></summary>
       <div class="g-body">${pt.blocks.map(blockHTML).join('')}${pt.details?.length ? `<details class="g-more"><summary>Детальніше</summary><div class="g-more-body">${pt.details.map(blockHTML).join('')}</div></details>` : ''}</div></details>`).join('')}</div>
+    <div class="g-review-slot"></div>
     ${playOfferHTML(n, n, `Прочитали урок ${n}? Міні-гра на закріплення`)}
     <div class="g-pager">${prev ? `<a class="btn ghost" href="#/grammar/${prev.lesson}">${I.left}<span>Урок ${prev.lesson}</span></a>` : '<span></span>'}
       ${next ? `<a class="btn ghost" href="#/grammar/${next.lesson}"><span>Урок ${next.lesson}</span>${I.right}</a>` : '<span></span>'}</div>
@@ -135,6 +177,7 @@ export async function grammarLesson(root, n, pointId) {
   const pi = pointId ? l.points.findIndex(p => p.id === pointId) : -1;
   const ask = mountAskBlock(lessonEl, { kind: 'grammar', logKey: `jp.ask.grammar.${n}`, topics: askTopics(n, l), topic: pi + 1, context: examQuestionFor(n) });
   lessonEl.insertBefore(ask, $('.g-pager', lessonEl)); // at the bottom of the lesson content, above the lesson pager
+  drawLessonReview($('.g-review-slot', root), n, l);
   wireSay($('.grammar-lesson', root)); // the lesson node is new on every render → one listener, never stacked on #app
   const tg = $('[data-toggle]', root);
   tg.onclick = () => {

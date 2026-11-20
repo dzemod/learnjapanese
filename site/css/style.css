@@ -1455,7 +1455,8 @@ body .sensei, body .sensei * { font-family: var(--ss-font); }
 .today-head .sec-title { margin: 0; }
 .today-streak { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: .92rem; }
 .today-streak b { color: var(--text); font-size: 1.05rem; }
-.today-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.today-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 560px) { .today-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .today-cell { display: grid; gap: 2px; align-content: start; min-width: 0; padding: 10px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; color: var(--muted); font-size: .82rem; line-height: 1.3; overflow-wrap: anywhere; }
 .today-cell b { color: var(--text); font-size: 1.6rem; line-height: 1.1; }
 .today-cell:hover { border-color: var(--red); }
@@ -1885,3 +1886,12 @@ button.kb-c:hover { outline: 2px solid var(--text); outline-offset: 1px; }
   .gm-tile .gm-back, .gm-tile .gm-face, .gm-mole { transition: none; }
   .gm-shake, .gm-pulse, .gm-combo, .gm-drop.pop { animation: none; }
 }
+
+/* Grammar review (grammar-srs.js) — grammar home + bottom of each lesson */
+.g-review { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+.g-review .sec-title { margin-bottom: 4px; }
+.g-review-txt { flex: 1 1 260px; min-width: 0; }
+.g-review-txt p { margin: 0; }
+.g-review-txt b { color: var(--text); }
+.g-review-btns { display: flex; flex-wrap: wrap; gap: 8px; }
+@media (max-width: 560px) { .g-review > .btn, .g-review-btns, .g-review-btns .btn { width: 100%; } }

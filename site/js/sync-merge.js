@@ -13,6 +13,7 @@
 //   unlocked   jp.achievements  { id: time } → union, the earliest unlock wins (ach-rules.js mergeUnlocked)
 //   time       jp.studyTime     { "YYYY-MM-DD": ms } → per day the larger value (daily goal)
 //   notes      jp.kanjiNotes    { kanjiId: { t, at } } → per kanji the newer note wins (an emptied note has t: "")
+//   grammar    jp.grammarSrs    { pointId: { due, ivl, ease, last, c, w, added } } → per point the newer answer (last) wins
 import { mergeUnlocked } from './ach-rules.js';
 
 const obj = v => (v && typeof v === 'object' && !Array.isArray(v) ? v : {});
@@ -107,5 +108,6 @@ export function mergeAll(local, remote) {
     time: mergeActivity(local.time, remote.time),
     unlocked: mergeUnlocked(local.unlocked, remote.unlocked),
     notes: mergeNotes(local.notes, remote.notes),
+    grammar: mergeProgress(local.grammar, remote.grammar), // grammar-srs.js: same rule as words
   };
 }

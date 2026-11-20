@@ -13,6 +13,7 @@ import { ensureTokenizer, tokenize, onTokProgress, tokProgressText } from './tok
 import { loadScript } from './importer.js';
 import { addAskButton, mountAskBlock, contextText, htmlText } from './ai-helper.js';
 import { playOfferHTML } from './games.js';
+import { noteAnswer } from './grammar-srs.js';
 import { paperView, paperResult, newPaper, availability as univAvail, SECTIONS as UNIV_SECTIONS, univGroups } from './exam-univ.js';
 
 const K = { presets: 'jp.examPresets', history: 'jp.examHistory', session: 'jp.examSession', ret: 'jp.examReturn', mistakes: 'jp.examMistakes', romaji: 'jp.exam.romaji' };
@@ -493,7 +494,55 @@ function askContext(q, a) {
 
 // ---------- session ----------
 let S = null; // { conf, qs, i, res: [{ok, given}], start, deadline }
-const persist = () => { ssave(K.session, S); if (S?.answered) markStudied(`exam:${S.start}:${S.i}`); }; // an answer = a study day (counted once)
+let notedAt = '';
+const persist = () => {
+  ssave(K.session, S);
+  if (!S?.answered) return;
+  markStudied(`exam:${S.start}:${S.i}`); // an answer = a study day (counted once)
+  const key = `${S.start}:${S.i}`, q = S.qs[S.i];
+  if (notedAt !== key && q?.ref?.kind === 'g' && q.ref.point) { notedAt = key; noteAnswer(q.ref.point, !!S.answered.ok); } // grammar review schedule (grammar-srs.js)
+};
+
+// ---------- grammar review (grammar-srs.js): questions of chosen grammar points from the bank ----------
+const REVIEW_ORDER = ['p', 'e', 'tr', 'v', 'ts']; // quick question kinds first; sentence typing only if nothing else
+const reviewItems = id => (data.bank || []).flatMap(l => l.items.filter(i => i.pt === id && REVIEW_ORDER.includes(i.t)));
+/** Grammar point ids that have review questions (all lessons). */
+export async function reviewablePoints() {
+  await loadAll();
+  return new Set((data.bank || []).flatMap(l => l.items.filter(i => REVIEW_ORDER.includes(i.t)).map(i => i.pt)));
+}
+/** Up to `per` questions for each point, of different kinds where possible (quick kinds first). */
+export async function grammarReviewQuestions(ids, per = 2) {
+  await loadAll();
+  const out = [];
+  for (const id of ids) {
+    const items = reviewItems(id), maxL = +String(id).split('-')[0] || 50;
+    const kinds = REVIEW_ORDER.filter(t => items.some(i => i.t === t));
+    const quick = kinds.filter(t => t !== 'ts');
+    const use = (quick.length ? quick : kinds);
+    const qs = [];
+    for (let k = 0, guard = 0; qs.length < per && guard < 12; guard++, k++) {
+      const t = use[k % use.length];
+      const it = pickOne(items.filter(i => i.t === t && !qs.some(q => q.uid.endsWith(i.id))));
+      if (!it) continue;
+      const q = t === 'p' ? qParticle(it) : t === 'e' ? qError(it) : t === 'tr' ? qTransJ(it, items.filter(i => i.t === 'tr').length > 3 ? items.filter(i => i.t === 'tr') : bankItems({ from: 1, to: maxL, part: 'all' }, 'tr')) : t === 'v' ? qVerb(it) : qSent(it);
+      if (q) { q.ref = gref(id); qs.push(q); }
+    }
+    out.push(...qs);
+  }
+  return out;
+}
+/** Start an exam run of grammar review questions (Exam runner, with explanations); false if there is nothing to ask. */
+export async function startGrammarReview(ids, name = 'Повторення граматики', extra = []) {
+  const qs = [...(await grammarReviewQuestions(ids)), ...extra];
+  if (!qs.length) return false;
+  const ls = ids.map(id => +String(id).split('-')[0]).filter(Boolean);
+  const c = { ...DEFAULT, ...(load(K.presets + '.last', null) || {}) };
+  S = { conf: { ...c, name, timer: 0, from: Math.min(...ls, 50), to: Math.max(...ls, 1) }, qs: shuffle(qs), i: 0, res: [], start: Date.now(), deadline: 0, answered: null };
+  persist();
+  location.hash = '#/exam/run';
+  return true;
+}
 /** «Сьогодні»: an exam of saved mistakes (the same session as «Повторити мої помилки» in the setup). */
 export function startMistakesExam(qs, name = 'Сьогодні: мої помилки') {
   const c = { ...DEFAULT, ...(load(K.presets + '.last', null) || {}) };

@@ -52,8 +52,9 @@ ok(M.mergeMistakes({ items: Array.from({ length: 150 }, (_, i) => ({ uid: 'u' + 
 // broken / missing remote data never breaks local data
 const broken = M.mergeAll(phone, { progress: 'x', kanji: [1], days: {}, mistakes: 5, history: 'y', best: null });
 ok(eq(broken.progress, phone.progress) && eq(broken.kanji, phone.kanji) && eq(broken.days, phone.days), 'broken remote data: local data kept');
-ok(eq(M.mergeAll({}, {}), { progress: {}, kanji: {}, days: [], mistakes: { items: [], clearedAt: 0 }, history: [], best: {}, level: null, activity: {}, time: {}, unlocked: {}, notes: {} }), 'empty + empty = empty');
+ok(eq(M.mergeAll({}, {}), { progress: {}, kanji: {}, days: [], mistakes: { items: [], clearedAt: 0 }, history: [], best: {}, level: null, activity: {}, time: {}, unlocked: {}, notes: {}, grammar: {} }), 'empty + empty = empty');
 
+ok(eq(M.mergeAll({ grammar: { '5-1': { due: 9, last: 5, c: 1, w: 0 } } }, { grammar: { '5-1': { due: 20, last: 8, c: 2, w: 0 }, '6-2': { due: 3, last: 1, c: 0, w: 1 } } }).grammar, { '5-1': { due: 20, last: 8, c: 2, w: 0 }, '6-2': { due: 3, last: 1, c: 0, w: 1 } }), 'grammar review: newer answer per point wins, union of points');
 // heatmap counts, achievement dates, kanji associations
 const sym = (fn, x, y) => eq(fn(x, y), fn(y, x)) && eq(fn(fn(x, y), y), fn(x, y));
 const actA = { '2026-11-01': 3, '2026-11-02': 10 }, actB = { '2026-11-02': 4, '2026-11-03': 1, bad: 9 };

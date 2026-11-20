@@ -2,6 +2,7 @@
 //   words: progress jp.progress (lvl 0 new / 1 learning / 2 known, c/w counts, last answer time) → wordsDue();
 //   kanji: the writing schedule jp.kanjiWrite (kanji-write.js, stroke-match.js status 'review' = due now);
 //   exam:  saved mistakes jp.examMistakes («Додати до помилок»);
+//   grammar: points due in the grammar review schedule jp.grammarSrs (grammar-srs.js) → grammarDue();
 //   streak: the study-day log jp.days (store.js studyDays / streak).
 // «Почати сесію» = a ≈ 15-minute mix in this order: due words (flashcards, recorded like the study modes), due kanji
 // (recall → reveal with stroke order → the writing mode's ratings, same schedule), then the exam mistakes in the
@@ -11,7 +12,8 @@ import { getSets, prog, record, streak, markStudied, studiedToday, getGoal, setG
 import { ringSVG, GOALS } from './goal.js';
 import { loadKanji, books as kanjiBooks, kanjiVG } from './kanji.js';
 import { RATINGS, applyRating, nextInterval, fmtInterval, status as kStatus, DAY } from './stroke-match.js';
-import { startMistakesExam, savedMistakeList } from './exam.js';
+import { startMistakesExam, savedMistakeList, startGrammarReview } from './exam.js';
+import { grammarDue } from './grammar-srs.js';
 import { kunHTML } from './modes.js';
 import { todayLineHTML, bump } from './achievements.js';
 import { noteHintHTML } from './kanji-assoc.js';
@@ -24,7 +26,7 @@ export const RULES = {
   KNOWN_AFTER: 7 * DAY,      // a known word (lvl 2) is due a week after its last answer
   WRONG_AFTER: 10 * 6e4,     // a word answered wrong more often than right: due again after 10 minutes
 };
-export const BUDGET = { totalSec: 15 * 60, wordSec: 20, kanjiSec: 40, examSec: 45, wordCap: 0.5, kanjiCap: 0.35 };
+export const BUDGET = { totalSec: 15 * 60, wordSec: 20, kanjiSec: 40, examSec: 45, wordCap: 0.5, kanjiCap: 0.35, grammarSec: 70, grammarCap: 0.3 };
 const KW_KEY = 'jp.kanjiWrite';
 const SESSION_KEY = 'jp.today.session';
 const lget = (k, d) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } };
@@ -52,15 +54,17 @@ export function kanjiDue(now = Date.now()) {
 }
 export const examMistakes = () => { try { const l = savedMistakeList(); return Array.isArray(l) ? l : []; } catch { return []; } };
 
-/** The session: due words, then kanji, then exam mistakes, within ≈ 15 minutes (BUDGET); leftover time → more words. */
-export function planSession(words, kanji, mistakes, B = BUDGET) {
+/** The session: due words, then kanji, then grammar points + exam mistakes (one exam run), within ≈ 15 minutes
+ *  (BUDGET); leftover time → more words. grammar = due point ids (≈ 2 questions each). */
+export function planSession(words, kanji, mistakes, B = BUDGET, grammar = []) {
   let left = B.totalSec;
   const take = (n, cost, cap) => { const k = Math.max(0, Math.min(n, Math.floor(Math.min(cap, left) / cost))); left -= k * cost; return k; };
   let w = take(words.length, B.wordSec, B.totalSec * B.wordCap);
   const k = take(kanji.length, B.kanjiSec, B.totalSec * B.kanjiCap);
+  const g = take(grammar.length, B.grammarSec ?? 70, B.totalSec * (B.grammarCap ?? 0.3));
   const e = take(mistakes.length, B.examSec, Infinity);
   w += take(words.length - w, B.wordSec, Infinity); // time left over → more words
-  return { words: words.slice(0, w).map(x => [x.setId, x.cardId]), kanji: kanji.slice(0, k).map(x => [x.lessonId, x.id]), exam: e, minutes: Math.round((B.totalSec - left) / 60) };
+  return { words: words.slice(0, w).map(x => [x.setId, x.cardId]), kanji: kanji.slice(0, k).map(x => [x.lessonId, x.id]), exam: e, grammar: grammar.slice(0, g), minutes: Math.round((B.totalSec - left) / 60) };
 }
 
 // ---------- daily goal ----------
@@ -72,18 +76,21 @@ const goalHTML = () => {
 };
 document.addEventListener('kotoba:goal', () => toast(`Денну мету виконано — ${getGoal()} хв навчання сьогодні 🎉`, { duration: 4000 }));
 
+const safeGrammarDue = () => { try { return grammarDue(); } catch { return []; } };
+
 // ---------- the home page panel ----------
 const n = (v, forms) => `${v} ${plWord(v, forms)}`;
 export function todayPanel(slot) {
   const draw = (kanjiN, kanjiReady) => {
-    const words = wordsDue(), mist = examMistakes(), st = streak();
-    const any = words.length + kanjiN + mist.length;
+    const words = wordsDue(), mist = examMistakes(), st = streak(), gram = safeGrammarDue();
+    const any = words.length + kanjiN + mist.length + gram.length;
     slot.innerHTML = `<section class="panel today" aria-labelledby="today-title">
       <div class="today-head"><h2 class="sec-title" id="today-title">Сьогодні</h2>
         <span class="today-streak ${studiedToday() ? 'on' : ''}" title="Дні поспіль, коли ви щось вивчили"><span class="streak-dot ${studiedToday() ? 'on' : ''}"></span><b data-t="streak">${st}</b> ${plWord(st, ['день', 'дні', 'днів'])} поспіль</span></div>
       <div class="today-grid">
         <a class="today-cell" href="#/" data-t-words><b data-t="words">${words.length}</b><span>${plWord(words.length, ['слово', 'слова', 'слів'])} на повторення</span></a>
         <a class="today-cell" href="#/kanji/write"><b data-t="kanji">${kanjiReady ? kanjiN : '…'}</b><span>${plWord(kanjiN, ['канджі', 'канджі', 'канджі'])} для письма</span></a>
+        <a class="today-cell" href="#/grammar"><b data-t="grammar">${gram.length}</b><span>${plWord(gram.length, ['пункт', 'пункти', 'пунктів'])} граматики</span></a>
         <a class="today-cell" href="#/exam"><b data-t="exam">${mist.length}</b><span>${plWord(mist.length, ['помилка', 'помилки', 'помилок'])} з екзамену</span></a>
       </div>
       ${goalHTML()}
@@ -105,11 +112,11 @@ export async function todaySessionView(root) {
   await loadKanji();
   let S = sget(SESSION_KEY);
   if (!S || !S.plan) {
-    const plan = planSession(wordsDue(), kanjiDue(), examMistakes());
+    const plan = planSession(wordsDue(), kanjiDue(), examMistakes(), BUDGET, safeGrammarDue());
     S = { plan, i: 0, known: 0, at: Date.now() };
     sset(SESSION_KEY, S);
   }
-  const items = [...S.plan.words.map(w => ({ t: 'w', w })), ...S.plan.kanji.map(k => ({ t: 'k', k })), ...(S.plan.exam ? [{ t: 'e', n: S.plan.exam }] : [])];
+  const items = [...S.plan.words.map(w => ({ t: 'w', w })), ...S.plan.kanji.map(k => ({ t: 'k', k })), ...(S.plan.exam || S.plan.grammar?.length ? [{ t: 'e', n: S.plan.exam, g: S.plan.grammar || [] }] : [])];
   const total = items.length;
   const save = () => sset(SESSION_KEY, S);
 
@@ -131,14 +138,14 @@ export async function todaySessionView(root) {
     }
     if (S.i >= total) {
       bump('todayDone');
-      frame(`<div class="empty today-done"><div class="empty-jp" lang="ja">完</div><p>Сесію завершено: ${n(S.plan.words.length, ['слово', 'слова', 'слів'])}, ${n(S.plan.kanji.length, ['канджі', 'канджі', 'канджі'])}${S.plan.exam ? `, ${n(S.plan.exam, ['помилка', 'помилки', 'помилок'])} з екзамену` : ''}.</p><a class="btn primary" href="#/">На головну</a></div>`);
+      frame(`<div class="empty today-done"><div class="empty-jp" lang="ja">完</div><p>Сесію завершено: ${n(S.plan.words.length, ['слово', 'слова', 'слів'])}, ${n(S.plan.kanji.length, ['канджі', 'канджі', 'канджі'])}${S.plan.grammar?.length ? `, ${n(S.plan.grammar.length, ['пункт', 'пункти', 'пунктів'])} граматики` : ''}${S.plan.exam ? `, ${n(S.plan.exam, ['помилка', 'помилки', 'помилок'])} з екзамену` : ''}.</p><a class="btn primary" href="#/">На головну</a></div>`);
       sset(SESSION_KEY, null);
       return;
     }
     const it = items[S.i];
     if (it.t === 'w') return drawWord(...it.w);
     if (it.t === 'k') return drawKanji(...it.k);
-    return drawExam(it.n);
+    return drawExam(it.n, it.g);
   }
 
   // word: Ukrainian → «Показати» → Japanese with reading → Знав(ла) / Не знав(ла) (recorded like a study mode)
@@ -185,12 +192,18 @@ export async function todaySessionView(root) {
     };
   }
   // exam mistakes: handed to the Exam's own runner (all question types); the session ends there
-  function drawExam(count) {
-    frame(`<section class="panel today-card"><p class="eyebrow">Екзамен · мої помилки</p>
-      <p>Залишилося ${n(count, ['питання', 'питання', 'питань'])} з ваших збережених помилок. Вони відкриються в екзамені — з поясненнями після кожної відповіді.</p>
+  function drawExam(count, gram = []) {
+    const what = [gram.length ? `${n(gram.length, ['пункт', 'пункти', 'пунктів'])} граматики на повторення` : '', count ? `${n(count, ['питання', 'питання', 'питань'])} з ваших збережених помилок` : ''].filter(Boolean).join(' і ');
+    frame(`<section class="panel today-card"><p class="eyebrow">Екзамен · ${gram.length ? 'граматика' : ''}${gram.length && count ? ' й ' : ''}${count ? 'мої помилки' : ''}</p>
+      <p>Залишилося: ${what}. Вони відкриються в екзамені — з поясненнями після кожної відповіді.</p>
       <div class="btn-row"><button type="button" class="btn ghost" data-skip>Пропустити</button><button type="button" class="btn primary" data-exam>Відкрити екзамен</button></div></section>`);
     $('[data-skip]', root).onclick = next;
-    $('[data-exam]', root).onclick = () => { const list = examMistakes().slice(0, count); S.i = total; save(); sset(SESSION_KEY, null); startMistakesExam(list); };
+    $('[data-exam]', root).onclick = async () => {
+      const list = count ? examMistakes().slice(0, count) : [];
+      S.i = total; save(); sset(SESSION_KEY, null);
+      if (gram.length) await startGrammarReview(gram, count ? 'Сьогодні: граматика й помилки' : 'Сьогодні: граматика', list);
+      else startMistakesExam(list);
+    };
   }
   draw();
 }

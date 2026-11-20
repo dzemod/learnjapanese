@@ -16,7 +16,7 @@ export const HEAD = 'kotoba.progress.v1';
 const PART_CHARS = 60000; // ≤ 180 KB even if every character takes 3 bytes of UTF-8
 const STATE_KEY = 'jp.sync';
 const AUTO_GAP_MS = 2 * 60e3; // automatic syncs at most every 2 minutes
-export const LS = { progress: 'jp.progress', kanji: 'jp.kanjiWrite', days: 'jp.days', mistakes: 'jp.examMistakes', cleared: 'jp.examMistakes.clearedAt', history: 'jp.examHistory', best: 'jp.best', level: 'jp.sensei.level', activity: 'jp.activity', time: 'jp.studyTime', unlocked: 'jp.achievements', notes: 'jp.kanjiNotes' };
+export const LS = { progress: 'jp.progress', kanji: 'jp.kanjiWrite', days: 'jp.days', mistakes: 'jp.examMistakes', cleared: 'jp.examMistakes.clearedAt', history: 'jp.examHistory', best: 'jp.best', level: 'jp.sensei.level', activity: 'jp.activity', time: 'jp.studyTime', unlocked: 'jp.achievements', notes: 'jp.kanjiNotes', grammar: 'jp.grammarSrs' };
 export const MSG = {
   signin: 'Щоб синхронізувати прогрес, увійдіть у безкоштовний акаунт Puter',
   fail: 'Не вдалося синхронізувати, спробуйте ще раз',
@@ -36,14 +36,14 @@ export function localData() {
     progress: get(LS.progress, {}), kanji: get(LS.kanji, {}), days: get(LS.days, []),
     mistakes: { items: get(LS.mistakes, []), clearedAt: +get(LS.cleared, 0) || 0 },
     history: get(LS.history, []), best: get(LS.best, {}), level: getRaw(LS.level),
-    activity: get(LS.activity, {}), time: get(LS.time, {}), unlocked: get(LS.unlocked, {}), notes: get(LS.notes, {}),
+    activity: get(LS.activity, {}), time: get(LS.time, {}), unlocked: get(LS.unlocked, {}), notes: get(LS.notes, {}), grammar: get(LS.grammar, {}),
   };
 }
 function writeLocal(d) {
   set(LS.progress, d.progress); set(LS.kanji, d.kanji); set(LS.days, d.days);
   set(LS.mistakes, d.mistakes.items); set(LS.cleared, d.mistakes.clearedAt);
   set(LS.history, d.history); set(LS.best, d.best);
-  set(LS.activity, d.activity); set(LS.time, d.time); set(LS.unlocked, d.unlocked); set(LS.notes, d.notes);
+  set(LS.activity, d.activity); set(LS.time, d.time); set(LS.unlocked, d.unlocked); set(LS.notes, d.notes); set(LS.grammar, d.grammar);
   if (d.level != null) setRaw(LS.level, String(d.level));
   reloadProgressFromStorage();
 }
