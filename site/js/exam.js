@@ -232,12 +232,12 @@ function qVerb(it) {
     src: it.src ? `${it.src}, урок ${it.l}` : `урок ${it.l}`,
   };
 }
-function qGrammar(it, maxL) {
+function qGrammar(it, maxL, nOpts = 4) {
   if (!it) return null;
   const base = plainT(it.base), kana = it.base.replace(/\{([^|}]+)\|([^}]+)\}/g, '$2');
   const alts = uniq(['te', 'ta', 'nai', 'dict', 'tara', 'temo', 'nakatta'].filter(f => f !== it.f && FORMS[f].lesson <= maxL).map(f => conjugate(base, it.g, f)).concat([base]).filter(Boolean)).filter(x => x !== plainT(it.a));
   if (alts.length < 2) return null;
-  const opts = shuffle([plainT(it.a), ...shuffle(alts).slice(0, 3)]);
+  const opts = shuffle([plainT(it.a), ...shuffle(alts).slice(0, nOpts - 1)]);
   return {
     uid: 'g' + it.id, type: 'g', mode: 'choice', lesson: it.l, ref: gref(it.spt || it.pt), weak: FORMS[it.f].label, label: 'Виберіть правильну форму для речення',
     prompt: sentHTML(it.pre, '<span class="ex-blank">（　　）</span>', it.post) + `<div class="ex-uk">${esc(it.uk)}</div>`,
@@ -504,44 +504,72 @@ const persist = () => {
 };
 
 // ---------- grammar review (grammar-srs.js): questions of chosen grammar points from the bank ----------
-const REVIEW_ORDER = ['p', 'e', 'tr', 'v', 'ts']; // quick question kinds first; sentence typing only if nothing else
-const reviewItems = id => (data.bank || []).flatMap(l => l.items.filter(i => i.pt === id && REVIEW_ORDER.includes(i.t)));
+// Exercise types of the panel settings (grammar-review-conf.js) → bank item kinds + the Exam builders above.
+const REVIEW_KINDS = {
+  tj: ['tr'], uj: ['tr'], fill: ['p', 'v'], choose: ['v'], build: ['ts'],
+};
+const REVIEW_ALL = ['p', 'e', 'tr', 'v', 'ts'];
+const reviewItems = id => (data.bank || []).flatMap(l => l.items.filter(i => i.pt === id && REVIEW_ALL.includes(i.t)));
+function reviewQ(type, it, items, maxL) {
+  if (type === 'tj') return qTransJ(it, items.filter(i => i.t === 'tr').length > 3 ? items.filter(i => i.t === 'tr') : bankItems({ from: 1, to: maxL, part: 'all' }, 'tr'));
+  if (type === 'uj') return qTiles(it);
+  if (type === 'fill') return it.t === 'p' ? qParticle(it) : qVerb(it);
+  if (type === 'choose') return qGrammar(it, maxL, 3);
+  if (type === 'build') return qSent(it);
+  return null;
+}
 /** Grammar point ids that have review questions (all lessons). */
 export async function reviewablePoints() {
   await loadAll();
-  return new Set((data.bank || []).flatMap(l => l.items.filter(i => REVIEW_ORDER.includes(i.t)).map(i => i.pt)));
+  return new Set((data.bank || []).flatMap(l => l.items.filter(i => REVIEW_ALL.includes(i.t)).map(i => i.pt)));
 }
-/** Up to `per` questions for each point, of different kinds where possible (quick kinds first). */
-export async function grammarReviewQuestions(ids, per = 2) {
+/**
+ * Review questions of the points, only of the chosen types. Points are taken in order, one question each per round
+ * (types rotate per point), until `count` questions. Returns { qs, skipped: types with no question for these points }.
+ */
+export async function reviewPlan(ids, { types = ['tj', 'fill', 'choose'], count = 10 } = {}) {
   await loadAll();
-  const out = [];
-  for (const id of ids) {
-    const items = reviewItems(id), maxL = +String(id).split('-')[0] || 50;
-    const kinds = REVIEW_ORDER.filter(t => items.some(i => i.t === t));
-    const quick = kinds.filter(t => t !== 'ts');
-    const use = (quick.length ? quick : kinds);
-    const qs = [];
-    for (let k = 0, guard = 0; qs.length < per && guard < 12; guard++, k++) {
-      const t = use[k % use.length];
-      const it = pickOne(items.filter(i => i.t === t && !qs.some(q => q.uid.endsWith(i.id))));
-      if (!it) continue;
-      const q = t === 'p' ? qParticle(it) : t === 'e' ? qError(it) : t === 'tr' ? qTransJ(it, items.filter(i => i.t === 'tr').length > 3 ? items.filter(i => i.t === 'tr') : bankItems({ from: 1, to: maxL, part: 'all' }, 'tr')) : t === 'v' ? qVerb(it) : qSent(it);
-      if (q) { q.ref = gref(id); qs.push(q); }
+  const use = types.filter(t => REVIEW_KINDS[t]);
+  const per = ids.map(id => {
+    const items = reviewItems(id);
+    return { id, items, maxL: +String(id).split('-')[0] || 50, used: new Set(), k: 0, kinds: use.filter(t => items.some(i => REVIEW_KINDS[t].includes(i.t))) };
+  });
+  const qs = [], made = new Set();
+  for (let round = 0; qs.length < count && round < 8; round++) {
+    let any = false;
+    for (const P of per) {
+      if (qs.length >= count) break;
+      for (let tries = 0; tries < P.kinds.length; tries++) {
+        const t = P.kinds[P.k++ % P.kinds.length];
+        const cand = P.items.filter(i => REVIEW_KINDS[t].includes(i.t) && !P.used.has(t + i.id));
+        let q = null, it = null;
+        for (let g = 0; g < 6 && !q && cand.length; g++) { it = pickOne(cand); q = reviewQ(t, it, P.items, P.maxL); if (!q) P.used.add(t + it.id); }
+        if (!q) continue;
+        P.used.add(t + it.id);
+        if (qs.some(x => x.uid === q.uid)) continue;
+        q.ref = gref(P.id); q.rt = t; qs.push(q); made.add(t); any = true;
+        break;
+      }
     }
-    out.push(...qs);
+    if (!any) break;
   }
-  return out;
+  return { qs, skipped: use.filter(t => !made.has(t)) };
+}
+/** Up to `per` questions for each point (default types). */
+export async function grammarReviewQuestions(ids, per = 2, types) {
+  return (await reviewPlan(ids, { types, count: ids.length * per })).qs;
 }
 /** Start an exam run of grammar review questions (Exam runner, with explanations); false if there is nothing to ask. */
-export async function startGrammarReview(ids, name = 'Повторення граматики', extra = []) {
-  const qs = [...(await grammarReviewQuestions(ids)), ...extra];
+export async function startGrammarReview(ids, name = 'Повторення граматики', extra = [], opts = {}) {
+  const plan = await reviewPlan(ids, { types: opts.types, count: opts.count ?? Math.max(ids.length * 2, 1) });
+  const qs = [...plan.qs, ...extra];
   if (!qs.length) return false;
   const ls = ids.map(id => +String(id).split('-')[0]).filter(Boolean);
   const c = { ...DEFAULT, ...(load(K.presets + '.last', null) || {}) };
-  S = { conf: { ...c, name, timer: 0, from: Math.min(...ls, 50), to: Math.max(...ls, 1) }, qs: shuffle(qs), i: 0, res: [], start: Date.now(), deadline: 0, answered: null };
+  S = { conf: { ...c, name, timer: 0, review: true, game: !!opts.game, from: Math.min(...ls, 50), to: Math.max(...ls, 1) }, qs: shuffle(qs), i: 0, res: [], start: Date.now(), deadline: 0, answered: null };
   persist();
   location.hash = '#/exam/run';
-  return true;
+  return { skipped: plan.skipped, n: plan.qs.length };
 }
 /** «Сьогодні»: an exam of saved mistakes (the same session as «Повторити мої помилки» in the setup). */
 export function startMistakesExam(qs, name = 'Сьогодні: мої помилки') {
@@ -1006,7 +1034,7 @@ function resultView(root) {
       <h2>${pct >= 90 ? '完璧 — чудовий результат!' : pct >= 70 ? 'Добре!' : pct >= 50 ? 'Непогано, але є що повторити' : 'Варто повторити матеріал'}</h2>
       <p class="muted">${ok} з ${n} правильно</p>
       <div class="res-btns">${wrong.length ? `<button class="btn primary" data-repeat>Повторити мої помилки (${wrong.length})</button>` : ''}<a class="btn ghost" href="#/exam">Новий екзамен</a></div></div>
-    ${(() => { const a = +S.conf.from || 1, b = +S.conf.to || a; return playOfferHTML(Math.min(a, b), Math.max(a, b), 'Екзамен позаду — зіграти міні-гру?'); })()}
+    ${S.conf.review && !S.conf.game ? '' : (() => { const a = +S.conf.from || 1, b = +S.conf.to || a; return playOfferHTML(Math.min(a, b), Math.max(a, b), S.conf.review ? 'Міні-гра на закріплення' : 'Екзамен позаду — зіграти міні-гру?'); })()}
     <section class="panel"><h2 class="sec-title">За типами завдань</h2>${table(st.byType)}</section>
     <section class="panel"><h2 class="sec-title">За уроками</h2>${table(st.byLesson)}</section>
     ${wrong.length ? `<section class="panel"><h2 class="sec-title">Помилки (${wrong.length})</h2><div class="ex-mistakes">${wrong.map(({ q, r }, i) => `<div class="ex-mistake" data-i="${i}">

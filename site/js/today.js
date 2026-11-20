@@ -14,6 +14,7 @@ import { loadKanji, books as kanjiBooks, kanjiVG } from './kanji.js';
 import { RATINGS, applyRating, nextInterval, fmtInterval, status as kStatus, DAY } from './stroke-match.js';
 import { startMistakesExam, savedMistakeList, startGrammarReview } from './exam.js';
 import { grammarDue } from './grammar-srs.js';
+import { loadConf, quizTypes } from './grammar-review-conf.js';
 import { kunHTML } from './modes.js';
 import { todayLineHTML, bump } from './achievements.js';
 import { noteHintHTML } from './kanji-assoc.js';
@@ -201,8 +202,10 @@ export async function todaySessionView(root) {
     $('[data-exam]', root).onclick = async () => {
       const list = count ? examMistakes().slice(0, count) : [];
       S.i = total; save(); sset(SESSION_KEY, null);
-      if (gram.length) await startGrammarReview(gram, count ? 'Сьогодні: граматика й помилки' : 'Сьогодні: граматика', list);
-      else startMistakesExam(list);
+      const c = loadConf(); // exercise types of the grammar panel settings
+      const started = gram.length && await startGrammarReview(gram, count ? 'Сьогодні: граматика й помилки' : 'Сьогодні: граматика', list, { types: quizTypes(c), game: c.types.includes('game') });
+      if (!started && list.length) startMistakesExam(list);
+      else if (!started) { toast(quizTypes(c).length ? 'Немає завдань для вибраних типів вправ' : 'Оберіть хоча б один тип вправи'); location.hash = '#/grammar'; }
     };
   }
   draw();
