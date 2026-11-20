@@ -1895,6 +1895,43 @@ button.kb-c:hover { outline: 2px solid var(--text); outline-offset: 1px; }
 .g-review-txt b { color: var(--text); }
 .g-review-btns { display: flex; flex-wrap: wrap; gap: 8px; }
 @media (max-width: 560px) { .g-review > .btn, .g-review-btns, .g-review-btns .btn { width: 100%; } }
+/* grammar review settings (gear → dialog, grammar.js openReviewSettings) */
+.g-review-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.g-review-head .sec-title { margin-bottom: 4px; }
+.g-conf-btn { flex: none; margin: -6px -6px 0 0; }
+.g-review-txt p.g-conf-line { margin-top: 6px; }
+.g-review-txt p.g-review-msg { margin-top: 8px; padding: 8px 12px; border: 1px solid var(--red-d); background: var(--red-bg); border-radius: 10px; color: var(--text); font-size: .9rem; }
+.modal.grc { max-width: 560px; }
+.grc-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.grc-head h2 { margin-bottom: 0; }
+.grc-note, .grc-warn { margin: 0 0 12px; padding: 8px 12px; border: 1px solid var(--red-d); background: var(--red-bg); border-radius: 10px; font-size: .88rem; }
+.grc-warn { margin: 8px 0 0; }
+.grc-fs { border: 0; padding: 0; margin: 0 0 18px; min-width: 0; }
+.grc-fs legend { font-weight: 700; margin-bottom: 8px; padding: 0; }
+.grc-fs .muted.small { margin: 8px 0 0; }
+.grc-check, .grc-radio { display: flex; align-items: flex-start; gap: 10px; padding: 8px 0; cursor: pointer; min-width: 0; }
+.grc-check input, .grc-radio input, .grc-gl input { width: 18px; height: 18px; margin: 2px 0 0; flex: none; accent-color: var(--red); }
+.grc-check span { min-width: 0; }
+.grc-check b { display: block; font-weight: 600; }
+.grc-check small { color: var(--muted); }
+.grc-seg { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.grc-seg label, .grc-lessons label { position: relative; cursor: pointer; }
+.grc-seg input, .grc-lessons input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.grc-seg span, .grc-lessons span { display: grid; place-items: center; min-height: 40px; border: 1px solid var(--border-2); border-radius: 10px; background: var(--panel-2); font-variant-numeric: tabular-nums; }
+.grc-seg input:checked + span, .grc-lessons input:checked + span { border-color: var(--red); background: var(--red-bg); color: var(--text); font-weight: 700; }
+.grc-seg input:focus-visible + span, .grc-lessons input:focus-visible + span { outline: 2px solid var(--red); outline-offset: 2px; }
+.grc-days { display: flex; align-items: center; gap: 8px; padding: 4px 0 0 28px; }
+.grc-days .input { width: 84px; }
+.grc-days .input:disabled { opacity: .45; }
+.grc-all { display: flex; gap: 8px; margin-bottom: 10px; }
+.grc-group { margin-bottom: 10px; }
+.grc-gl { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; font-weight: 600; cursor: pointer; }
+.grc-lessons { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 4px; }
+.grc-lessons span { min-height: 36px; font-size: .88rem; }
+@media (max-width: 520px) { .grc-lessons { grid-template-columns: repeat(5, minmax(0, 1fr)); } .grc-lessons span { min-height: 40px; } }
+.grc-btns { flex-wrap: wrap; position: sticky; bottom: 0; background: var(--panel); padding-top: 10px; }
+.grc-btns .btn { min-width: 0; }
+
 
 /* JLPT levels (jlpt.js, jlpt-view.js) */
 .jlpt-chip { display: inline-flex; align-items: center; padding: 1px 7px; border-radius: 6px; font: 800 .68rem/1.5 var(--ui); letter-spacing: .03em; color: #111; background: var(--jl, #888); vertical-align: middle; }
