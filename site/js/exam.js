@@ -12,6 +12,7 @@ import { preKana, checkSentence, verdictOf, VERDICT, normJa, KANJI_RE } from './
 import { ensureTokenizer, tokenize, onTokProgress, tokProgressText } from './tokenizer.js';
 import { loadScript } from './importer.js';
 import { addAskButton, mountAskBlock, contextText, htmlText } from './ai-helper.js';
+import { playOfferHTML } from './games.js';
 import { paperView, paperResult, newPaper, availability as univAvail, SECTIONS as UNIV_SECTIONS, univGroups } from './exam-univ.js';
 
 const K = { presets: 'jp.examPresets', history: 'jp.examHistory', session: 'jp.examSession', ret: 'jp.examReturn', mistakes: 'jp.examMistakes', romaji: 'jp.exam.romaji' };
@@ -956,6 +957,7 @@ function resultView(root) {
       <h2>${pct >= 90 ? '完璧 — чудовий результат!' : pct >= 70 ? 'Добре!' : pct >= 50 ? 'Непогано, але є що повторити' : 'Варто повторити матеріал'}</h2>
       <p class="muted">${ok} з ${n} правильно</p>
       <div class="res-btns">${wrong.length ? `<button class="btn primary" data-repeat>Повторити мої помилки (${wrong.length})</button>` : ''}<a class="btn ghost" href="#/exam">Новий екзамен</a></div></div>
+    ${(() => { const a = +S.conf.from || 1, b = +S.conf.to || a; return playOfferHTML(Math.min(a, b), Math.max(a, b), 'Екзамен позаду — зіграти міні-гру?'); })()}
     <section class="panel"><h2 class="sec-title">За типами завдань</h2>${table(st.byType)}</section>
     <section class="panel"><h2 class="sec-title">За уроками</h2>${table(st.byLesson)}</section>
     ${wrong.length ? `<section class="panel"><h2 class="sec-title">Помилки (${wrong.length})</h2><div class="ex-mistakes">${wrong.map(({ q, r }, i) => `<div class="ex-mistake" data-i="${i}">

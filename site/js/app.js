@@ -19,6 +19,7 @@ import { readView } from './read.js';
 import { speakView } from './speak.js';
 import { dictView } from './dict.js';
 import { weekView } from './week-view.js';
+import { playView } from './games.js';
 import { initPWA } from './pwa.js';
 
 const app = $('#app');
@@ -80,6 +81,7 @@ async function route() {
   else if (parts[0] === 'achievements') out(achievementsView(app));
   else if (parts[0] === 'week') { await weekView(app, parts[1] || '0'); if (my !== routeNo) return; }
   else if (parts[0] === 'dict') { const v = await dictView(app, parts.slice(1)); if (my === routeNo) out(v); }
+  else if (parts[0] === 'play') { const v = await playView(app, parts.slice(1)); if (my === routeNo) out(v); }
   else if (parts[0] === 'read') readView(app);
   else if (parts[0] === 'speak') out(speakView(app));
   else if (parts[0] === 'drill') out(drillView(app, parts[1] || ''));

@@ -73,7 +73,7 @@ export function gatherStats(now = new Date()) {
     best: st.best, streak: st.streak, days: st.total, freezeUsed: st.freezeUsed, comeback: st.comeback,
     words, mineWords, lessonsDone, part1, part2, kanjiWritten, kanjiKnown, kanjiEasy, notes,
     exams, examBest, univBest, tsPerfect, mistakesCleared: (+lget(KEYS.cleared, 0) || 0) > 0 ? 1 : 0,
-    records: Object.keys(state.best || {}).length, todayDone: +counts.todayDone || 0, sensei: +counts.sensei || 0, conj: +counts.conj || 0, read: +counts.read || 0, speak: +counts.speak || 0, goalDays: goalDays(studyTime(), getGoal()).length,
+    records: Object.keys(state.best || {}).length, todayDone: +counts.todayDone || 0, sensei: +counts.sensei || 0, conj: +counts.conj || 0, read: +counts.read || 0, speak: +counts.speak || 0, play: +counts.play || 0, goalDays: goalDays(studyTime(), getGoal()).length,
     ...timeStats(now),
   };
 }
@@ -105,15 +105,16 @@ export function checkNow({ event = false } = {}) {
 function pop(a, sub = 'Нове досягнення') {
   if (!a || typeof document === 'undefined') return;
   document.querySelector('.ach-pop')?.remove();
-  const el = document.createElement('a');
+  const el = document.createElement('div');
   el.className = `ach-pop tier-${a.tier || 1}`;
-  el.href = '#/achievements';
   el.setAttribute('role', 'status');
-  el.innerHTML = `<span class="ach-badge sm" lang="ja">${esc(a.jp)}</span><span><small>${esc(sub)}</small><b>${esc(a.t)}</b></span>`;
-  el.onclick = () => el.remove();
+  // optional reward: a mini-game (games.js) — never offered while a game is running
+  const inGame = /^#\/play\/[^/]+\/./.test(location.hash);
+  el.innerHTML = `<a class="ach-pop-main" href="#/achievements"><span class="ach-badge sm" lang="ja">${esc(a.jp)}</span><span><small>${esc(sub)}</small><b>${esc(a.t)}</b></span></a>${inGame ? '' : '<a class="ach-pop-play" href="#/play" title="За бажанням: міні-гра як нагорода"><span lang="ja">遊</span> Міні-гра</a>'}`;
+  el.onclick = e => { if (e.target.closest('a')) el.remove(); };
   document.body.append(el);
   requestAnimationFrame(() => el.classList.add('show'));
-  setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 400); }, 4200);
+  setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 400); }, 6000);
 }
 
 export function initAchievements() {

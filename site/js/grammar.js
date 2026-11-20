@@ -5,6 +5,7 @@
 // Japanese text uses furigana markup {漢字|かんじ}, shown as 漢字(かんじ).
 import { $, $$, esc, I, furi, furiT, furiPlain, furiSay, furiBase, speak, norm } from './util.js';
 import { mountAskBlock, examQuestionFor } from './ai-helper.js';
+import { playOfferHTML } from './games.js';
 
 const G = { data: null, loading: null, error: false };
 export function loadGrammar() {
@@ -126,6 +127,7 @@ export async function grammarLesson(root, n, pointId) {
     <div class="g-cards">${l.points.map((pt, i) => `<details class="g-card" id="g-${esc(pt.id)}" open>
       <summary><span class="g-num">${i + 1}</span><span class="g-title" lang="ja">${furiT(pt.title)}</span><span class="g-chev" aria-hidden="true"></span></summary>
       <div class="g-body">${pt.blocks.map(blockHTML).join('')}${pt.details?.length ? `<details class="g-more"><summary>Детальніше</summary><div class="g-more-body">${pt.details.map(blockHTML).join('')}</div></details>` : ''}</div></details>`).join('')}</div>
+    ${playOfferHTML(n, n, `Прочитали урок ${n}? Міні-гра на закріплення`)}
     <div class="g-pager">${prev ? `<a class="btn ghost" href="#/grammar/${prev.lesson}">${I.left}<span>Урок ${prev.lesson}</span></a>` : '<span></span>'}
       ${next ? `<a class="btn ghost" href="#/grammar/${next.lesson}"><span>Урок ${next.lesson}</span>${I.right}</a>` : '<span></span>'}</div>
   </div>`;
