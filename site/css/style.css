@@ -1930,3 +1930,13 @@ button.kb-c:hover { outline: 2px solid var(--text); outline-offset: 1px; }
 .dc-exuk { margin: 0 0 2px; }
 .dc-exen { margin: 0; }
 .dc-exbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-top: 6px; }
+
+/* Pitch accent (pitch.js): line over high morae, step down after the accent */
+.pitch { display: inline-flex; align-items: flex-end; gap: 0; padding-top: 3px; font: 500 .82rem/1.15 var(--jp); color: var(--muted); vertical-align: middle; }
+.pitch > span { padding: 1px 1px 0; border-top: 1.5px solid transparent; }
+.pitch > span.h { border-top-color: #ff7a8e; color: var(--text); }
+.pitch > span.d { border-right: 1.5px solid #ff7a8e; }
+.pitch > span.r { border-left: 1.5px solid #ff7a8e; }
+.pitch small { margin-left: 4px; padding: 0 4px; border-radius: 4px; background: var(--panel-3); color: var(--muted); font: 700 .65rem/1.4 var(--ui); align-self: center; }
+.dc-pitch { display: inline-flex; align-items: center; gap: 8px; }
+.dc-pitch .pitch { font-size: 1rem; }

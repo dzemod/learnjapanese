@@ -1,5 +1,6 @@
 import { $, $$, esc, shuffle, speakCard, speakCardAuto, autoSpeakOn, setAutoSpeak, stopSpeech, check, I, onSwipe, justSwiped, isTyping, sizeClass, toast } from './util.js';
 import { wordLevel, jlptChip } from './jlpt.js';
+import { pitchOf, pitchHTML } from './pitch.js';
 import { openWordModal } from './edit.js';
 import { state, getSet, prog, record, toggleStar, saveOpts, studyCards, difficultCards, dueCards, getBest, setBest } from './store.js';
 
@@ -26,6 +27,8 @@ export function metaHTML(c) {
   const bits = [];
   if (c.hint) bits.push(`<span lang="ja">${esc(c.hint)}</span>`);
   if (c.verbGroup) bits.push(`<span class="vg">гр. ${esc(c.verbGroup)}</span>`);
+  const pt = pitchHTML(pitchOf(c.japanese, c.reading, c.verbGroup));
+  if (pt) bits.push(pt);
   const n = wordLevel(c.japanese, c.reading, c.verbGroup);
   if (n) bits.push(jlptChip(n));
   return bits.length ? `<div class="meta">${bits.join('')}</div>` : '';

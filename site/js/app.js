@@ -22,6 +22,7 @@ import { weekView } from './week-view.js';
 import { playView } from './games.js';
 import { jlptView } from './jlpt-view.js';
 import { loadJlpt } from './jlpt.js';
+import { loadPitch } from './pitch.js';
 import { initPWA } from './pwa.js';
 
 const app = $('#app');
@@ -153,7 +154,7 @@ onSync(drawSyncBar);
 initPWA();
 
 (async function init() {
-  await Promise.all([loadBase(), loadJlpt()]); // JLPT levels (jlpt.js) are shown on word rows, so they load with the lessons
+  await Promise.all([loadBase(), loadJlpt(), loadPitch()]); // JLPT levels (jlpt.js) are shown on word rows, so they load with the lessons
   // Retry unsaved lessons quietly (without asking for the password).
   if (Object.keys(state.custom.pending).length) syncAll({ interactive: false });
   window.addEventListener('hashchange', route);

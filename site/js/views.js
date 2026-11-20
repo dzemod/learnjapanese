@@ -1,4 +1,5 @@
 import { sortGojuon } from './util.js';
+import { pitchOn, setPitch } from './pitch.js';
 import { $, $$, esc, I, speakCard, toast, modal, download, pickFile, parseText, norm, today, onSwipe, justSwiped, isTyping, hasKanji, soundOn, setSound, autoSpeakOn, setAutoSpeak, plWord } from './util.js';
 import {
   state, getSets, getSet, isMine, setStats, prog, toggleStar, createSet, addCards, deleteCard, renameSet, deleteSet, markChecked,
@@ -79,6 +80,7 @@ export function homeView(root) {
         <h2 class="sec-title">Звук</h2>
         <p class="muted small">Вимова звучить лише тоді, коли ви натискаєте кнопку динаміка, «▶ Прослухати» або клавішу V. Кнопка 🔊/🔇 угорі вимикає звук повністю.</p>
         <label class="check"><input type="checkbox" data-sound ${soundOn() ? 'checked' : ''}><span>Звук увімкнено</span></label>
+        <label class="check"><input type="checkbox" data-pitch ${pitchOn() ? 'checked' : ''}><span>Показувати наголос (висоту тону) <small class="muted">над читанням слова: лінія — високий тон, сходинка — спад</small></span></label>
         <label class="check sound-auto"><input type="checkbox" data-autospeak ${autoSpeakOn() ? 'checked' : ''}><span>Автоматично озвучувати картки <small class="muted">(картки й автопрогравання; за замовчуванням вимкнено)</small></span></label>
       </section>
       <section class="panel data-panel">
@@ -135,6 +137,7 @@ export function homeView(root) {
     $('[data-exp]', root).onclick = backupNow;
     $('[data-sound]', root).onchange = e => setSound(e.target.checked);
     $('[data-autospeak]', root).onchange = e => setAutoSpeak(e.target.checked);
+    $('[data-pitch]', root).onchange = e => setPitch(e.target.checked);
     $('[data-anki]', root).onclick = async () => { await loadKanji(); openAnkiDialog({ books: kanjiBooks, assocOf: id => getNote(id) || defaultAssoc(id)?.t || '' }); };
     $('[data-claude]', root).onclick = () => { download(`kotoba-sets-${today()}.json`, setsExport()); toast('Слова експортовано — надішліть файл Claude'); };
     $('[data-imp]', root).onclick = async () => {

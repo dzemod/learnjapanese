@@ -9,7 +9,7 @@ import { $ } from './util.js';
 import { syncAll, state } from './store.js';
 import { syncNow, syncState } from './sync-progress.js';
 
-export const DATA_FILES = ['data/sets.json', 'data/grammar.json', 'data/kanji.json', 'data/kanji-assoc.json', 'data/exam.json', 'data/exam-univ.json', 'data/exam-presets.json', 'data/analyzer.json', 'data/jmdict-mini.json', 'data/jlpt.json'];
+export const DATA_FILES = ['data/sets.json', 'data/grammar.json', 'data/kanji.json', 'data/kanji-assoc.json', 'data/exam.json', 'data/exam-univ.json', 'data/exam-presets.json', 'data/analyzer.json', 'data/jmdict-mini.json', 'data/jlpt.json', 'data/pitch.json'];
 let installEvent = null;
 
 function warm() {

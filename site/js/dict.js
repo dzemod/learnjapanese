@@ -13,6 +13,7 @@
 // the background, cached by the service worker). Favourites jp.dict.fav, recent jp.dict.recent. Speech on click only.
 import { $, $$, esc, I, speak, toast } from './util.js';
 import { wordLevel, kanjiLevel, jlptChip } from './jlpt.js';
+import { pitchDict, pitchHTML, pitchOn } from './pitch.js';
 import { getSets } from './store.js';
 import { buildIndex, lookupWord } from './wordindex.js';
 import { loadKanji, books as kanjiBooks, strokeOrder } from './kanji.js';
@@ -237,7 +238,7 @@ async function wordView(root, wid) {
   const key = 'w:' + it.id;
   root.innerHTML = `<div class="dc fade-in"><a class="back" href="javascript:history.back()">${I.back}<span>Назад</span></a>
     <section class="panel dc-word">
-      <div class="dc-whead"><span class="dc-big" lang="ja">${esc(head)}</span>${k.length ? `<span class="reading dc-rd" lang="ja">${esc(rd[0])}</span>` : ''}
+      <div class="dc-whead"><span class="dc-big" lang="ja">${esc(head)}</span>${k.length ? `<span class="reading dc-rd" lang="ja">${esc(rd[0])}</span>` : ''}<span class="dc-pitch"></span>
         <span class="dc-acts"><button type="button" class="btn ghost sm" data-add title="До мого уроку" aria-label="Додати до мого уроку">${I.plus}<span>До мого уроку</span></button><button type="button" class="icon-btn" data-say aria-label="Прослухати">${I.speaker}</button><button type="button" class="icon-btn star ${isFav(key) ? 'on' : ''}" data-fav aria-label="Обране">${I.star}</button></span></div>
       ${it.common ? '<span class="chip dc-common">поширене слово</span>' : ''}${(() => { const n = wordLevel(head, rd[0]); return n ? ` <a href="#/jlpt" class="jl-link">${jlptChip(n)}</a>` : ''; })()}
       ${h ? `<div class="dc-mine big"><b>${esc(h.uk)}</b> <a class="link small" href="${esc(h.href)}">${esc(h.src)}</a></div>` : ''}
@@ -251,6 +252,7 @@ async function wordView(root, wid) {
     <p class="muted small dc-lic">JMdict © EDRDG, CC BY-SA 4.0</p></div>`;
   $('[data-say]', root).onclick = () => speak(rd[0]);
   drawExamples($('.dc-ex', root), it.id, it.senses.length);
+  if (pitchOn()) pitchDict(head, rd[0]).then(p => { const el = $('.dc-pitch', root); if (el && p) el.innerHTML = pitchHTML(p) + '<a class="link small muted" href="https://github.com/mifunetoshiro/kanjium" target="_blank" rel="noopener" title="Наголос: Kanjium, CC BY-SA 4.0">Kanjium</a>'; });
   $('[data-add]', root).onclick = () => {
     const g = groupOfPos(it.senses[0]?.[0]);
     const jp = k[0] || '', kn = rd[0];
