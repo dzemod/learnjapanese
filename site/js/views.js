@@ -59,6 +59,7 @@ export function homeView(root) {
       <div class="week-slot"></div>
       <a class="drill-entry" href="#/drill"><span class="mode-ic" lang="ja">活</span><span><b>Тренажер дієслів</b><small>て-, ない-, た-форма та інші — лише ті, що ви вже пройшли</small></span><span class="today-ach-go" aria-hidden="true">›</span></a>
       <a class="drill-entry" href="#/read"><span class="mode-ic" lang="ja">読</span><span><b>Читання</b><small>короткі тексти зі слів, які ви вже вивчили; торкніться слова — значення</small></span><span class="today-ach-go" aria-hidden="true">›</span></a>
+      <a class="drill-entry" href="#/jlpt"><span class="mode-ic" lang="ja">能</span><span><b>Шлях до JLPT</b><small>скільки слів і канджі рівнів N5–N1 ви вже знаєте</small></span><span class="today-ach-go" aria-hidden="true">›</span></a>
       <a class="drill-entry" href="#/play"><span class="mode-ic" lang="ja">遊</span><span><b>Міні-ігри</b><small>Дощ слів, Пам’ять, Частки-блискавка, Кроти — зі слів ваших уроків</small></span><span class="today-ach-go" aria-hidden="true">›</span></a>
       <a class="drill-entry" href="#/speak"><span class="mode-ic" lang="ja">話</span><span><b>Говоріння</b><small>послухайте речення, скажіть уголос — сайт покаже, що вийшло</small></span><span class="today-ach-go" aria-hidden="true">›</span></a>
       <section class="hero">

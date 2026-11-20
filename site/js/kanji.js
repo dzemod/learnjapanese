@@ -4,6 +4,7 @@
 //   <lessonId>-w   — example words of the lesson ("Слова уроку N")
 // Stroke order: KanjiVG (© Ulrich Apel, CC BY-SA 3.0), fetched from the jsDelivr CDN.
 import { $, $$, esc, I, toast, modal, speak, speakCard, sizeClass, hasKanji, sortGojuon, plWord } from './util.js';
+import { kanjiLevel, jlptChip } from './jlpt.js';
 import {
   saveOpts, state, prog, toggleStar, setStats, registerSetProvider, registerKanjiPayload, markKanjiPending, saveCustomNow, syncAll, onSync,
 } from './store.js';
@@ -283,7 +284,7 @@ export function openKanji(lessonId, kanjiId, onChange) {
         </div>
         <div class="kc-meaning">${esc(k.meaning)} ${k.check ? `<button class="check-badge as-btn" data-edit title="Перекладено з англійської — перевірте">перевірити</button>` : ''}</div>
         <div class="kc-en muted small">англійською: ${esc(k.en || '')}</div>
-        <div class="kc-facts"><span><b>${esc(k.strokes)}</b> ${plWord(+k.strokes, ['риска', 'риски', 'рисок'])}</span>${k.radical ? `<span>ключ <b lang="ja">${esc(k.radical)}</b></span>` : ''}</div>
+        <div class="kc-facts"><span><b>${esc(k.strokes)}</b> ${plWord(+k.strokes, ['риска', 'риски', 'рисок'])}</span>${k.radical ? `<span>ключ <b lang="ja">${esc(k.radical)}</b></span>` : ''}${kanjiLevel(k.kanji) ? `<a href="#/jlpt" class="jl-link">${jlptChip(kanjiLevel(k.kanji))}</a>` : ''}</div>
         <div class="kc-readings">
           ${k.on.length ? `<div><span class="kb-l">он</span><span lang="ja">${esc(k.on.join('、'))}</span></div>` : ''}
           ${k.kun.length ? `<div><span class="kb-l">кун</span><span lang="ja">${k.kun.map(kunHTML).join('、')}</span></div>` : ''}

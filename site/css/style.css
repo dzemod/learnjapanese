@@ -1895,3 +1895,28 @@ button.kb-c:hover { outline: 2px solid var(--text); outline-offset: 1px; }
 .g-review-txt b { color: var(--text); }
 .g-review-btns { display: flex; flex-wrap: wrap; gap: 8px; }
 @media (max-width: 560px) { .g-review > .btn, .g-review-btns, .g-review-btns .btn { width: 100%; } }
+
+/* JLPT levels (jlpt.js, jlpt-view.js) */
+.jlpt-chip { display: inline-flex; align-items: center; padding: 1px 7px; border-radius: 6px; font: 800 .68rem/1.5 var(--ui); letter-spacing: .03em; color: #111; background: var(--jl, #888); vertical-align: middle; }
+.jlpt-chip[data-n="5"] { --jl: #7fd1a4; } .jlpt-chip[data-n="4"] { --jl: #8fc3f0; } .jlpt-chip[data-n="3"] { --jl: #e6c36a; }
+.jlpt-chip[data-n="2"] { --jl: #f09a6e; } .jlpt-chip[data-n="1"] { --jl: #e77b9a; }
+.jlpt-chip.big { font-size: 1.05rem; padding: 6px 12px; border-radius: 10px; }
+.jl-link { text-decoration: none; }
+.jl-legend { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 0 0 6px; color: var(--muted); }
+.jl-legend i { display: inline-block; width: 12px; height: 12px; margin-right: 6px; border-radius: 3px; vertical-align: -1px; background: var(--panel-3); border: 1px solid var(--border-2); }
+.jl-legend i.k, .jl-bar i.k { background: var(--green); } .jl-legend i.l, .jl-bar i.l { background: var(--amber); } .jl-legend i.b, .jl-bar i.b { background: #6d6a66; }
+.jl-head { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
+.jl-head h2 { margin: 0; font-size: 1.15rem; }
+.jl-head p { margin: 0; }
+.jl-head > div { flex: 1; min-width: 0; }
+.jl-pct { font-size: 1.6rem; font-variant-numeric: tabular-nums; }
+.jl-row { margin: 10px 0; }
+.jl-lbl { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 12px; margin-bottom: 5px; }
+.jl-bar { display: flex; height: 10px; border-radius: 99px; overflow: hidden; background: var(--panel-3); }
+.jl-bar i { display: block; height: 100%; }
+.jl-more { margin-top: 10px; }
+.jl-more summary { cursor: pointer; color: var(--muted); font-size: .9rem; }
+.jl-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; max-height: 340px; overflow-y: auto; }
+.jl-chips .chip { font-size: .95rem; color: var(--text); }
+.jl-chips .chip small { margin-left: 4px; color: var(--muted); font-size: .72rem; }
+.meta .jlpt-chip { margin-left: 2px; }

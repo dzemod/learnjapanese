@@ -12,6 +12,7 @@
 // Data: data/dict/* (tools/build-dict.mjs), searched in dict-worker.js (chunk 00 = common words first, the rest in
 // the background, cached by the service worker). Favourites jp.dict.fav, recent jp.dict.recent. Speech on click only.
 import { $, $$, esc, I, speak, toast } from './util.js';
+import { wordLevel, kanjiLevel, jlptChip } from './jlpt.js';
 import { getSets } from './store.js';
 import { buildIndex, lookupWord } from './wordindex.js';
 import { loadKanji, books as kanjiBooks, strokeOrder } from './kanji.js';
@@ -211,7 +212,7 @@ async function wordView(root, wid) {
     <section class="panel dc-word">
       <div class="dc-whead"><span class="dc-big" lang="ja">${esc(head)}</span>${k.length ? `<span class="reading dc-rd" lang="ja">${esc(rd[0])}</span>` : ''}
         <span class="dc-acts"><button type="button" class="btn ghost sm" data-add title="До мого уроку" aria-label="Додати до мого уроку">${I.plus}<span>До мого уроку</span></button><button type="button" class="icon-btn" data-say aria-label="Прослухати">${I.speaker}</button><button type="button" class="icon-btn star ${isFav(key) ? 'on' : ''}" data-fav aria-label="Обране">${I.star}</button></span></div>
-      ${it.common ? '<span class="chip dc-common">поширене слово</span>' : ''}
+      ${it.common ? '<span class="chip dc-common">поширене слово</span>' : ''}${(() => { const n = wordLevel(head, rd[0]); return n ? ` <a href="#/jlpt" class="jl-link">${jlptChip(n)}</a>` : ''; })()}
       ${h ? `<div class="dc-mine big"><b>${esc(h.uk)}</b> <a class="link small" href="${esc(h.href)}">${esc(h.src)}</a></div>` : ''}
       ${it.uk ? `<div class="dc-ukb"><b>${esc(it.uk)}</b> <span class="check-badge" title="${UK_NOTE}">перевірити</span></div>` : ''}
       ${glossHTML(it.senses, m, 10)}
@@ -244,7 +245,7 @@ async function kanjiView(root, ch) {
       ${b ? `<p class="dc-kmean"><b>${esc(b.meaning)}</b> <a class="link small" href="#/kanji/${encodeURIComponent(b.lessonId)}/${encodeURIComponent(b.id)}">${esc(b.bookTitle)}, картка</a></p>` : ''}
       ${k?.[7] ? `<p class="muted" lang="en">${esc(k[7])}</p>` : ''}
       <div class="kc-readings">${on.length ? `<div><span class="kb-l">он</span><span lang="ja">${esc(on.join('、'))}</span></div>` : ''}${kun.length ? `<div><span class="kb-l">кун</span><span lang="ja">${kun.map(r => kunHTML(r.replace('.', '-'))).join('、')}</span></div>` : ''}</div>
-      <div class="kc-facts">${k ? `<span><b>${k[1]}</b> рис.</span>${k[2] ? `<span>клас школи <b>${k[2] <= 6 ? k[2] : 'старші'}</b></span>` : ''}${k[3] ? `<span>JLPT (стар.) <b>N${k[3]}</b></span>` : ''}${k[4] ? `<span>частотність <b>№${k[4]}</b></span>` : ''}` : ''}</div>
+      <div class="kc-facts">${k ? `<span><b>${k[1]}</b> рис.</span>${k[2] ? `<span>клас школи <b>${k[2] <= 6 ? k[2] : 'старші'}</b></span>` : ''}${kanjiLevel(ch) ? `<span>JLPT <a href="#/jlpt" class="jl-link">${jlptChip(kanjiLevel(ch))}</a></span>` : k[3] ? `<span>JLPT (стар.) <b>${k[3]}</b></span>` : ''}${k[4] ? `<span>частотність <b>№${k[4]}</b></span>` : ''}` : ''}</div>
       ${k?.[8] ? `<p class="small"><span class="muted">Складники:</span> <span lang="ja">${[...k[8]].map(c => `<a class="link" href="#/dict/k/${encodeURIComponent(c)}">${esc(c)}</a>`).join(' ')}</span></p>` : ''}
       ${assoc ? `<div class="as-note"><p>${esc(assoc)}</p></div>` : ''}
     </section>

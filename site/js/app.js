@@ -20,6 +20,8 @@ import { speakView } from './speak.js';
 import { dictView } from './dict.js';
 import { weekView } from './week-view.js';
 import { playView } from './games.js';
+import { jlptView } from './jlpt-view.js';
+import { loadJlpt } from './jlpt.js';
 import { initPWA } from './pwa.js';
 
 const app = $('#app');
@@ -82,6 +84,7 @@ async function route() {
   else if (parts[0] === 'week') { await weekView(app, parts[1] || '0'); if (my !== routeNo) return; }
   else if (parts[0] === 'dict') { const v = await dictView(app, parts.slice(1)); if (my === routeNo) out(v); }
   else if (parts[0] === 'play') { const v = await playView(app, parts.slice(1)); if (my === routeNo) out(v); }
+  else if (parts[0] === 'jlpt') { await jlptView(app); if (my !== routeNo) return; }
   else if (parts[0] === 'read') readView(app);
   else if (parts[0] === 'speak') out(speakView(app));
   else if (parts[0] === 'drill') out(drillView(app, parts[1] || ''));
@@ -150,7 +153,7 @@ onSync(drawSyncBar);
 initPWA();
 
 (async function init() {
-  await loadBase();
+  await Promise.all([loadBase(), loadJlpt()]); // JLPT levels (jlpt.js) are shown on word rows, so they load with the lessons
   // Retry unsaved lessons quietly (without asking for the password).
   if (Object.keys(state.custom.pending).length) syncAll({ interactive: false });
   window.addEventListener('hashchange', route);

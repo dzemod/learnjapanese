@@ -1,4 +1,5 @@
 import { $, $$, esc, shuffle, speakCard, speakCardAuto, autoSpeakOn, setAutoSpeak, stopSpeech, check, I, onSwipe, justSwiped, isTyping, sizeClass, toast } from './util.js';
+import { wordLevel, jlptChip } from './jlpt.js';
 import { openWordModal } from './edit.js';
 import { state, getSet, prog, record, toggleStar, saveOpts, studyCards, difficultCards, dueCards, getBest, setBest } from './store.js';
 
@@ -25,6 +26,8 @@ export function metaHTML(c) {
   const bits = [];
   if (c.hint) bits.push(`<span lang="ja">${esc(c.hint)}</span>`);
   if (c.verbGroup) bits.push(`<span class="vg">гр. ${esc(c.verbGroup)}</span>`);
+  const n = wordLevel(c.japanese, c.reading, c.verbGroup);
+  if (n) bits.push(jlptChip(n));
   return bits.length ? `<div class="meta">${bits.join('')}</div>` : '';
 }
 export const answerText = (c, side = ansSide()) => (side === 'ja' ? c.japanese : c.ukrainian);
