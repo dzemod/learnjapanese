@@ -58,6 +58,7 @@ function worker() {
 }
 const ask = msg => new Promise(res => { const id = ++seq; waits.set(id, res); worker().postMessage({ ...msg, id }); });
 export const dictSearch = (q, mode, limit = 50, offset = 0) => ask({ type: 'search', q, mode, limit, offset });
+/** One word by JMdict id (the worker answers when the word's chunk is in, or «not found» after the last chunk). */
 export const dictEntry = wid => ask({ type: 'entry', wid });
 /** Exact form lookup in the whole dictionary (common words first, ≤ 5 per call). */
 export const dictExact = keys => ask({ type: 'exact', keys });
@@ -199,6 +200,32 @@ async function resultsView(root, q) {
   return off;
 }
 
+// ---------- example sentences (Tatoeba, tools/build-dict-examples.mjs; data/dict/ex-<hash of the id, 0–f>.json) ----------
+// rows: [sense (−1 = extra sentence with a Ukrainian translation), ja, form in the sentence, en, uk, tatoebaId]
+const EX = {};
+const exShard = id => { let h = 0; for (const c of String(id)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return (h % 16).toString(16); };
+const exFor = id => { const s = exShard(id); return (EX[s] ||= fetch(`data/dict/ex-${s}.json`).then(r => (r.ok ? r.json() : { x: {} })).then(j => j.x || {}).catch(() => { delete EX[s]; return {}; }))
+  .then(x => x[String(id)] || []); };
+function exampleHTML([si, ja, form, en, uk, tid], senses) {
+  const at = form ? ja.indexOf(form) : -1;
+  const jaH = at >= 0 ? `${esc(ja.slice(0, at))}<b>${esc(form)}</b>${esc(ja.slice(at + form.length))}` : esc(ja);
+  return `<div class="dc-exi"><p class="dc-exja" lang="ja">${jaH}</p>
+    ${uk ? `<p class="dc-exuk">${esc(uk)}</p>` : ''}${en ? `<p class="dc-exen muted small" lang="en">${esc(en)}</p>` : ''}
+    <div class="dc-exbar">${senses > 1 && si >= 0 ? `<span class="chip">значення ${si + 1}</span>` : ''}
+      <button type="button" class="icon-btn sm" data-ex-say="${esc(ja)}" aria-label="Прослухати речення">${I.speaker}</button>
+      <a class="link small" href="#/translate/${encodeURIComponent(ja)}">Розібрати</a>
+      ${tid ? `<a class="link small muted" href="https://tatoeba.org/uk/sentences/show/${tid}" target="_blank" rel="noopener">Tatoeba №${tid}</a>` : ''}</div></div>`;
+}
+async function drawExamples(box, id, senses) {
+  const rows = await exFor(id);
+  if (!box.isConnected) return;
+  if (!rows.length) { box.remove(); return; }
+  box.hidden = false;
+  box.innerHTML = `<h2 class="sec-title">Приклади речень <span class="muted small">${rows.length}</span></h2>${rows.map(r => exampleHTML(r, senses)).join('')}
+    <p class="muted small dc-lic">Речення: <a class="link" href="https://tatoeba.org" target="_blank" rel="noopener">Tatoeba</a>, CC BY 2.0 FR. Український переклад — від авторів Tatoeba, якщо він є; англійський — з JMdict / Tatoeba.</p>`;
+  box.addEventListener('click', e => { const b = e.target.closest('[data-ex-say]'); if (b) speak(b.dataset.exSay); });
+}
+
 async function wordView(root, wid) {
   root.innerHTML = '<div class="dc"><div class="loading"><span class="sun pulse"></span></div></div>';
   const [r, m, my, K] = await Promise.all([dictEntry(wid), meta(), mine(), kanjiData().catch(() => new Map())]);
@@ -218,10 +245,12 @@ async function wordView(root, wid) {
       ${glossHTML(it.senses, m, 10)}
       ${k.length > 1 || rd.length > 1 ? `<p class="small"><span class="muted">Інші написання:</span> <span lang="ja">${esc([...k.slice(1), ...rd.slice(k.length ? 1 : 1)].filter(Boolean).join('、'))}</span></p>` : ''}
     </section>
+    <section class="panel dc-ex" hidden></section>
     ${[...new Set([...head].filter(ch => KANJI.test(ch)))].length ? `<h2 class="group-title">Канджі слова</h2><div class="dc-kanji-row">${[...new Set([...head].filter(ch => KANJI.test(ch)))].map(ch => { const kk = K.get(ch), b = my.book.get(ch); return `<a class="dc-k" href="#/dict/k/${encodeURIComponent(ch)}"><b lang="ja">${esc(ch)}</b><small>${esc(b?.meaning || kk?.[7]?.split('; ')[0] || '')}</small></a>`; }).join('')}</div>` : ''}
     <p class="small"><a class="link" href="#/translate/${encodeURIComponent(head)}">Розібрати в Перекладачі</a></p>
     <p class="muted small dc-lic">JMdict © EDRDG, CC BY-SA 4.0</p></div>`;
   $('[data-say]', root).onclick = () => speak(rd[0]);
+  drawExamples($('.dc-ex', root), it.id, it.senses.length);
   $('[data-add]', root).onclick = () => {
     const g = groupOfPos(it.senses[0]?.[0]);
     const jp = k[0] || '', kn = rd[0];

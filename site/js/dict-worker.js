@@ -160,7 +160,8 @@ function answer(m) {
 function flush() {
   for (let k = pending.length - 1; k >= 0; k--) {
     const m = pending[k];
-    const ready = loaded >= total || (loaded >= 1 && (m.type === 'search' || m.type === 'exact' || m.type === 'withKanji' || (m.type === 'browse' && m.filter !== 'all' && loaded >= 2) || (m.type === 'entry' && idToI.has(m.wid))));
+    // total = 0 until meta.json is in: «everything loaded» only after that (else a word page opened directly got «не знайдено»)
+    const ready = (total > 0 && loaded >= total) || (loaded >= 1 && (m.type === 'search' || m.type === 'exact' || m.type === 'withKanji' || (m.type === 'browse' && m.filter !== 'all' && loaded >= 2) || (m.type === 'entry' && idToI.has(m.wid))));
     if (ready) { pending.splice(k, 1); answer(m); }
   }
 }

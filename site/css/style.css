@@ -1920,3 +1920,13 @@ button.kb-c:hover { outline: 2px solid var(--text); outline-offset: 1px; }
 .jl-chips .chip { font-size: .95rem; color: var(--text); }
 .jl-chips .chip small { margin-left: 4px; color: var(--muted); font-size: .72rem; }
 .meta .jlpt-chip { margin-left: 2px; }
+
+/* Dictionary example sentences (Tatoeba) */
+.dc-ex .sec-title { margin-bottom: 10px; }
+.dc-exi { padding: 12px 0; border-top: 1px solid var(--border); }
+.dc-exi:first-of-type { border-top: 0; padding-top: 4px; }
+.dc-exja { margin: 0 0 4px; font: 500 1.15rem/1.7 var(--jp); }
+.dc-exja b { color: #ff5a72; font-weight: 700; }
+.dc-exuk { margin: 0 0 2px; }
+.dc-exen { margin: 0; }
+.dc-exbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-top: 6px; }
