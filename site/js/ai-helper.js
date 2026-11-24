@@ -166,10 +166,10 @@ const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeo
  * The one Puter.js client of the site (Exam, Grammar, Сенсей): loads Puter.js, signs in on the click, tries MODELS in
  * turn. messages = [{ role: 'system'|'user'|'assistant', content }]; earlier turns of a conversation may be included.
  * Resolves to { answer, cut } (cut = stopped by the output limit) or { error: Ukrainian message } (signin = the
- * message for a cancelled sign-in). maxTokens: a number or 'max' (MODEL_MAX_OUTPUT of the model in use).
+ * message for a cancelled sign-in). file = { blob, name } (a photo of Сенсей) goes with the last user message. maxTokens: a number or 'max' (MODEL_MAX_OUTPUT of the model in use).
  * Real errors go to the console as code + message only.
  */
-export async function chat(messages, { signin = MSG_SIGNIN, maxTokens = MAX_OUTPUT_TOKENS, timeoutMs = TIMEOUT_MS } = {}) {
+export async function chat(messages, { signin = MSG_SIGNIN, maxTokens = MAX_OUTPUT_TOKENS, timeoutMs = TIMEOUT_MS, file = null } = {}) {
   let puter;
   try { puter = await loadPuter(); } catch (e) { console.error('ask:', errInfo(e)); return { error: MSG_FAIL }; }
   // Sign-in opens Puter's popup, so it runs here, right after the click on «Надіслати».
@@ -177,6 +177,24 @@ export async function chat(messages, { signin = MSG_SIGNIN, maxTokens = MAX_OUTP
     if (!puter.auth.isSignedIn()) await puter.auth.signIn();
   } catch (e) { console.warn('ask: Puter sign-in did not finish:', errInfo(e)); return { error: signin }; }
   if (!puter.auth.isSignedIn()) return { error: signin };
+  if (!file) return ask(puter, messages, maxTokens, timeoutMs, signin);
+  // A photo (Сенсей): docs.puter.com/AI/chat «Working with Files» — upload with puter.fs.write, a { type: 'file',
+  // puter_path } part in the user message, delete the temporary file afterwards (both models accept images).
+  let path = '';
+  try {
+    const f = await puter.fs.write(`kotoba-sensei-${Date.now()}-${String(file.name || 'photo.jpg').replace(/[^\w.-]+/g, '_')}`, file.blob);
+    path = f?.path || '';
+    if (!path) throw new Error('no path');
+  } catch (e) {
+    console.error('ask: file upload to Puter failed -', errInfo(e));
+    return { error: isAuthError(e) ? signin : MSG_FAIL };
+  }
+  const last = messages[messages.length - 1];
+  const withFile = [...messages.slice(0, -1), { role: 'user', content: [{ type: 'file', puter_path: path }, { type: 'text', text: String(last.content) }] }];
+  try { return await ask(puter, withFile, maxTokens, timeoutMs, signin); }
+  finally { Promise.resolve().then(() => puter.fs.delete(path)).catch(e => console.warn('ask: temporary file not deleted -', errInfo(e))); }
+}
+async function ask(puter, messages, maxTokens, timeoutMs, signin) {
   for (const model of MODELS) {
     try {
       const max_tokens = maxTokens === 'max' ? MODEL_MAX_OUTPUT[model] : maxTokens;

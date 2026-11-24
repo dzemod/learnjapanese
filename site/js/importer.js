@@ -86,7 +86,8 @@ export async function ocrImage(img, onProgress) {
 }
 
 // ---------------------------------------------------------------- PDF
-async function getPdfLib() {
+/** pdf.js (lazy, from the CDN): shared with the Сенсей attachments (sensei-files.js). */
+export async function loadPdfLib() {
   await loadScript(CDN.pdf);
   const lib = window.pdfjsLib;
   lib.GlobalWorkerOptions.workerSrc = CDN.pdfWorker;
@@ -139,7 +140,7 @@ async function pageText(page) {
  */
 export async function readPdf(file, rangeStr, onProgress) {
   onProgress?.(0, 'Відкриваю PDF…');
-  const lib = await getPdfLib();
+  const lib = await loadPdfLib();
   let pdf;
   try { pdf = await lib.getDocument({ data: await file.arrayBuffer() }).promise; }
   catch { throw new Error('Не вдалося відкрити PDF — файл пошкоджений або захищений паролем.'); }
