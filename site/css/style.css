@@ -1371,6 +1371,21 @@ body.kw-rating main { padding-bottom: calc(110px + env(safe-area-inset-bottom));
 .ss-input::placeholder { color: var(--muted); }
 .ss-send { flex: none; border-radius: 0; min-height: 40px; padding: 0 14px; }
 .ss-send:disabled { opacity: .6; cursor: progress; }
+/* attachments: paperclip left of the textarea, the chosen file as a chip on its own row above it */
+.ss-bar { flex-wrap: wrap; min-width: 0; }
+.ss-stage { grid-template-columns: minmax(0, 1fr); } /* a long file name never widens the stage */
+.ss-clip { flex: none; display: grid; place-items: center; width: 40px; height: 40px; padding: 0; background: transparent; border: 0; border-radius: 0; color: var(--muted); cursor: pointer; }
+.ss-clip:hover, .ss-clip:focus-visible { color: var(--text); }
+.ss-clip:focus-visible { outline: 1px solid var(--red); }
+.ss-clip:disabled { opacity: .5; cursor: progress; }
+.ss-att { flex: 1 0 100%; min-width: 0; }
+.ss-att-chip { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; min-width: 0; padding: 4px 4px 4px 10px; background: var(--red-bg); border: 1px solid rgba(200, 16, 46, .45); color: var(--text); font-size: .85rem; line-height: 1.3; }
+.ss-att-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ss-att-size { flex: none; color: var(--muted); }
+.ss-att-x { flex: none; width: 28px; height: 28px; padding: 0; background: transparent; border: 0; color: var(--text); font-size: 1.2rem; line-height: 1; cursor: pointer; }
+.ss-att-x:hover, .ss-att-x:focus-visible { color: var(--red); }
+.ss-msg-file { display: block; width: fit-content; max-width: 100%; margin-bottom: 6px; padding: 2px 8px; border: 1px solid rgba(200, 16, 46, .45); font-size: .85em; overflow-wrap: anywhere; }
+.ss-art > .ss-bar { gap: 4px; }
 .ss-meta { display: flex; justify-content: space-between; gap: 10px; min-height: 1.2em; font-size: .88rem; }
 .ss-count.over { color: var(--red); }
 .ss-starters { display: flex; flex-wrap: wrap; gap: 8px; }
