@@ -32,6 +32,8 @@ const MSG_SIGNIN = 'Щоб поговорити з Сенсеєм, увійді�
 const MSG_LONG = 'Повідомлення надто довге, скоротіть його';
 const FILE_QUESTION = 'Що тут? Поясни, будь ласка.'; // sent when only a file is attached
 const MSG_READING = 'Готую файл…';
+const MSG_REPLACED = 'Попередній файл замінено';
+const MSG_PASTE_FAIL = 'Не вдалося вставити зображення. Спробуйте кнопку скріпки';
 const LEVEL_KEY = 'jp.sensei.level'; // talk mode: lessons 1–N (localStorage)
 const LEVEL_DEFAULT = 10;
 const STARTERS = ['Як краще вчити кану?', 'Що робити, якщо плутаю は і が?', 'Як не забути канджі?', 'Які фільми подивитися для практики?'];
@@ -156,6 +158,7 @@ export function senseiView(root, startMode = '') {
   let error = '';
   let att = null; // the prepared attachment of the next message (memory only, never stored)
   let preparing = false;
+  let info = ''; // a neutral note under the bar (e.g. the previous file was replaced)
   loadPuter(); // preload, so the sign-in popup can open right on the first click
   loadGrammar(); // the lesson list for «Перевір речення» and «Розмова японською»
 
@@ -231,7 +234,7 @@ export function senseiView(root, startMode = '') {
     const x = $('.ss-att-x', attBox);
     if (x) x.onclick = () => { att = null; draw(); input.focus({ preventScroll: true }); };
     send.textContent = busy ? 'Надсилаю…' : 'Надіслати';
-    status.innerHTML = error ? `<span class="ask-err">${esc(error)}</span>` : '';
+    status.innerHTML = error ? `<span class="ask-err">${esc(error)}</span>` : info ? `<span class="muted">${esc(info)}</span>` : '';
     root.querySelector('.sensei').classList.toggle('thinking', !!busy);
     if (scroll === 'typing') reveal($('.ss-typing', list), 'nearest');
     if (scroll === 'reply') reveal([...list.querySelectorAll('.ss-msg.ai')].pop(), 'start');
@@ -246,7 +249,7 @@ export function senseiView(root, startMode = '') {
     const q = typed || FILE_QUESTION, a = att;
     att = null;
     const M = mode; // the reply goes to the conversation it was asked in, even if the learner switches modes
-    error = ''; busy = M;
+    error = ''; info = ''; busy = M;
     const log = readLog(M);
     writeLog(M, [...log, a ? { r: 'u', t: q, f: a.name } : { r: 'u', t: q }]);
     input.value = ''; grow(); counter();
@@ -286,16 +289,45 @@ export function senseiView(root, startMode = '') {
 
   // «Прикріпити»: one photo or text file per message (native picker; on phones it also offers the camera)
   clip.onclick = () => { if (!busy && !preparing) picker.click(); };
-  picker.onchange = async () => {
-    const f = picker.files?.[0];
-    picker.value = '';
-    if (!f) return;
-    preparing = true; error = ''; draw();
+  // the same pipeline for the paperclip and a pasted image (size limit, resize, EXIF strip, chip); one file at a time
+  async function attach(f) {
+    if (busy || preparing) return;
+    const had = !!att;
+    preparing = true; error = ''; info = ''; draw();
     const r = await prepareAttachment(f);
     preparing = false;
-    if (r.error) error = r.error; else att = r;
+    if (r.error) error = r.error; // a rejected file keeps the previous one
+    else { att = r; if (had) info = MSG_REPLACED; }
     if (root.isConnected) draw();
+  }
+  picker.onchange = () => {
+    const f = picker.files?.[0];
+    picker.value = '';
+    if (f) attach(f);
   };
+  // Ctrl+V / Cmd+V / long-press «Вставити»: an image in the clipboard becomes the attachment; text pastes as before.
+  // Image + text together (some apps): the image is attached and the text is pasted.
+  input.addEventListener('paste', e => {
+    const dt = e.clipboardData;
+    if (!dt) return;
+    const isImg = t => String(t || '').toLowerCase().startsWith('image/');
+    const items = [...(dt.items || [])];
+    const imgItems = items.filter(it => it.kind === 'file' && isImg(it.type));
+    const file = imgItems.map(it => it.getAsFile()).find(Boolean) || [...(dt.files || [])].find(x => isImg(x.type)) || dt.files?.[0]; // a copied file: the pipeline checks it
+    const text = dt.getData('text/plain');
+    // the clipboard announces a file/image but the browser gives none (some phones): tell the learner, keep the text
+    const announced = imgItems.length || [...(dt.types || [])].includes('Files');
+    if (!file) {
+      if (announced && !text) { e.preventDefault(); error = MSG_PASTE_FAIL; info = ''; draw(); }
+      return; // plain text: the browser pastes it as usual
+    }
+    e.preventDefault();
+    if (text) {
+      input.setRangeText(text, input.selectionStart, input.selectionEnd, 'end');
+      grow(); counter();
+    }
+    attach(new File([file], file.name || 'зображення.png', { type: file.type }));
+  });
   input.addEventListener('keydown', e => {
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && desktopKeys()) { e.preventDefault(); form.requestSubmit(); }
   });
