@@ -3,6 +3,8 @@
 // chip removed → only the typed text; photo → resized (≤ 1024 px JPEG, no EXIF) → uploaded with puter.fs.write,
 // { type: 'file', puter_path } part, puter.fs.delete; failure keeps the file; nothing of the file in sessionStorage;
 // 1000-character limit = typed question only; notes; layout at 320 / 390 / 1280 (no horizontal scroll, chip fits).
+// Paste (Ctrl+V / long-press «Вставити»): image → chip (same pipeline), plain / multi-line text pastes as before,
+// image + text → both, a second image replaces the first (note), image over 5 MB → message, no image given → note.
 // Puter.js is replaced by the mock of qa-sensei.mjs + puter.fs (write/delete) — nothing reaches Puter.
 //   npm i --no-save playwright-core sharp kuromoji@0.1.2
 //   node tools/qa-sensei-files.mjs   → screenshots in qa/sensei-files/
@@ -41,7 +43,9 @@ const REPLY = 'На фото — **слово** 本 (ほん), «книга».';
 const BAD = 'Цей файл не підтримується або завеликий';
 const LONG = 'Повідомлення надто довге, скоротіть його';
 const FAIL = 'Не вдалося отримати відповідь, спробуйте ще раз';
-const PRIV = 'Файл надсилається у безкоштовний сервіс Puter. Не надсилайте документи з особистими даними.';
+const REPLACED = 'Попередній файл замінено';
+const PASTE_FAIL = 'Не вдалося вставити зображення. Спробуйте кнопку скріпки';
+const PRIV ='Файл надсилається у безкоштовний сервіс Puter. Не надсилайте документи з особистими даними.';
 
 const srv = await serve();
 const URL_ = `http://localhost:${srv.address().port}/`;
@@ -52,6 +56,7 @@ const browser = await chromium.launch({ executablePath: process.env.QA_CHROME ||
 
 async function open(width, height, phone) {
   const ctx = await browser.newContext({ viewport: { width, height }, hasTouch: phone, isMobile: phone, locale: 'uk-UA' });
+  await ctx.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: URL_ });
   await ctx.addInitScript(s => { window.__pm = Object.assign(window.__pm || {}, s); }, { signedIn: true, reply: { text: REPLY } });
   await ctx.route(/^https:\/\/js\.puter\.com\/v2\//, r => r.fulfill({ status: 200, contentType: 'text/javascript; charset=utf-8', body: FS_MOCK }));
   const page = await ctx.newPage();
@@ -218,6 +223,90 @@ const noHScroll = (page, w) => page.evaluate(w => Math.max(document.documentElem
   await page.click('.ss-send');
   await page.waitForFunction(() => document.querySelector('.ss-status').textContent.includes('увійдіть'));
   ok((await chip(page)).includes('a.txt'), T('sign-in cancelled: file kept'));
+  ok(!errs.length, T('no page errors'), errs.join(' | '));
+  await ctx.close();
+}
+
+// ---------------- paste (390 phone + 1280 desktop) ----------------
+// dispatches a paste event on the textarea: { png: [w, h, name] | bytes: n (oversize) | stub, text }; returns defaultPrevented
+const paste = (page, spec) => page.evaluate(async ({ png, bytes, text, stub }) => {
+  const ta = document.querySelector('.ss-input');
+  ta.focus();
+  let ev;
+  if (stub) { // a phone that announces an image but gives none
+    ev = new Event('paste', { bubbles: true, cancelable: true });
+    Object.defineProperty(ev, 'clipboardData', { value: { items: [{ kind: 'file', type: 'image/png', getAsFile: () => null }], files: [], types: ['Files'], getData: () => '' } });
+  } else {
+    const dt = new DataTransfer();
+    if (png) {
+      const c = document.createElement('canvas'); c.width = png[0]; c.height = png[1];
+      const g = c.getContext('2d'); g.fillStyle = '#336'; g.fillRect(0, 0, c.width, c.height); g.fillStyle = '#fff'; g.fillText('日本語', 10, 30);
+      const b = await new Promise(r => c.toBlob(r, 'image/png'));
+      dt.items.add(new File([b], png[2], { type: 'image/png' }));
+    }
+    if (bytes) dt.items.add(new File([new Uint8Array(bytes)], 'image.png', { type: 'image/png' }));
+    if (text) dt.setData('text/plain', text);
+    ev = new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: dt });
+  }
+  ta.dispatchEvent(ev);
+  return ev.defaultPrevented;
+}, spec);
+for (const [width, height, phone] of [[390, 844, true], [1280, 800, false]]) {
+  const { ctx, page, errs } = await open(width, height, phone);
+  const T = s => `paste ${width}px: ${s}`;
+  // plain text: not intercepted, no chip
+  ok(!(await paste(page, { text: 'просто текст' })) && !(await chip(page)), T('plain text: default paste kept, no chip'));
+  // image over 5 MB: message, nothing attached
+  ok(await paste(page, { bytes: 5 * 1024 * 1024 + 100 }), T('oversize image: default prevented'));
+  await page.waitForFunction(m => document.querySelector('.ss-status').textContent.includes(m), BAD);
+  ok(!(await chip(page)), T('oversize image: no chip'));
+  // announced image, none given (phone long-press): note
+  ok(await paste(page, { stub: true }), T('no image given: default prevented'));
+  ok((await status(page)) === PASTE_FAIL && !(await chip(page)), T('no image given: «Не вдалося вставити зображення…»'), await status(page));
+  // small PNG → chip with its name → attached (uploaded on send)
+  ok(await paste(page, { png: [800, 500, 'image.png'] }), T('image: default prevented'));
+  await page.waitForSelector('.ss-att-chip .ss-att-name');
+  ok((await chip(page)).includes('image.png'), T('image: chip with the name'), await chip(page));
+  ok(!(await status(page)), T('image: no message'));
+  // a second image replaces the first, with a note
+  await paste(page, { png: [1600, 1200, 'знімок.png'] });
+  await page.waitForFunction(() => document.querySelector('.ss-att-name')?.textContent === 'знімок.png');
+  ok((await status(page)) === REPLACED && (await page.$$('.ss-att-chip')).length === 1, T('second image replaces the chip + note'), await status(page));
+  // image + text: the image is attached, the text is pasted at the cursor
+  await page.fill('.ss-input', 'Що тут ');
+  await page.evaluate(() => { const t = document.querySelector('.ss-input'); t.selectionStart = t.selectionEnd = t.value.length; });
+  ok(await paste(page, { png: [300, 200, 'з-текстом.png'], text: 'написано?\nі тут' }), T('image + text: default prevented'));
+  await page.waitForFunction(() => document.querySelector('.ss-att-name')?.textContent === 'з-текстом.png');
+  ok((await page.inputValue('.ss-input')) === 'Що тут написано?\nі тут', T('image + text: text pasted'), JSON.stringify(await page.inputValue('.ss-input')));
+  // layout with the pasted chip
+  const g = await page.evaluate(() => { const r = e => document.querySelector(e).getBoundingClientRect(); return { bar: r('.ss-bar'), c: r('.ss-att-chip'), inp: r('.ss-input') }; });
+  ok(await noHScroll(page, width), T('no horizontal scroll'));
+  ok(g.c.left >= g.bar.left - 0.5 && g.c.right <= g.bar.right + 0.5 && g.c.bottom <= g.inp.top + 1, T('chip inside the bar, above the textarea'));
+  await page.screenshot({ path: path.join(OUT, `paste-${width}.png`), fullPage: !phone });
+  // sending uploads the pasted image (resized JPEG)
+  await page.click('.ss-send');
+  await reply(page, 1);
+  const s5 = await pm(page);
+  ok(s5.writes.length === 1 && s5.writes[0].type === 'image/jpeg' && s5.writes[0].w === 300 && Array.isArray(s5.last.messages.at(-1).content), T('pasted image sent as a file'), JSON.stringify(s5.writes));
+  if (!phone) {
+    // the real keyboard path: Ctrl+V of multi-line text, then of an image from the system clipboard
+    const multi = 'перший рядок\nдругий рядок\n  третій';
+    await page.evaluate(t => navigator.clipboard.writeText(t), multi);
+    await page.fill('.ss-input', '');
+    await page.focus('.ss-input');
+    await page.keyboard.press('Control+V');
+    ok((await page.inputValue('.ss-input')) === multi && !(await chip(page)), T('real Ctrl+V: multi-line text as before'), JSON.stringify(await page.inputValue('.ss-input')));
+    await page.evaluate(async () => {
+      const c = document.createElement('canvas'); c.width = 1920; c.height = 1080; c.getContext('2d').fillRect(0, 0, 50, 50);
+      const b = await new Promise(r => c.toBlob(r, 'image/png'));
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': b })]);
+    });
+    await page.fill('.ss-input', '');
+    await page.focus('.ss-input');
+    await page.keyboard.press('Control+V');
+    ok(await page.waitForSelector('.ss-att-chip .ss-att-name', { timeout: 4000 }).then(() => true, () => false), T('real Ctrl+V of a screenshot: chip'));
+    ok((await page.inputValue('.ss-input')) === '', T('real Ctrl+V of a screenshot: no text inserted'));
+  }
   ok(!errs.length, T('no page errors'), errs.join(' | '));
   await ctx.close();
 }
