@@ -138,6 +138,89 @@ for (const [width, height, phone] of [[320, 640, true], [390, 844, true], [1280,
   await ctx.close();
 }
 
+// ---------------- scroll memory ----------------
+const setHidden = (page, hidden) => page.evaluate(h => {
+  Object.defineProperty(document, 'hidden', { configurable: true, get: () => h });
+  Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => (h ? 'hidden' : 'visible') });
+  document.dispatchEvent(new Event('visibilitychange'));
+}, hidden);
+const topMsg = page => page.evaluate(() => { const t = document.querySelector('.topbar').getBoundingClientRect().bottom; return [...document.querySelectorAll('.ss-list > *')].findIndex(e => e.getBoundingClientRect().bottom > t + 1); });
+for (const [width, height, phone] of [[390, 844, true], [1280, 800, false]]) {
+  const T = s => `scroll ${width}px: ${s}`;
+  const { ctx, page, errs } = await open(width, height, phone);
+  for (const k of [1, 2]) await ask(page, `Запитання ${k}`, LONG(16, k));
+  // the learner reads somewhere in the middle
+  const y0 = await page.evaluate(() => { scrollTo(0, Math.round((document.documentElement.scrollHeight - innerHeight) * 0.45)); return scrollY; });
+  await page.waitForTimeout(300);
+  const m0 = await topMsg(page);
+  const saved = await page.evaluate(() => JSON.parse(sessionStorage.getItem('jp.sensei.scroll') || 'null'));
+  ok(saved && Math.abs(saved.y - y0) <= 2 && saved.mode === 'ask' && Number.isInteger(saved.i), T('position saved under jp.sensei.scroll'), JSON.stringify(saved));
+  // another tab of the site and back: same place
+  await page.evaluate(() => { location.hash = '#/grammar'; }); // = the tab link (the achievement pop-up may cover the tab bar)
+  await page.waitForFunction(() => !location.hash.startsWith('#/sensei'));
+  await page.waitForTimeout(200);
+  await page.evaluate(() => { location.hash = '#/sensei'; });
+  await page.waitForSelector('.ss-list .ss-msg.ai');
+  await page.waitForTimeout(250);
+  let y = await page.evaluate(() => scrollY);
+  ok(Math.abs(y - y0) <= 3 && (await topMsg(page)) === m0, T('back to the tab: position restored'), `${y} vs ${y0}`);
+  // another app: hidden → (the browser drops the scroll) → visible: restored
+  await setHidden(page, true);
+  await page.evaluate(() => scrollTo(0, 0));
+  await page.waitForTimeout(250);
+  await setHidden(page, false);
+  await page.waitForTimeout(250);
+  y = await page.evaluate(() => scrollY);
+  ok(Math.abs(y - y0) <= 3, T('visibilitychange: position restored'), `${y} vs ${y0}`);
+  // sending a message does not reset the scroll to the top
+  await page.evaluate(t => { window.__pm.queue.push({ text: t }); window.__pm.hold = new Promise(r => (window.__pmRelease = r)); }, 'Коротка відповідь.');
+  await page.fill('.ss-input', 'Ще питання');
+  await page.click('.ss-send');
+  await page.waitForTimeout(200);
+  ok((await page.evaluate(() => scrollY)) > 200, T('sending: the page is not reset to the top'));
+  await page.evaluate(() => { window.__pm.hold = null; window.__pmRelease(); });
+  await page.waitForFunction(() => !document.querySelector('.ss-typing'));
+  // a fresh visit from another site's link (same tab, same session storage): starts at the top
+  await page.evaluate(() => scrollTo(0, Math.round((document.documentElement.scrollHeight - innerHeight) * 0.5)));
+  await page.waitForTimeout(300);
+  await page.goto(EXT, { waitUntil: 'load' });
+  await page.click('#back'); // a link from another site → a new visit
+  await page.waitForSelector('.ss-list .ss-msg.ai');
+  await page.waitForTimeout(300);
+  ok((await page.evaluate(() => scrollY)) === 0, T('fresh visit from another site: starts at the top'), String(await page.evaluate(() => scrollY)));
+  // «back» from another site (same session): restored
+  const y1 = await page.evaluate(() => { scrollTo(0, Math.round((document.documentElement.scrollHeight - innerHeight) * 0.6)); return scrollY; });
+  await page.waitForTimeout(300);
+  await page.goto(EXT, { waitUntil: 'load' });
+  await page.goBack({ waitUntil: 'load' });
+  await page.waitForSelector('.ss-list .ss-msg.ai');
+  await page.waitForTimeout(400);
+  y = await page.evaluate(() => scrollY);
+  ok(Math.abs(y - y1) <= 3, T('«back» from another site: restored'), `${y} vs ${y1}`);
+  ok(!(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)), T('no horizontal scroll'));
+  ok(!errs.length, T('no page errors'), errs.join(' | '));
+  // a new session (new browser context): nothing restored
+  const fresh = await open(width, height, phone);
+  ok((await fresh.page.evaluate(() => scrollY)) === 0 && !(await fresh.page.evaluate(() => sessionStorage.getItem('jp.sensei.scroll') && JSON.parse(sessionStorage.getItem('jp.sensei.scroll')).y)), T('new session: starts at the top'));
+  await fresh.ctx.close();
+  await ctx.close();
+}
+// sessionStorage blocked: nothing special, no errors
+{
+  const { ctx, page, errs } = await open(390, 844, true, { block: true });
+  await ask(page, 'Питання', LONG(8, 1));
+  await page.evaluate(() => scrollTo(0, 300));
+  await page.waitForTimeout(250);
+  await setHidden(page, true); await setHidden(page, false);
+  await page.evaluate(() => { location.hash = '#/grammar'; }); // = the tab link (the achievement pop-up may cover the tab bar)
+  await page.waitForTimeout(200);
+  await page.evaluate(() => { location.hash = '#/sensei'; });
+  await page.waitForSelector('.ss-bar');
+  await page.waitForTimeout(200);
+  ok(!errs.length, 'sessionStorage blocked: no errors', errs.join(' | '));
+  await ctx.close();
+}
+
 await browser.close();
 srv.close(); ext.close();
 console.log(`\n${passed} passed, ${issues.length} failed`);

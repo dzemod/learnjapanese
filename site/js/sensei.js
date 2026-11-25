@@ -118,6 +118,23 @@ export function buildMessages(log, question, system = SENSEI_SYSTEM) {
 }
 
 const desktopKeys = () => matchMedia('(hover: hover) and (pointer: fine)').matches;
+
+// ---------- scroll memory (sessionStorage, this tab's session only; never throws) ----------
+// { mode, y, i, off }: page scroll + the conversation message at the top of the screen (i = index in the list, off = its
+// distance from the top), so the same message is shown again even if the layout changed a little. Restored when the tab
+// is shown again and when the page becomes visible again; a fresh visit from another site's link starts at the top.
+export const SCROLL_KEY = 'jp.sensei.scroll';
+function readScroll() { try { const v = JSON.parse(sessionStorage.getItem(SCROLL_KEY) || 'null'); return v && Number.isFinite(v.y) ? v : null; } catch { return null; } }
+function writeScroll(v) { try { if (v) sessionStorage.setItem(SCROLL_KEY, JSON.stringify(v)); else sessionStorage.removeItem(SCROLL_KEY); } catch { /* not kept */ } }
+// this page load came from a link on another site (or was typed): the saved position of an earlier visit is not used
+let freshEntry = (() => {
+  try {
+    if (document.wasDiscarded) return false; // the browser dropped the tab in the background: same session
+    const type = performance.getEntriesByType('navigation')[0]?.type || 'navigate';
+    const ref = document.referrer ? new URL(document.referrer).origin : '';
+    return type === 'navigate' && ref !== location.origin;
+  } catch { return false; }
+})();
 let busy = false;
 let redrawCurrent = null; // draw() of the open view (the learner may leave and come back while Сенсей writes)
 
@@ -427,7 +444,56 @@ export function senseiView(root, startMode = '') {
   redrawCurrent = draw;
   setMode(mode);
   if (prefill?.text) { fill(String(prefill.text)); }
+
+  // ---------- scroll memory ----------
+  if (freshEntry) { freshEntry = false; writeScroll(null); }
+  let saveTimer = 0, restoring = false;
+  function saveScroll() {
+    saveTimer = 0;
+    if (!root.isConnected || document.hidden || restoring) return;
+    const topLine = topLimit() + 1;
+    const items = [...list.children];
+    const i = list.hidden ? -1 : items.findIndex(el => el.getBoundingClientRect().bottom > topLine);
+    writeScroll({ mode, y: Math.round(scrollY), i, off: i >= 0 ? Math.round(items[i].getBoundingClientRect().top - topLine) : 0 });
+  }
+  const onScroll = () => { if (!saveTimer) saveTimer = setTimeout(saveScroll, 150); };
+  function restoreScroll(v = readScroll()) {
+    if (!v || v.mode !== mode || !root.isConnected) return;
+    const el = v.i >= 0 && !list.hidden ? list.children[v.i] : null;
+    const y = el ? scrollY + el.getBoundingClientRect().top - (topLimit() + 1) - v.off : v.y;
+    const max = document.documentElement.scrollHeight - innerHeight;
+    restoring = true;
+    scrollTo({ top: Math.max(0, Math.min(max, Math.round(y))), behavior: 'instant' });
+    requestAnimationFrame(() => { restoring = false; schedule(); });
+  }
+  const onVisible = () => {
+    if (document.hidden) { if (saveTimer) clearTimeout(saveTimer); saveScroll(); return; }
+    const v = readScroll(); // back from another app or site: put the page back where it was if it moved
+    if (v && Math.abs(scrollY - v.y) > 4) restoreScroll(v);
+  };
+  const onShow = e => { if (e.persisted) onVisible(); };
+  document.addEventListener('visibilitychange', onVisible);
+  addEventListener('pageshow', onShow);
+  addEventListener('pagehide', saveScroll);
+  // restore after the first layout, and once more when the fonts are in (text reflows), unless the learner scrolled
+  let moved = false;
+  const byHand = () => { moved = true; };
+  const HAND = ['wheel', 'touchstart', 'keydown', 'pointerdown'];
+  HAND.forEach(t => addEventListener(t, byHand, { once: true, passive: true }));
+  const first = readScroll(); // the same saved value for both passes (the first pass itself scrolls and saves)
+  requestAnimationFrame(() => {
+    restoreScroll(first);
+    addEventListener('scroll', onScroll, { passive: true });
+    document.fonts?.ready.then(() => requestAnimationFrame(() => { if (!moved) restoreScroll(first); }));
+  });
   return () => {
+    if (saveTimer) clearTimeout(saveTimer);
+    saveScroll(); // leaving the tab: remember where the learner was
+    removeEventListener('scroll', onScroll);
+    HAND.forEach(t => removeEventListener(t, byHand));
+    document.removeEventListener('visibilitychange', onVisible);
+    removeEventListener('pageshow', onShow);
+    removeEventListener('pagehide', saveScroll);
     ro.disconnect(); barRO.disconnect(); if (frame) cancelAnimationFrame(frame);
     removeEventListener('scroll', schedule); removeEventListener('resize', schedule);
     vv?.removeEventListener('resize', schedule); vv?.removeEventListener('scroll', schedule); vv?.removeEventListener('resize', keepVisible);
