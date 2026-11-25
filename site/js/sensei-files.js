@@ -1,4 +1,4 @@
-// Attachments of the «Сенсей» chat: one photo or text file per message, prepared in the browser only.
+// Attachments of the «Сенсей» chat: up to MAX_FILES photos and text files per message, prepared in the browser only.
 //   image/*            ≤ 5 MB   → redrawn on a canvas (drops EXIF incl. location), ≤ 1024 px, JPEG 0.8 → sent as a file
 //   .txt / .md (text)  ≤ 200 KB → read with FileReader, ≤ TEXT_MAX characters → appended to the question as text
 //   .pdf               ≤ 200 KB → text layer via pdf.js (already used by importer.js, loaded lazily) → as text
@@ -10,6 +10,13 @@ export const IMAGE_SIDE = 1024;
 export const JPEG_Q = 0.8;
 export const MSG_BAD_FILE = 'Цей файл не підтримується або завеликий';
 export const MSG_NO_TEXT = 'У цьому файлі не знайдено тексту';
+// Limits of one message: the AI service's documented limits are noted at chat() of the shared AI client (checked 2026-11-25).
+export const MAX_FILES = 10; // attachments per message (images and text files together) — change here only
+export const MAX_IMAGES = 20; // images one request may carry (the service documents no count limit; kept at the model provider's cap for many images)
+export const TOTAL_MAX = 20 * 1024 * 1024; // bytes of all attachments of one message (images after resizing, text as UTF-8); under the 32 MB request of the model provider (files travel base64, ~4/3 larger)
+export const MSG_TOO_MANY = n => `Можна прикріпити до ${n} файлів до одного повідомлення`;
+export const MSG_TOO_BIG = (fit, all) => `Файли разом завеликі: поміститься ${fit} з ${all}. Приберіть зайві файли й надішліть знову`;
+export const MSG_FIRST_N = (n, m, max = n) => `Надіслано перші ${n} з ${m} файлів, бо безкоштовний помічник приймає до ${max} зображень за раз`;
 export const ACCEPT = 'image/*,.txt,.md,.markdown,.pdf,text/plain,text/markdown,application/pdf';
 
 /** Kind of a file: 'image' | 'text' | 'pdf', or '' when not supported / too large. */
@@ -98,4 +105,29 @@ export async function prepareAttachment(file) {
     console.warn('sensei: file could not be read:', e?.message || e);
     return { error: MSG_BAD_FILE };
   }
+}
+
+/** Bytes an attachment adds to the request: the resized image, or the text as UTF-8. */
+export const attBytes = a => (a.kind === 'image' ? (a.blob?.size ?? a.size ?? 0) : new TextEncoder().encode(a.text || '').length);
+
+/** How many attachments, in order, fit into total bytes (prefix). */
+export function fitCount(list, total = TOTAL_MAX) {
+  let sum = 0, n = 0;
+  for (const a of list) { sum += attBytes(a); if (sum > total) break; n++; }
+  return n;
+}
+
+/**
+ * Which attachments go with one request: the first ones in order, up to maxImages images ("the first N that fit");
+ * the rest is left out and the learner is told. Resolves { send, dropped }.
+ */
+export function splitForRequest(list, maxImages = MAX_IMAGES) {
+  let imgs = 0, n = 0;
+  for (const a of list) { if (a.kind === 'image' && ++imgs > maxImages) break; n++; }
+  return { send: list.slice(0, n), dropped: list.slice(n) };
+}
+
+/** The user message for the model with every text attachment appended. */
+export function withFileTexts(question, list) {
+  return list.filter(a => a.kind === 'text' || a.kind === 'pdf').reduce((q, a) => withFileText(q, a.name, a.text, a.cut), question);
 }

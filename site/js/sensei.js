@@ -11,7 +11,7 @@ import { chat, loadPuter, MSG_FAIL, TRANSLIT, SENSEI_PREFILL } from './ai-helper
 import { renderReply } from './reply-md.js';
 import { loadGrammar, grammarLessons } from './grammar.js';
 import { bump } from './achievements.js';
-import { ACCEPT, prepareAttachment, sizeLabel, withFileText } from './sensei-files.js';
+import { ACCEPT, MAX_FILES, MAX_IMAGES, TOTAL_MAX, MSG_TOO_MANY, MSG_TOO_BIG, MSG_FIRST_N, prepareAttachment, sizeLabel, withFileTexts, fitCount, splitForRequest } from './sensei-files.js';
 
 // ---------- the illustration: input bar on the outstretched hands ----------
 // sensei-cutout.(webp|png) = the figure cropped from reference/sensei (tools/make-sensei-cutout.mjs), 538 × 471 px.
@@ -32,7 +32,6 @@ const MSG_SIGNIN = 'Щоб поговорити з Сенсеєм, увійді�
 const MSG_LONG = 'Повідомлення надто довге, скоротіть його';
 const FILE_QUESTION = 'Що тут? Поясни, будь ласка.'; // sent when only a file is attached
 const MSG_READING = 'Готую файл…';
-const MSG_REPLACED = 'Попередній файл замінено';
 const MSG_PASTE_FAIL = 'Не вдалося вставити зображення. Спробуйте кнопку скріпки';
 const LEVEL_KEY = 'jp.sensei.level'; // talk mode: lessons 1–N (localStorage)
 const LEVEL_DEFAULT = 10;
@@ -90,7 +89,7 @@ function readLog(mode) {
   let saved = null;
   try { saved = JSON.parse(sessionStorage.getItem(key) || 'null'); } catch { /* blocked */ }
   mem[key] = (Array.isArray(saved) ? saved : []).filter(m => m && typeof m.t === 'string' && (m.r === 'u' || m.r === 'a'))
-    .map(m => ({ r: m.r, t: m.t, ...(m.cut ? { cut: true } : {}), ...(typeof m.f === 'string' && m.f ? { f: m.f.slice(0, 80) } : {}) })).slice(-KEEP);
+    .map(m => ({ r: m.r, t: m.t, ...(m.cut ? { cut: true } : {}), ...(typeof m.f === 'string' && m.f ? { f: m.f.slice(0, 400) } : {}) })).slice(-KEEP);
   return mem[key];
 }
 function writeLog(mode, list) {
@@ -138,9 +137,9 @@ export function senseiView(root, startMode = '') {
       <div class="ss-art" style="--ar:${ART.w}/${ART.h}; --bar-l:${PALMS.left.x}%; --bar-r:${100 - PALMS.right.x}%; --bar-b:${100 - Math.min(PALMS.left.y, PALMS.right.y)}%">
         <picture class="ss-fig"><source type="image/webp" srcset="${ART.webp}"><img src="${ART.png}" alt="Сенсей, наставник з японської" width="${ART.w}" height="${ART.h}" decoding="async"></picture>
         <form class="ss-bar" autocomplete="off" novalidate>
-          <div class="ss-att" hidden></div>
+          <div class="ss-att" role="list" aria-label="Прикріплені файли" hidden></div>
           <button type="button" class="ss-clip" aria-label="Прикріпити" title="Прикріпити фото або файл"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M20.5 11.5l-8.4 8.4a5 5 0 01-7.1-7.1l8.8-8.8a3.3 3.3 0 014.7 4.7l-8.8 8.8a1.7 1.7 0 01-2.4-2.4l8.1-8.1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-          <input type="file" class="ss-file" accept="${ACCEPT}" hidden>
+          <input type="file" class="ss-file" accept="${ACCEPT}" multiple hidden>
           <textarea class="ss-input" rows="1"></textarea>
           <button class="btn primary ss-send" type="submit">Надіслати</button>
         </form>
@@ -156,9 +155,9 @@ export function senseiView(root, startMode = '') {
   const status = $('.ss-status', root), count = $('.ss-count', root), levelBox = $('.ss-level', root), levelSel = $('.ss-level-sel', root);
   const clip = $('.ss-clip', root), picker = $('.ss-file', root), attBox = $('.ss-att', root);
   let error = '';
-  let att = null; // the prepared attachment of the next message (memory only, never stored)
-  let preparing = false;
-  let info = ''; // a neutral note under the bar (e.g. the previous file was replaced)
+  let atts = []; // the prepared attachments of the next message, in order (memory only, never stored), ≤ MAX_FILES
+  let preparing = 0; // files being prepared right now
+  let info = ''; // a neutral note under the bar (e.g. only the first N files were sent)
   loadPuter(); // preload, so the sign-in popup can open right on the first click
   loadGrammar(); // the lesson list for «Перевір речення» and «Розмова японською»
 
@@ -226,13 +225,12 @@ export function senseiView(root, startMode = '') {
     list.hidden = !log.length && busy !== mode;
     $('.ss-starters', root).hidden = !!log.length;
     $('[data-new]', root).hidden = !log.length;
-    send.disabled = !!busy || preparing;
-    clip.disabled = !!busy || preparing;
-    attBox.hidden = !att && !preparing;
-    attBox.innerHTML = preparing ? `<span class="ss-att-chip"><span class="spinner"></span> ${MSG_READING}</span>`
-      : att ? `<span class="ss-att-chip"><span class="ss-att-name" title="${esc(att.name)}">${esc(att.name)}</span><span class="ss-att-size">${sizeLabel(att.size)}${att.cut ? ' · обрізано' : ''}</span><button type="button" class="ss-att-x" aria-label="Прибрати файл «${esc(att.name)}»">×</button></span>` : '';
-    const x = $('.ss-att-x', attBox);
-    if (x) x.onclick = () => { att = null; draw(); input.focus({ preventScroll: true }); };
+    send.disabled = !!busy || !!preparing;
+    clip.disabled = !!busy || atts.length + preparing >= MAX_FILES;
+    attBox.hidden = !atts.length && !preparing;
+    attBox.innerHTML = atts.map((a, i) => `<span class="ss-att-chip" role="listitem"><span class="ss-att-name" title="${esc(a.name)}">${esc(a.name)}</span><span class="ss-att-size">${sizeLabel(a.size)}${a.cut ? ' · обрізано' : ''}</span><button type="button" class="ss-att-x" data-i="${i}" aria-label="Прибрати файл «${esc(a.name)}»">×</button></span>`).join('')
+      + (preparing ? `<span class="ss-att-chip" role="listitem"><span class="spinner"></span> ${MSG_READING}${preparing > 1 ? ` (${preparing})` : ''}</span>` : '');
+    $$('.ss-att-x', attBox).forEach(x => (x.onclick = () => { atts = atts.filter((_, j) => j !== +x.dataset.i); error = ''; draw(); input.focus({ preventScroll: true }); }));
     send.textContent = busy ? 'Надсилаю…' : 'Надіслати';
     status.innerHTML = error ? `<span class="ask-err">${esc(error)}</span>` : info ? `<span class="muted">${esc(info)}</span>` : '';
     root.querySelector('.sensei').classList.toggle('thinking', !!busy);
@@ -244,19 +242,26 @@ export function senseiView(root, startMode = '') {
     e.preventDefault();
     if (busy || preparing) return;
     const typed = input.value.trim();
-    if (!typed && !att) { input.focus(); return; }
+    if (!typed && !atts.length) { input.focus(); return; }
     if (typed.length > MAX_INPUT) { error = MSG_LONG; draw(); return; } // the limit counts the typed question only
-    const q = typed || FILE_QUESTION, a = att;
-    att = null;
+    // the whole message must fit into one request: otherwise say how many files fit and send nothing
+    const fit = fitCount(atts, TOTAL_MAX);
+    if (fit < atts.length) { error = MSG_TOO_BIG(fit, atts.length); info = ''; draw(); return; }
+    // more images than one request takes: the first ones go, the learner is told (never split into several requests)
+    const { send: sent, dropped } = splitForRequest(atts, MAX_IMAGES);
+    const all = atts, q = typed || FILE_QUESTION;
+    atts = [];
     const M = mode; // the reply goes to the conversation it was asked in, even if the learner switches modes
-    error = ''; info = ''; busy = M;
+    error = ''; busy = M;
+    info = dropped.length ? MSG_FIRST_N(sent.length, all.length, MAX_IMAGES) : '';
     const log = readLog(M);
-    writeLog(M, [...log, a ? { r: 'u', t: q, f: a.name } : { r: 'u', t: q }]);
+    const names = sent.map(a => a.name).join(', ');
+    writeLog(M, [...log, names ? { r: 'u', t: q, f: names } : { r: 'u', t: q }]);
     input.value = ''; grow(); counter();
     draw('typing');
-    const content = a?.kind === 'text' || a?.kind === 'pdf' ? withFileText(q, a.name, a.text, a.cut) : q;
-    const file = a?.kind === 'image' ? { blob: a.blob, name: 'photo.jpg' } : null;
-    const r = await chat(buildMessages(log, content, systemFor(M, level())), { signin: MSG_SIGNIN, maxTokens: MAX_TOKENS, timeoutMs: TIMEOUT_MS, file });
+    const content = withFileTexts(q, sent);
+    const files = sent.filter(a => a.kind === 'image').map((a, i) => ({ blob: a.blob, name: `photo-${i + 1}.jpg` }));
+    const r = await chat(buildMessages(log, content, systemFor(M, level())), { signin: MSG_SIGNIN, maxTokens: MAX_TOKENS, timeoutMs: TIMEOUT_MS, files });
     busy = false;
     if (r.answer) bump('sensei');
     if (r.answer) writeLog(M, [...readLog(M), r.cut ? { r: 'a', t: r.answer, cut: true } : { r: 'a', t: r.answer }]);
@@ -264,7 +269,8 @@ export function senseiView(root, startMode = '') {
       // not answered: take the message back into the input, so nothing is lost
       writeLog(M, readLog(M).slice(0, -1));
       if (!input.value && mode === M) { input.value = typed; grow(); counter(); }
-      if (!att) att = a; // the file comes back too
+      atts = [...all, ...atts].slice(0, MAX_FILES); // the files come back too (before any added meanwhile)
+      info = '';
       error = r.error || MSG_FAIL;
     }
     // desktop: back to the input; phones: no focus (the keyboard would cover the reply and scroll to the bar)
@@ -287,23 +293,28 @@ export function senseiView(root, startMode = '') {
     if (root.isConnected) draw(); else redrawCurrent?.();
   }
 
-  // «Прикріпити»: one photo or text file per message (native picker; on phones it also offers the camera)
-  clip.onclick = () => { if (!busy && !preparing) picker.click(); };
-  // the same pipeline for the paperclip and a pasted image (size limit, resize, EXIF strip, chip); one file at a time
-  async function attach(f) {
-    if (busy || preparing) return;
-    const had = !!att;
-    preparing = true; error = ''; info = ''; draw();
-    const r = await prepareAttachment(f);
-    preparing = false;
-    if (r.error) error = r.error; // a rejected file keeps the previous one
-    else { att = r; if (had) info = MSG_REPLACED; }
+  // «Прикріпити»: photos and text files, up to MAX_FILES per message (native picker; on phones it also offers the camera)
+  clip.onclick = () => { if (!busy && atts.length + preparing < MAX_FILES) picker.click(); };
+  // the same pipeline for the paperclip and a paste (size limit, resize, EXIF strip, chip); new files are added to the
+  // list in the order chosen, never replacing the earlier ones; files over MAX_FILES are refused with a message
+  async function attach(files) {
+    if (busy) return;
+    const room = Math.max(0, MAX_FILES - atts.length - preparing);
+    const take = files.slice(0, room);
+    error = files.length > room ? MSG_TOO_MANY(MAX_FILES) : ''; info = '';
+    if (!take.length) { draw(); return; }
+    preparing += take.length; draw();
+    const ready = await Promise.all(take.map(f => prepareAttachment(f)));
+    preparing -= take.length;
+    const bad = ready.find(r => r.error);
+    if (bad && !error) error = bad.error; // a rejected file keeps the others
+    atts = [...atts, ...ready.filter(r => !r.error)].slice(0, MAX_FILES);
     if (root.isConnected) draw();
   }
   picker.onchange = () => {
-    const f = picker.files?.[0];
+    const chosen = [...(picker.files || [])];
     picker.value = '';
-    if (f) attach(f);
+    if (chosen.length) attach(chosen);
   };
   // Ctrl+V / Cmd+V / long-press «Вставити»: an image in the clipboard becomes the attachment; text pastes as before.
   // Image + text together (some apps): the image is attached and the text is pasted.
@@ -313,7 +324,10 @@ export function senseiView(root, startMode = '') {
     const isImg = t => String(t || '').toLowerCase().startsWith('image/');
     const items = [...(dt.items || [])];
     const imgItems = items.filter(it => it.kind === 'file' && isImg(it.type));
-    const file = imgItems.map(it => it.getAsFile()).find(Boolean) || [...(dt.files || [])].find(x => isImg(x.type)) || dt.files?.[0]; // a copied file: the pipeline checks it
+    // every image of the clipboard (or the copied files: the pipeline checks them), added to the list
+    let pasted = imgItems.map(it => it.getAsFile()).filter(Boolean);
+    if (!pasted.length) pasted = [...(dt.files || [])];
+    const file = pasted[0];
     const text = dt.getData('text/plain');
     // the clipboard announces a file/image but the browser gives none (some phones): tell the learner, keep the text
     const announced = imgItems.length || [...(dt.types || [])].includes('Files');
@@ -326,7 +340,7 @@ export function senseiView(root, startMode = '') {
       input.setRangeText(text, input.selectionStart, input.selectionEnd, 'end');
       grow(); counter();
     }
-    attach(new File([file], file.name || 'зображення.png', { type: file.type }));
+    attach(pasted.map((f, i) => new File([f], f.name || `зображення-${atts.length + i + 1}.png`, { type: f.type })));
   });
   input.addEventListener('keydown', e => {
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && desktopKeys()) { e.preventDefault(); form.requestSubmit(); }

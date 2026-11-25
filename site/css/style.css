@@ -1378,7 +1378,12 @@ body.kw-rating main { padding-bottom: calc(110px + env(safe-area-inset-bottom));
 .ss-clip:hover, .ss-clip:focus-visible { color: var(--text); }
 .ss-clip:focus-visible { outline: 1px solid var(--red); }
 .ss-clip:disabled { opacity: .5; cursor: progress; }
-.ss-att { flex: 1 0 100%; min-width: 0; }
+/* up to MAX_FILES chips: they wrap, and the list scrolls inside the bar so the bar stays under ~1/3 of the screen */
+.ss-att { flex: 1 0 100%; min-width: 0; display: flex; flex-wrap: wrap; gap: 6px; max-height: max(44px, calc(30svh - 70px)); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.ss-att[hidden] { display: none; }
+.ss-att .ss-att-name { max-width: 15em; }
+.ss-att .ss-att-x { width: 24px; height: 24px; }
+.ss-art > .ss-bar .ss-att { max-height: min(max(44px, calc(30svh - 70px)), 100px); } /* on the hands: the bar never grows over the mode tabs */
 .ss-att-chip { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; min-width: 0; padding: 4px 4px 4px 10px; background: var(--red-bg); border: 1px solid rgba(200, 16, 46, .45); color: var(--text); font-size: .85rem; line-height: 1.3; }
 .ss-att-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ss-att-size { flex: none; color: var(--muted); }

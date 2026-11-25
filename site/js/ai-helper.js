@@ -166,10 +166,10 @@ const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeo
  * The one Puter.js client of the site (Exam, Grammar, Сенсей): loads Puter.js, signs in on the click, tries MODELS in
  * turn. messages = [{ role: 'system'|'user'|'assistant', content }]; earlier turns of a conversation may be included.
  * Resolves to { answer, cut } (cut = stopped by the output limit) or { error: Ukrainian message } (signin = the
- * message for a cancelled sign-in). file = { blob, name } (a photo of Сенсей) goes with the last user message. maxTokens: a number or 'max' (MODEL_MAX_OUTPUT of the model in use).
+ * message for a cancelled sign-in). files = [{ blob, name }] (photos of Сенсей; file = one of them, older callers) go with the last user message. maxTokens: a number or 'max' (MODEL_MAX_OUTPUT of the model in use).
  * Real errors go to the console as code + message only.
  */
-export async function chat(messages, { signin = MSG_SIGNIN, maxTokens = MAX_OUTPUT_TOKENS, timeoutMs = TIMEOUT_MS, file = null } = {}) {
+export async function chat(messages, { signin = MSG_SIGNIN, maxTokens = MAX_OUTPUT_TOKENS, timeoutMs = TIMEOUT_MS, file = null, files = null } = {}) {
   let puter;
   try { puter = await loadPuter(); } catch (e) { console.error('ask:', errInfo(e)); return { error: MSG_FAIL }; }
   // Sign-in opens Puter's popup, so it runs here, right after the click on «Надіслати».
@@ -177,22 +177,31 @@ export async function chat(messages, { signin = MSG_SIGNIN, maxTokens = MAX_OUTP
     if (!puter.auth.isSignedIn()) await puter.auth.signIn();
   } catch (e) { console.warn('ask: Puter sign-in did not finish:', errInfo(e)); return { error: signin }; }
   if (!puter.auth.isSignedIn()) return { error: signin };
-  if (!file) return ask(puter, messages, maxTokens, timeoutMs, signin);
-  // A photo (Сенсей): docs.puter.com/AI/chat «Working with Files» — upload with puter.fs.write, a { type: 'file',
-  // puter_path } part in the user message, delete the temporary file afterwards (both models accept images).
-  let path = '';
+  const list = (files || (file ? [file] : [])).filter(f => f && f.blob);
+  if (!list.length) return ask(puter, messages, maxTokens, timeoutMs, signin);
+  // Limits (docs.puter.com/rate-limits-and-quotas, checked 2026-11-25): no documented maximum number of images per
+  // puter.ai.chat request; an inlined image ≤ 5 MB; an attached file ≤ 5 MB for OpenAI models (gpt-5.4-nano) and ≤ 30 MB
+  // for Claude models; request body ≤ 128 MiB. Сенсей keeps to MAX_FILES / MAX_IMAGES / TOTAL_MAX of sensei-files.js.
+  // Photos (Сенсей): docs.puter.com/AI/chat «Working with Files» — upload each with puter.fs.write, one { type: 'file',
+  // puter_path } part per photo in the user message, delete the temporary files afterwards (both models accept images).
+  const paths = [];
+  const cleanup = () => paths.forEach(p => Promise.resolve().then(() => puter.fs.delete(p)).catch(e => console.warn('ask: temporary file not deleted -', errInfo(e))));
   try {
-    const f = await puter.fs.write(`kotoba-sensei-${Date.now()}-${String(file.name || 'photo.jpg').replace(/[^\w.-]+/g, '_')}`, file.blob);
-    path = f?.path || '';
-    if (!path) throw new Error('no path');
+    const stamp = Date.now();
+    for (const [i, f] of list.entries()) {
+      const w = await puter.fs.write(`kotoba-sensei-${stamp}-${i + 1}-${String(f.name || 'photo.jpg').replace(/[^\w.-]+/g, '_')}`, f.blob);
+      if (!w?.path) throw new Error('no path');
+      paths.push(w.path);
+    }
   } catch (e) {
     console.error('ask: file upload to Puter failed -', errInfo(e));
+    cleanup();
     return { error: isAuthError(e) ? signin : MSG_FAIL };
   }
   const last = messages[messages.length - 1];
-  const withFile = [...messages.slice(0, -1), { role: 'user', content: [{ type: 'file', puter_path: path }, { type: 'text', text: String(last.content) }] }];
-  try { return await ask(puter, withFile, maxTokens, timeoutMs, signin); }
-  finally { Promise.resolve().then(() => puter.fs.delete(path)).catch(e => console.warn('ask: temporary file not deleted -', errInfo(e))); }
+  const withFiles = [...messages.slice(0, -1), { role: 'user', content: [...paths.map(p => ({ type: 'file', puter_path: p })), { type: 'text', text: String(last.content) }] }];
+  try { return await ask(puter, withFiles, maxTokens, timeoutMs, signin); }
+  finally { cleanup(); }
 }
 async function ask(puter, messages, maxTokens, timeoutMs, signin) {
   for (const model of MODELS) {

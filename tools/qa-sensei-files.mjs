@@ -4,7 +4,9 @@
 // { type: 'file', puter_path } part, puter.fs.delete; failure keeps the file; nothing of the file in sessionStorage;
 // 1000-character limit = typed question only; notes; layout at 320 / 390 / 1280 (no horizontal scroll, chip fits).
 // Paste (Ctrl+V / long-press «Вставити»): image → chip (same pipeline), plain / multi-line text pastes as before,
-// image + text → both, a second image replaces the first (note), image over 5 MB → message, no image given → note.
+// image + text → both, a second paste adds to the list (never replaces), image over 5 MB → message, no image given → note.
+// Several files: ten small images → ten chips, the bar under a third of the screen at 390 px, an 11th refused, all ten
+// uploaded as file parts of one request; total size / image-count rules of sensei-files.js checked directly.
 // Puter.js is replaced by the mock of qa-sensei.mjs + puter.fs (write/delete) — nothing reaches Puter.
 //   npm i --no-save playwright-core sharp kuromoji@0.1.2
 //   node tools/qa-sensei-files.mjs   → screenshots in qa/sensei-files/
@@ -43,10 +45,10 @@ const REPLY = 'На фото — **слово** 本 (ほん), «книга».';
 const BAD = 'Цей файл не підтримується або завеликий';
 const LONG = 'Повідомлення надто довге, скоротіть його';
 const FAIL = 'Не вдалося отримати відповідь, спробуйте ще раз';
-const REPLACED = 'Попередній файл замінено';
 const PASTE_FAIL = 'Не вдалося вставити зображення. Спробуйте кнопку скріпки';
 const PRIV ='Файл надсилається у безкоштовний сервіс Puter. Не надсилайте документи з особистими даними.';
 
+const SF = await import(new URL('../site/js/sensei-files.js', import.meta.url));
 const srv = await serve();
 const URL_ = `http://localhost:${srv.address().port}/`;
 let passed = 0;
@@ -73,6 +75,106 @@ const status = page => page.$eval('.ss-status', e => e.textContent.trim());
 const chip = page => page.$eval('.ss-att', e => (e.hidden ? '' : e.textContent.trim()));
 async function reply(page, n) { await page.waitForFunction(k => document.querySelectorAll('.ss-list .ss-msg.ai:not(.ss-typing)').length >= k, n, { timeout: 8000 }); }
 const noHScroll = (page, w) => page.evaluate(w => Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) <= w, w);
+
+// dispatches a paste event on the textarea: { png: [w, h, name] | bytes: n (oversize) | stub, text }; returns defaultPrevented
+const paste = (page, spec) => page.evaluate(async ({ png, bytes, text, stub }) => {
+  const ta = document.querySelector('.ss-input');
+  ta.focus();
+  let ev;
+  if (stub) { // a phone that announces an image but gives none
+    ev = new Event('paste', { bubbles: true, cancelable: true });
+    Object.defineProperty(ev, 'clipboardData', { value: { items: [{ kind: 'file', type: 'image/png', getAsFile: () => null }], files: [], types: ['Files'], getData: () => '' } });
+  } else {
+    const dt = new DataTransfer();
+    if (png) {
+      const c = document.createElement('canvas'); c.width = png[0]; c.height = png[1];
+      const g = c.getContext('2d'); g.fillStyle = '#336'; g.fillRect(0, 0, c.width, c.height); g.fillStyle = '#fff'; g.fillText('日本語', 10, 30);
+      const b = await new Promise(r => c.toBlob(r, 'image/png'));
+      dt.items.add(new File([b], png[2], { type: 'image/png' }));
+    }
+    if (bytes) dt.items.add(new File([new Uint8Array(bytes)], 'image.png', { type: 'image/png' }));
+    if (text) dt.setData('text/plain', text);
+    ev = new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: dt });
+  }
+  ta.dispatchEvent(ev);
+  return ev.defaultPrevented;
+}, spec);
+
+// ---------------- limits of one message (pure rules of sensei-files.js) ----------------
+{
+  const T = s => `limits: ${s}`;
+  ok(SF.MAX_FILES >= 10, T('at least 10 attachments per message'), String(SF.MAX_FILES));
+  const img = n => ({ kind: 'image', name: `f${n}.jpg`, size: 1000, blob: { size: 1000 } });
+  const list = Array.from({ length: 10 }, (_, i) => img(i));
+  ok(SF.fitCount(list, 20 * 1024 * 1024) === 10, T('ten resized photos fit the total'));
+  ok(SF.fitCount(list, 3500) === 3, T('over the total: how many fit (3 of 10)'));
+  ok(SF.MSG_TOO_BIG(3, 10) === 'Файли разом завеликі: поміститься 3 з 10. Приберіть зайві файли й надішліть знову', T('total message in Ukrainian'));
+  const txtA = { kind: 'text', name: 'a.txt', text: 'абв' };
+  const sp = SF.splitForRequest([img(1), txtA, img(2), img(3), img(4)], 3);
+  ok(sp.send.length === 4 && sp.dropped.length === 1 && sp.dropped[0].name === 'f4.jpg', T('image limit 3: first 4 files go (3 images + text), the 4th image is left out'));
+  ok(SF.splitForRequest(list, SF.MAX_IMAGES).dropped.length === 0, T(`MAX_IMAGES (${SF.MAX_IMAGES}) ≥ MAX_FILES: nothing left out`));
+  ok(SF.MSG_FIRST_N(3, 5) === 'Надіслано перші 3 з 5 файлів, бо безкоштовний помічник приймає до 3 зображень за раз', T('first-N note text'));
+  ok(SF.attBytes(txtA) === 6, T('text counted as UTF-8 bytes'));
+  const q = SF.withFileTexts('Q', [txtA, img(1), { kind: 'pdf', name: 'b.pdf', text: 'x', cut: true }]);
+  ok(q.includes('Файл «a.txt»') && q.includes('Файл «b.pdf» (обрізано') && q.startsWith('Q'), T('every text file appended to the question'));
+}
+
+// ---------------- ten images (phone 390) ----------------
+{
+  const { ctx, page, errs } = await open(390, 844, true);
+  const T = s => `ten images 390px: ${s}`;
+  const pngs = await page.evaluate(async () => {
+    const out = [];
+    for (let i = 0; i < 11; i++) {
+      const c = document.createElement('canvas'); c.width = 200 + i * 10; c.height = 150;
+      const g = c.getContext('2d'); g.fillStyle = `hsl(${i * 30} 60% 40%)`; g.fillRect(0, 0, c.width, c.height);
+      out.push(Array.from(new Uint8Array(await (await new Promise(r => c.toBlob(r, 'image/png'))).arrayBuffer())));
+    }
+    return out;
+  });
+  const file = i => ({ name: `знімок-екрана-${i + 1}.png`, mimeType: 'image/png', buffer: Buffer.from(pngs[i]) });
+  ok((await page.getAttribute('.ss-file', 'multiple')) !== null, T('picker allows several files'));
+  await page.setInputFiles('.ss-file', [0, 1, 2, 3, 4, 5].map(file));
+  await page.waitForFunction(() => document.querySelectorAll('.ss-att-chip .ss-att-name').length === 6);
+  await page.setInputFiles('.ss-file', [6, 7, 8, 9].map(file)); // the paperclip again: added, not replaced
+  await page.waitForFunction(() => document.querySelectorAll('.ss-att-chip .ss-att-name').length === 10);
+  const names = await page.$$eval('.ss-att-name', e => e.map(x => x.textContent));
+  ok(names.length === 10 && names[0] === 'знімок-екрана-1.png' && names[9] === 'знімок-екрана-10.png', T('ten chips, in order'), names.join(','));
+  ok((await page.$$('.ss-att-x')).length === 10, T('every chip has ×'));
+  const g = await page.evaluate(() => { const r = e => document.querySelector(e).getBoundingClientRect(); const a = document.querySelector('.ss-att'); return { bar: r('.ss-bar'), att: r('.ss-att'), vh: innerHeight, sh: a.scrollHeight, ch: a.clientHeight }; });
+  ok(g.bar.height <= g.vh / 3, T('bar under a third of the screen height'), `${Math.round(g.bar.height)} of ${g.vh}`);
+  ok(g.att.left >= g.bar.left - 0.5 && g.att.right <= g.bar.right + 0.5, T('chip list inside the bar'));
+  ok(g.sh > g.ch, T('chip list scrolls inside the bar'), `${g.sh} > ${g.ch}`);
+  ok(await noHScroll(page, 390), T('no horizontal scroll'));
+  ok(await page.isDisabled('.ss-clip'), T('paperclip disabled at the limit'));
+  await page.screenshot({ path: path.join(OUT, 'ten-images-390.png') });
+  // an 11th by paste: refused with a message, the ten stay
+  await paste(page, { png: [100, 100, 'одинадцятий.png'] });
+  await page.waitForFunction(() => document.querySelector('.ss-status').textContent.includes('до 10 файлів'));
+  ok((await page.$$('.ss-att-chip .ss-att-name')).length === 10, T('11th refused, ten kept'), await status(page));
+  // remove one, then send: nine images in one request
+  await page.click('.ss-att-chip:nth-child(2) .ss-att-x');
+  ok((await page.$$eval('.ss-att-name', e => e.map(x => x.textContent))).join(',') === names.filter((_, i) => i !== 1).join(','), T('× removes only that chip'));
+  await paste(page, { png: [120, 90, 'вставлений.png'] });
+  await page.waitForFunction(() => document.querySelectorAll('.ss-att-chip .ss-att-name').length === 10);
+  await page.fill('.ss-input', 'Що на цих знімках?');
+  await page.click('.ss-send');
+  await reply(page, 1);
+  const st = await pm(page);
+  const u = st.last.messages.at(-1);
+  const parts = Array.isArray(u.content) ? u.content : [];
+  ok(st.writes.length === 10 && st.writes.every(w => w.type === 'image/jpeg' && !w.exif && Math.max(w.w, w.h) <= 1024), T('ten JPEG uploads (≤ 1024 px, no EXIF)'), JSON.stringify(st.writes.map(w => [w.w, w.h, w.type])));
+  ok(parts.filter(x => x.type === 'file').length === 10 && parts.at(-1).type === 'text' && parts.at(-1).text === 'Що на цих знімках?', T('one request: ten file parts + the text'), JSON.stringify(parts).slice(0, 300));
+  ok(new Set(parts.filter(x => x.type === 'file').map(x => x.puter_path)).size === 10, T('ten different Puter paths'));
+  await page.waitForFunction(() => window.__pm.deletes.length >= 10);
+  ok(true, T('all ten temporary files deleted'));
+  const hist = await page.textContent('.ss-msg.me .ss-msg-file');
+  ok(hist.includes('знімок-екрана-1.png') && hist.includes('вставлений.png'), T('history names all files'), hist);
+  ok(!(await chip(page)) && !(await page.isDisabled('.ss-clip')), T('chips cleared, paperclip enabled again'));
+  console.log('  accepted in the request:', parts.filter(x => x.type === 'file').length, 'images:', hist.replace(/^файл: /, ''));
+  ok(!errs.length, T('no page errors'), errs.join(' | '));
+  await ctx.close();
+}
 
 // ---------------- behaviour (phone 390) ----------------
 {
@@ -228,29 +330,7 @@ const noHScroll = (page, w) => page.evaluate(w => Math.max(document.documentElem
 }
 
 // ---------------- paste (390 phone + 1280 desktop) ----------------
-// dispatches a paste event on the textarea: { png: [w, h, name] | bytes: n (oversize) | stub, text }; returns defaultPrevented
-const paste = (page, spec) => page.evaluate(async ({ png, bytes, text, stub }) => {
-  const ta = document.querySelector('.ss-input');
-  ta.focus();
-  let ev;
-  if (stub) { // a phone that announces an image but gives none
-    ev = new Event('paste', { bubbles: true, cancelable: true });
-    Object.defineProperty(ev, 'clipboardData', { value: { items: [{ kind: 'file', type: 'image/png', getAsFile: () => null }], files: [], types: ['Files'], getData: () => '' } });
-  } else {
-    const dt = new DataTransfer();
-    if (png) {
-      const c = document.createElement('canvas'); c.width = png[0]; c.height = png[1];
-      const g = c.getContext('2d'); g.fillStyle = '#336'; g.fillRect(0, 0, c.width, c.height); g.fillStyle = '#fff'; g.fillText('日本語', 10, 30);
-      const b = await new Promise(r => c.toBlob(r, 'image/png'));
-      dt.items.add(new File([b], png[2], { type: 'image/png' }));
-    }
-    if (bytes) dt.items.add(new File([new Uint8Array(bytes)], 'image.png', { type: 'image/png' }));
-    if (text) dt.setData('text/plain', text);
-    ev = new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: dt });
-  }
-  ta.dispatchEvent(ev);
-  return ev.defaultPrevented;
-}, spec);
+
 for (const [width, height, phone] of [[390, 844, true], [1280, 800, false]]) {
   const { ctx, page, errs } = await open(width, height, phone);
   const T = s => `paste ${width}px: ${s}`;
@@ -268,15 +348,15 @@ for (const [width, height, phone] of [[390, 844, true], [1280, 800, false]]) {
   await page.waitForSelector('.ss-att-chip .ss-att-name');
   ok((await chip(page)).includes('image.png'), T('image: chip with the name'), await chip(page));
   ok(!(await status(page)), T('image: no message'));
-  // a second image replaces the first, with a note
+  // a second image is added to the list (the first stays), no note
   await paste(page, { png: [1600, 1200, 'знімок.png'] });
-  await page.waitForFunction(() => document.querySelector('.ss-att-name')?.textContent === 'знімок.png');
-  ok((await status(page)) === REPLACED && (await page.$$('.ss-att-chip')).length === 1, T('second image replaces the chip + note'), await status(page));
+  await page.waitForFunction(() => [...document.querySelectorAll('.ss-att-name')].map(e => e.textContent).join() === 'image.png,знімок.png');
+  ok(!(await status(page)) && (await page.$$('.ss-att-chip')).length === 2, T('second image added, first kept'), await status(page));
   // image + text: the image is attached, the text is pasted at the cursor
   await page.fill('.ss-input', 'Що тут ');
   await page.evaluate(() => { const t = document.querySelector('.ss-input'); t.selectionStart = t.selectionEnd = t.value.length; });
   ok(await paste(page, { png: [300, 200, 'з-текстом.png'], text: 'написано?\nі тут' }), T('image + text: default prevented'));
-  await page.waitForFunction(() => document.querySelector('.ss-att-name')?.textContent === 'з-текстом.png');
+  await page.waitForFunction(() => [...document.querySelectorAll('.ss-att-name')].at(-1)?.textContent === 'з-текстом.png');
   ok((await page.inputValue('.ss-input')) === 'Що тут написано?\nі тут', T('image + text: text pasted'), JSON.stringify(await page.inputValue('.ss-input')));
   // layout with the pasted chip
   const g = await page.evaluate(() => { const r = e => document.querySelector(e).getBoundingClientRect(); return { bar: r('.ss-bar'), c: r('.ss-att-chip'), inp: r('.ss-input') }; });
@@ -287,7 +367,7 @@ for (const [width, height, phone] of [[390, 844, true], [1280, 800, false]]) {
   await page.click('.ss-send');
   await reply(page, 1);
   const s5 = await pm(page);
-  ok(s5.writes.length === 1 && s5.writes[0].type === 'image/jpeg' && s5.writes[0].w === 300 && Array.isArray(s5.last.messages.at(-1).content), T('pasted image sent as a file'), JSON.stringify(s5.writes));
+  ok(s5.writes.length === 3 && s5.writes.every(w => w.type === 'image/jpeg') && s5.writes.map(w => w.w).join() === '800,1024,300' && s5.last.messages.at(-1).content.filter(x => x.type === 'file').length === 3, T('three pasted images sent as files of one request'), JSON.stringify(s5.writes));
   if (!phone) {
     // the real keyboard path: Ctrl+V of multi-line text, then of an image from the system clipboard
     const multi = 'перший рядок\nдругий рядок\n  третій';
