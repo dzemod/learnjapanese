@@ -142,8 +142,10 @@ export function senseiView(root, startMode = '') {
           <input type="file" class="ss-file" accept="${ACCEPT}" multiple hidden>
           <textarea class="ss-input" rows="1"></textarea>
           <button class="btn primary ss-send" type="submit">Надіслати</button>
+          <button type="button" class="btn ghost sm ss-jump" hidden>↓ Нова відповідь</button>
         </form>
       </div>
+      <div class="ss-spot" aria-hidden="true"></div>
     </div>
     <div class="ss-meta"><span class="ss-status" role="status" aria-live="polite"></span><span class="muted small ss-count"></span></div>
     <div class="ss-starters" aria-label="Приклади"></div>
@@ -170,7 +172,7 @@ export function senseiView(root, startMode = '') {
     const home = onHands ? art : stage; // on the hands: inside the image box; below: after it, full width
     if (form.parentElement !== home) {
       const focused = document.activeElement === input;
-      home.append(form);
+      if (onHands) art.append(form); else stage.insertBefore(form, $('.ss-spot', stage)); // below: before the spot that keeps its place when docked
       if (focused) input.focus({ preventScroll: true });
     }
   };
@@ -179,11 +181,63 @@ export function senseiView(root, startMode = '') {
   const ro = new ResizeObserver(place);
   ro.observe(art);
   place();
-  // phones: keep the bar above the on-screen keyboard while typing
+
+  // ---------- the bar docks at the bottom of the screen ----------
+  // One form element (never a copy): it sits on the hands (or below them) while that spot is on screen; once the spot
+  // scrolls away or the on-screen keyboard covers it, the same form is fixed at the bottom of the visible area (safe-area
+  // inset, above the keyboard via visualViewport). The tab keeps a bottom padding of the bar's height (--ss-bar-h), so
+  // the last message is never hidden behind the bar.
   const vv = window.visualViewport;
-  const keepVisible = () => { if (document.activeElement === input) form.scrollIntoView({ block: 'nearest' }); };
+  const sensei = $('.sensei', root), spot = $('.ss-spot', root), jump = $('.ss-jump', root);
+  const BAR_B = 100 - Math.min(PALMS.left.y, PALMS.right.y); // % of the image height under the bar on the hands
+  let barH = 0, docked = false, frame = 0, revealNo = 0;
+  const visibleBottom = () => (vv ? Math.min(innerHeight, vv.offsetTop + vv.height) : innerHeight);
+  const topLimit = () => Math.max(0, $('.topbar')?.getBoundingClientRect().bottom || 0);
+  function dock() {
+    frame = 0;
+    if (!root.isConnected) return;
+    const below = stage.classList.contains('below') || stage.classList.contains('no-img');
+    const h = form.offsetHeight;
+    if (h !== barH) { barH = h; sensei.style.setProperty('--ss-bar-h', h + 'px'); }
+    // where the bar sits when it is not docked
+    let top, bottom;
+    if (below) { top = (docked ? spot : form).getBoundingClientRect().top; bottom = top + h; }
+    else { const a = art.getBoundingClientRect(); bottom = a.bottom - a.height * BAR_B / 100; top = bottom - h; }
+    const want = top < topLimit() - 1 || bottom > visibleBottom() + 1;
+    const kb = vv ? Math.max(0, Math.round(innerHeight - (vv.offsetTop + vv.height))) : 0; // on-screen keyboard
+    sensei.style.setProperty('--ss-kb', kb + 'px');
+    const c = sensei.getBoundingClientRect();
+    form.style.setProperty('--dock-l', c.left + 'px');
+    form.style.setProperty('--dock-w', c.width + 'px');
+    if (want !== docked) {
+      const focused = document.activeElement === input;
+      docked = want;
+      form.classList.toggle('docked', docked);
+      if (focused && document.activeElement !== input) input.focus({ preventScroll: true });
+    }
+    spot.style.height = docked && below ? h + 'px' : ''; // keeps the place of a bar below the hands: nothing moves
+    if (!jump.hidden && nearEnd()) jump.hidden = true;
+  }
+  const schedule = () => { if (!frame) frame = requestAnimationFrame(dock); };
+  addEventListener('scroll', schedule, { passive: true });
+  addEventListener('resize', schedule);
+  vv?.addEventListener('resize', schedule);
+  vv?.addEventListener('scroll', schedule);
+  const barRO = new ResizeObserver(schedule);
+  barRO.observe(form);
+  barRO.observe(sensei);
+  // phones: keep the bar above the on-screen keyboard while typing (a bar on the hands is scrolled into view)
+  const keepVisible = () => { if (document.activeElement === input && !docked) form.scrollIntoView({ block: 'nearest' }); schedule(); };
   vv?.addEventListener('resize', keepVisible);
   input.addEventListener('focus', () => setTimeout(keepVisible, 300));
+  // the end of the conversation is on screen (above the bar): only then does a new reply scroll the page
+  function nearEnd(slack = 160) {
+    const last = list.lastElementChild;
+    if (!last || list.hidden) return true;
+    const limit = visibleBottom() - (docked ? barH + 16 : 0);
+    return last.getBoundingClientRect().top < limit + slack;
+  }
+  jump.onclick = () => { jump.hidden = true; reveal([...list.querySelectorAll('.ss-msg.ai')].pop(), 'start'); };
 
   const grow = () => { input.style.height = 'auto'; input.style.height = Math.min(input.scrollHeight, 140) + 'px'; };
   const counter = () => { const n = input.value.length; count.textContent = n > MAX_INPUT * 0.8 ? `${n} / ${MAX_INPUT}` : ''; count.classList.toggle('over', n > MAX_INPUT); };
@@ -193,7 +247,20 @@ export function senseiView(root, startMode = '') {
   function reveal(el, block) {
     if (!el) return;
     el.style.scrollMarginTop = ($('.topbar')?.offsetHeight || 0) + 12 + 'px';
-    el.scrollIntoView({ block, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    el.style.scrollMarginBottom = barH + 24 + 'px'; // above the docked bar
+    const smooth = !matchMedia('(prefers-reduced-motion: reduce)').matches;
+    el.scrollIntoView({ block, behavior: smooth ? 'smooth' : 'auto' });
+    if (block !== 'start') return;
+    // the reply's layout settles a moment later (fonts of both scripts): align it again unless the learner scrolled
+    const mine = ++revealNo;
+    let touched = false;
+    const stop = () => { touched = true; };
+    ['wheel', 'touchstart', 'keydown'].forEach(t => addEventListener(t, stop, { once: true, passive: true }));
+    const again = () => { if (!touched && mine === revealNo && el.isConnected) el.scrollIntoView({ block, behavior: 'auto' }); };
+    const target = smooth ? 700 : 0;
+    setTimeout(() => requestAnimationFrame(again), target + 60);
+    document.fonts?.ready.then(() => setTimeout(again, target + 120));
+    setTimeout(() => ['wheel', 'touchstart', 'keydown'].forEach(t => removeEventListener(t, stop)), target + 1500);
   }
   // mode chrome: tabs, subtitle, starters, placeholder, level (talk)
   function setMode(m, { keepInput = false } = {}) {
@@ -236,6 +303,8 @@ export function senseiView(root, startMode = '') {
     root.querySelector('.sensei').classList.toggle('thinking', !!busy);
     if (scroll === 'typing') reveal($('.ss-typing', list), 'nearest');
     if (scroll === 'reply') reveal([...list.querySelectorAll('.ss-msg.ai')].pop(), 'start');
+    if (scroll === 'later') jump.hidden = false; // the learner is reading further up: no forced scroll, a button instead
+    schedule();
   }
 
   form.onsubmit = async e => {
@@ -274,7 +343,8 @@ export function senseiView(root, startMode = '') {
       error = r.error || MSG_FAIL;
     }
     // desktop: back to the input; phones: no focus (the keyboard would cover the reply and scroll to the bar)
-    if (root.isConnected) { draw(r.answer && mode === M ? 'reply' : ''); if (desktopKeys()) input.focus({ preventScroll: true }); } else redrawCurrent?.();
+    // a new reply is scrolled to only when the learner is at the end of the conversation (not reading older messages)
+    if (root.isConnected) { draw(r.answer && mode === M ? (nearEnd() ? 'reply' : 'later') : ''); if (desktopKeys()) input.focus({ preventScroll: true }); } else redrawCurrent?.();
   };
   // «Продовжити»: one follow-up request with the cut answer in context; the continuation is joined to that answer
   async function continueAnswer() {
@@ -357,5 +427,9 @@ export function senseiView(root, startMode = '') {
   redrawCurrent = draw;
   setMode(mode);
   if (prefill?.text) { fill(String(prefill.text)); }
-  return () => { ro.disconnect(); vv?.removeEventListener('resize', keepVisible); };
+  return () => {
+    ro.disconnect(); barRO.disconnect(); if (frame) cancelAnimationFrame(frame);
+    removeEventListener('scroll', schedule); removeEventListener('resize', schedule);
+    vv?.removeEventListener('resize', schedule); vv?.removeEventListener('scroll', schedule); vv?.removeEventListener('resize', keepVisible);
+  };
 }

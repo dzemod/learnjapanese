@@ -41,7 +41,7 @@ const geo = page => page.evaluate(() => {
   const img = document.querySelector('.ss-fig img');
   return {
     art: r(document.querySelector('.ss-art')), img: r(img), bar: r(document.querySelector('.ss-bar')),
-    below: document.querySelector('.ss-stage').classList.contains('below'),
+    below: document.querySelector('.ss-stage').classList.contains('below'), docked: document.querySelector('.ss-bar').classList.contains('docked'), spot: r(document.querySelector('.ss-spot')),
     loaded: img.complete && img.naturalWidth > 0, current: img.currentSrc, alt: img.alt,
     docW: Math.max(document.documentElement.scrollWidth, innerWidth), vw: document.documentElement.clientWidth, vh: innerHeight,
   };
@@ -71,7 +71,10 @@ for (const [width, height, phone] of [[320, 568, true], [390, 844, true], [1280,
     ok(g.bar.l >= g.art.l && g.bar.r <= g.art.r && g.bar.t >= g.art.t, T('bar inside the illustration'));
   } else {
     ok(g.below, T('narrow: bar below the hands'));
-    ok(g.bar.t >= g.img.b - 0.5, T('bar does not overlap the image'), `${Math.round(g.bar.t)} < ${Math.round(g.img.b)}`);
+    // a short screen: the place below the hands is off screen, so the same bar is docked at the bottom (qa-sensei-layout)
+    const at = g.docked ? g.spot : g.bar;
+    ok(at.t >= g.img.b - 0.5, T(g.docked ? 'docked: its place below the hands is kept (no overlap there)' : 'bar does not overlap the image'), `${Math.round(at.t)} < ${Math.round(g.img.b)}`);
+    if (g.docked) ok(Math.abs(g.spot.h - g.bar.h) < 1 && g.bar.b <= g.vh - 9, T('docked bar at the bottom of the screen'), JSON.stringify(g.bar));
     ok(g.bar.l >= 15.5 && g.vw - g.bar.r >= 15.5 && Math.abs(g.bar.w - (g.vw - 32)) < 2, T('bar full width with 16 px gutters'), `${Math.round(g.bar.l)} / ${Math.round(g.vw - g.bar.r)}`);
   }
   const anim = await page.evaluate(() => getComputedStyle(document.querySelector('.ss-fig')).animationName);
